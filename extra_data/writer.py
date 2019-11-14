@@ -90,7 +90,7 @@ class FileWriter:
     def set_writer(self):
         from . import __version__
 
-        self.file.attrs['writer'] = 'karabo_data {}'.format(__version__)
+        self.file.attrs['writer'] = 'extra_data {}'.format(__version__)
 
     def write(self):
         d = self.data

@@ -5,7 +5,7 @@ from matplotlib.axes import Axes
 import numpy as np
 import pytest
 
-from karabo_data.geometry2 import AGIPD_1MGeometry
+from extra_data.geometry2 import AGIPD_1MGeometry
 
 
 def test_snap_assemble_data():

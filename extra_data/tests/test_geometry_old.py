@@ -1,16 +1,16 @@
-"""Tests for deprecated karabo_data.geometry module."""
+"""Tests for deprecated extra_data.geometry module."""
 
 import h5py
 from matplotlib.figure import Figure
 import numpy as np
 from os.path import abspath, dirname, join as pjoin
 
-from karabo_data.geometry import LPDGeometry
+from extra_data.geometry import LPDGeometry
 
 tests_dir = dirname(abspath(__file__))
 
 # These coordinates are backwards - x increasing beam-right, y increasing
-# downwards. Use karabo_data.geometry2 instead, which expects coordinates
+# downwards. Use extra_data.geometry2 instead, which expects coordinates
 # in the standard axis directions.
 quadpos = [(-11.4, -299), (11.5, -8), (-254.5, 16), (-278.5, -275)]
 

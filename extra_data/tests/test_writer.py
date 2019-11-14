@@ -4,7 +4,7 @@ import numpy as np
 from tempfile import TemporaryDirectory
 from testpath import assert_isfile
 
-from karabo_data import RunDirectory, H5File
+from extra_data import RunDirectory, H5File
 
 
 def test_write_selected(mock_fxe_raw_run):

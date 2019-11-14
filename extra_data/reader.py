@@ -929,7 +929,7 @@ class DataCollection:
 
         Choose a slice of trains by train ID::
 
-            from karabo_data import by_id
+            from extra_data import by_id
             sel = run.select_trains(by_id[142844490:142844495])
 
         Or select a list of trains::
@@ -938,7 +938,7 @@ class DataCollection:
 
         Or select trains by index within this collection::
 
-            from karabo_data import by_index
+            from extra_data import by_index
             sel = run.select_trains(by_index[:5])
 
         Returns a new :class:`DataCollection` object for the selected trains.

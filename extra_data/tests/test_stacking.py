@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from karabo_data import RunDirectory, stack_data, stack_detector_data
+from extra_data import RunDirectory, stack_data, stack_detector_data
 
 def test_stack_data(mock_fxe_raw_run):
     test_run = RunDirectory(mock_fxe_raw_run)

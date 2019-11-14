@@ -1,4 +1,4 @@
-from karabo_data import lsxfel
+from extra_data import lsxfel
 
 
 def test_lsxfel_file(mock_lpd_data, capsys):

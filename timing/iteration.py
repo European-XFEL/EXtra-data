@@ -1,5 +1,5 @@
 from time import monotonic
-from karabo_data import RunDirectory
+from extra_data import RunDirectory
 
 print("Opening raw run...")
 start = monotonic()

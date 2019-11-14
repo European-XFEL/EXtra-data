@@ -5,7 +5,7 @@ from matplotlib.axes import Axes
 import numpy as np
 from os.path import abspath, dirname, join as pjoin
 
-from karabo_data.geometry2 import LPD_1MGeometry, invert_xfel_lpd_geom
+from extra_data.geometry2 import LPD_1MGeometry, invert_xfel_lpd_geom
 
 tests_dir = dirname(abspath(__file__))
 

@@ -3,7 +3,7 @@ from matplotlib.axes import Axes
 import numpy as np
 from os.path import abspath, dirname, join as pjoin
 
-from karabo_data.geometry2 import DSSC_1MGeometry
+from extra_data.geometry2 import DSSC_1MGeometry
 
 tests_dir = dirname(abspath(__file__))
 sample_xfel_geom = pjoin(tests_dir, 'dssc_geo_june19.h5')

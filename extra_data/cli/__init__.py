@@ -1,1 +1,1 @@
-"""karabo_data command-line interfaces"""
+"""extra_data command-line interfaces"""

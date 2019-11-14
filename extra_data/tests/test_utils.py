@@ -5,8 +5,8 @@ import re
 import tempfile
 from testpath import assert_isfile
 
-from karabo_data import utils
-from karabo_data.utils import QuickView
+from extra_data import utils
+from extra_data.utils import QuickView
 
 
 def test_cbf_conversion(mock_agipd_data, capsys):

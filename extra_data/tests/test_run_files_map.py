@@ -6,7 +6,7 @@ import pytest
 
 from .mockdata import write_file
 from .mockdata.xgm import XGM
-from karabo_data import run_files_map, RunDirectory
+from extra_data import run_files_map, RunDirectory
 
 def test_candidate_paths(tmp_path):
     # 'real' paths (like /gpfs/exfel/d)
@@ -27,12 +27,12 @@ def test_candidate_paths(tmp_path):
         rfm_exp = run_files_map.RunFilesMap(str(run_in_exp))
 
     assert rfm.candidate_paths == [
-        str(run_dir / 'karabo_data_map.json'),
-        str(prop_scratch / '.karabo_data_maps' / 'raw_r0450.json'),
+        str(run_dir / 'extra_data_map.json'),
+        str(prop_scratch / '.extra_data_maps' / 'raw_r0450.json'),
     ]
     assert rfm_exp.candidate_paths == [
-        str(run_in_exp / 'karabo_data_map.json'),
-        str(prop_scratch / '.karabo_data_maps' / 'raw_r0450.json'),
+        str(run_in_exp / 'extra_data_map.json'),
+        str(prop_scratch / '.extra_data_maps' / 'raw_r0450.json'),
     ]
 
 

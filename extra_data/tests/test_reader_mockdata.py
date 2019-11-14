@@ -11,7 +11,7 @@ from testpath import assert_isfile
 from unittest import mock
 from xarray import DataArray
 
-from karabo_data import (
+from extra_data import (
     H5File, RunDirectory, by_index, by_id,
     SourceNameError, PropertyNameError, DataCollection, open_run,
 )
@@ -560,7 +560,7 @@ def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
     os.makedirs(os.path.join(prop_dir, 'proc'))
     os.symlink(mock_spb_proc_run, os.path.join(prop_dir, 'proc', 'r0238'))
 
-    with mock.patch('karabo_data.read_machinery.DATA_ROOT_DIR', str(tmpdir)):
+    with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', str(tmpdir)):
         # With integers
         run = open_run(proposal=2012, run=238)
         paths = {f.filename for f in run.files}

@@ -1,4 +1,4 @@
-"""Exception classes specific to karabo_data."""
+"""Exception classes specific to extra_data."""
 
 
 class SourceNameError(KeyError):

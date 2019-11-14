@@ -4,8 +4,8 @@ import os.path as osp
 import pytest
 from testpath import assert_isfile
 
-from karabo_data.reader import RunDirectory, by_id, by_index
-from karabo_data.components import AGIPD1M, LPD1M
+from extra_data.reader import RunDirectory, by_id, by_index
+from extra_data.components import AGIPD1M, LPD1M
 
 
 def test_get_array(mock_fxe_raw_run):

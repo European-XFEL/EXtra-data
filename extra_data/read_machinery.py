@@ -1,6 +1,6 @@
 """Machinery for reading Karabo HDF5 files
 
-The public API is in karabo_data.reader; this is internal code.
+The public API is in extra_data.reader; this is internal code.
 """
 from collections import defaultdict
 from glob import iglob

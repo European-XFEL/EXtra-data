@@ -8,7 +8,7 @@ from queue import Full
 
 from karabo_bridge import Client
 
-from karabo_data.export import ZMQStreamer
+from extra_data.export import ZMQStreamer
 
 DATA = {
     'source1': {
@@ -74,7 +74,7 @@ def client():
 class DummyFrame:
     """Client._deserialize() now expects the message in ZMQ Frame objects.
 
-    TODO: avoid using a private method from karabo_data for tests.
+    TODO: avoid using a private method from extra_data for tests.
     """
 
     def __init__(self, data):

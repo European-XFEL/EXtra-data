@@ -2,7 +2,7 @@ import os
 import os.path as osp
 from testpath import assert_isfile
 
-from karabo_data.cli.make_virtual_cxi import main
+from extra_data.cli.make_virtual_cxi import main
 
 def test_make_virtual_cxi(mock_spb_proc_run, tmpdir):
     output = osp.join(str(tmpdir), 'test.cxi')

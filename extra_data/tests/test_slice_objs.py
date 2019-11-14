@@ -1,4 +1,4 @@
-from karabo_data import by_id, by_index
+from extra_data import by_id, by_index
 
 
 def test_slicing_reprs():

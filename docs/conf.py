@@ -37,7 +37,7 @@ extensions = [
 ]
 
 # For :ghissue: and :ghpull: links.
-github_project_url = "https://github.com/European-XFEL/karabo_data/"
+github_project_url = "https://github.com/European-XFEL/EXtra-data/"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -63,8 +63,8 @@ author = u'European XFEL'
 # built documents.
 #
 # The short X.Y version.
-import karabo_data
-version = karabo_data.__version__
+import extra_data
+version = extra_data.__version__
 # The full version, including alpha/beta/rc tags.
 release = version
 

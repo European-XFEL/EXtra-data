@@ -1,5 +1,5 @@
 # coding: utf-8
-"""The karabo_data package.
+"""The extra_data package.
 
 Copyright (c) 2017, European X-Ray Free-Electron Laser Facility GmbH
 All rights reserved.
@@ -35,28 +35,10 @@ program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 
 __version__ = "0.7.0"
 
-from warnings import warn
 
 from .reader import *
 from .stacking import *
 from .utils import *
 
-def ZMQStreamer(port, maxlen=10, protocol_version='2.2', dummy_timestamps=False):
-    warn("Please update imports: "
-         "karabo_data.ZMQStreamer -> karabo_data.export.ZMQStreamer",
-         UserWarning, stacklevel=2)
-    from . import export
-    return export.ZMQStreamer(
-        port=port, maxlen=maxlen, protocol_version=protocol_version, dummy_timestamps=dummy_timestamps
-    )
 
-def serve_files(path, port, source_glob='*', key_glob='*', **kwargs):
-    warn("Please update imports: "
-         "karabo_data.serve_files -> karabo_data.export.serve_files",
-         UserWarning, stacklevel=2)
-    from . import export
-    return export.serve_files(
-        path=path, port=port, source_glob=source_glob, key_glob=key_glob, **kwargs
-    )
-
-__all__ = reader.__all__ + utils.__all__ + stacking.__all__ + ['ZMQStreamer', 'serve_files']
+__all__ = reader.__all__ + utils.__all__ + stacking.__all__

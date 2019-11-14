@@ -21,7 +21,7 @@ class VirtualCXIWriter:
     Parameters
     ----------
 
-    detdata: karabo_data.components.MPxDetectorBase
+    detdata: extra_data.components.MPxDetectorBase
       The detector data interface for the data to gather in this file.
     """
     def __init__(self, detdata):

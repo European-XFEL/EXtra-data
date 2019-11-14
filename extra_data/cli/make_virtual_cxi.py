@@ -5,9 +5,9 @@ import os.path as osp
 import re
 import sys
 
-from karabo_data import RunDirectory
-from karabo_data.components import AGIPD1M, LPD1M
-from karabo_data.exceptions import SourceNameError
+from extra_data import RunDirectory
+from extra_data.components import AGIPD1M, LPD1M
+from extra_data.exceptions import SourceNameError
 
 log = logging.getLogger(__name__)
 
