@@ -1,8 +1,13 @@
 European XFEL Python data tools
 ===============================
 
-**extra_data** is a Python library for accessing and working with data
+**EXtra-data** is a Python library for accessing and working with data
 produced at `European XFEL <https://www.xfel.eu/>`_.
+
+.. note::
+   EXtra-data is the new name for karabo_data.
+   The code to work with detector geometry has been separated as
+   `extra_geom <https://github.com/European-XFEL/EXtra-geom>`__.
 
 Installation
 ------------
