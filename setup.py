@@ -44,7 +44,6 @@ setup(name="EXtra-data",
           ],
       },
       install_requires=[
-          'cfelpyutils>=0.92',
           'fabio',
           'h5py>=2.7.1',
           'karabo-bridge',
