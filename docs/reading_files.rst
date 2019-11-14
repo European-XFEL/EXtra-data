@@ -11,7 +11,7 @@ containing HDF5 files. You can open a run using :func:`RunDirectory` with the
 path of the directory, or using :func:`open_run` with the proposal number and
 run number to look up the standard data paths on the Maxwell cluster.
 
-.. module:: karabo_data
+.. module:: extra_data
 
 .. autofunction:: RunDirectory
 
@@ -174,7 +174,7 @@ There is no general way to distinguish this scenario from values which
 genuinely aren't changing.
 
 Parts of instrument data may be missing from the file. These will also be
-missing from the data returned by ``karabo_data``:
+missing from the data returned by ``extra_data``:
 
 - The train-oriented methods :meth:`~.DataCollection.trains`,
   :meth:`~.DataCollection.train_from_id`, and
@@ -198,8 +198,8 @@ have gaps between updates.
 Data problems
 -------------
 
-If you encounter problems accessing data with ``karabo_data``, there may be
-problems with the data files themselves. Use the ``karabo-data-validate``
+If you encounter problems accessing data with ``extra_data``, there may be
+problems with the data files themselves. Use the ``extra-data-validate``
 command to check for this (see :doc:`validation`).
 
 Here are some problems we've seen, and possible solutions or workarounds:
@@ -218,11 +218,11 @@ Here are some problems we've seen, and possible solutions or workarounds:
     causing :meth:`~.info` to fail. You can select everything except this train
     using :meth:`~.select_trains`::
 
-        from karabo_data import by_id
+        from extra_data import by_id
         sel = run.select_trains(by_id[:2**64-1])
 
-If you're having problems with karabo_data, you can also try searching
-`previously reported issues <https://github.com/European-XFEL/karabo_data/issues?q=is%3Aissue>`_
+If you're having problems with extra_data, you can also try searching
+`previously reported issues <https://github.com/European-XFEL/EXtra-data/issues?q=is%3Aissue>`_
 to see if anyone has encountered similar symptoms.
 
 .. _run-map-caching:
@@ -230,9 +230,9 @@ to see if anyone has encountered similar symptoms.
 Cached run data maps
 --------------------
 
-When you open a run in karabo_data, it needs to know what data is in each file.
+When you open a run in extra_data, it needs to know what data is in each file.
 Each file has metadata describing its contents, but reading this from every file
-is slow, especially on GPFS. karabo_data therefore tries to cache this
+is slow, especially on GPFS. extra_data therefore tries to cache this
 information the first time a run is opened, and reuse it when opening that run
 again.
 
@@ -254,7 +254,7 @@ You only need these details if you think caching may be causing problems.
     instrument sources.
   - It also stores the file size and last modified time of each data file, to
     check if the file has changed since the cache was created. If either of
-    these attributes doesn't match, karabo_data ignores the cached information
+    these attributes doesn't match, extra_data ignores the cached information
     and reads the metadata from the HDF5 file.
 
 - If any file in the run wasn't listed in the data map, or its entry was

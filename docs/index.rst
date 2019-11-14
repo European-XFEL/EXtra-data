@@ -1,11 +1,13 @@
 European XFEL Python data tools
 ===============================
 
-**karabo_data** is a Python library for accessing and working with data
+**extra_data** is a Python library for accessing and working with data
 produced at `European XFEL <https://www.xfel.eu/>`_.
 
 Installation
 ------------
+
+(TODO: update this)
 
 karabo_data is available on our Anaconda installation on the Maxwell cluster::
 
@@ -23,7 +25,7 @@ Quickstart
 
 Open a run or a file - see :ref:`opening-files` for more::
 
-    from karabo_data import open_run, RunDirectory, H5File
+    from extra_data import open_run, RunDirectory, H5File
 
     # Find a run on the Maxwell cluster
     run = open_run(proposal=700000, run=1)
