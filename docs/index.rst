@@ -55,8 +55,6 @@ Iterate through data for each pulse train - see :ref:`data-by-train` for more::
 
 These are not the only ways to get data: :doc:`reading_files` describes
 various other options.
-karabo_data also has classes to work with detector geometry,
-described in :doc:`geometry`.
 
 Documentation contents
 ----------------------
@@ -68,7 +66,6 @@ Documentation contents
    agipd_lpd_data
    streaming
    validation
-   geometry
    cli
    data_format
    performance
@@ -78,10 +75,6 @@ Documentation contents
 
    Demo
    lpd_data
-   apply_geometry
-   examine_geometry
-   agipd_geometry
-   dssc_geometry
    xpd_examples
    xpd_examples2
    parallel_example
