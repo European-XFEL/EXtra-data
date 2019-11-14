@@ -1,9 +1,9 @@
-[![Build Status](https://travis-ci.org/European-XFEL/karabo_data.svg?branch=master)](https://travis-ci.org/European-XFEL/karabo_data)
-[![codecov](https://codecov.io/gh/European-XFEL/karabo_data/branch/master/graph/badge.svg)](https://codecov.io/gh/European-XFEL/karabo_data)
+[![Build Status](https://travis-ci.org/European-XFEL/EXtra-data.svg?branch=master)](https://travis-ci.org/European-XFEL/EXtra-data)
+[![codecov](https://codecov.io/gh/European-XFEL/EXtra-data/branch/master/graph/badge.svg)](https://codecov.io/gh/European-XFEL/EXtra-data)
 
 Python 3 tools for reading European XFEL's HDF5 files.
 
-[Documentation](https://karabo-data.readthedocs.io/en/latest/)
+[Documentation](https://extra-data.readthedocs.io/en/latest/)
 
 Installing
 ==========
