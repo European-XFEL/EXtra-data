@@ -8,14 +8,14 @@ Python 3 tools for reading European XFEL's HDF5 files.
 Installing
 ==========
 
-`karabo_data` is available on our Anaconda installation on the Maxwell cluster:
+*EXtra-data* is available on our Anaconda installation on the Maxwell cluster:
 
     module load exfel exfel_anaconda3
 
-You can also install it [from PyPI](https://pypi.org/project/karabo-data/)
+You can also install it [from PyPI](https://pypi.org/project/extra-data/)
 to use in other environments with Python 3.5 or later:
 
-    pip install karabo_data
+    pip install extra_data
 
 If you get a permissions error, add the `--user` flag to that command.
 

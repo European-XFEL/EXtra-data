@@ -1,6 +1,11 @@
 Release Notes
 =============
 
+0.8
+---
+
+First separated version. No functional changes from karabo_data 0.7.
+
 Earlier history
 ---------------
 
