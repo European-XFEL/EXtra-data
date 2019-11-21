@@ -73,7 +73,7 @@ setup(name="EXtra-data",
       },
       python_requires='>=3.5',
       classifiers=[
-          'Development Status :: 3 - Alpha',
+          'Development Status :: 5 - Production/Stable',
           'Environment :: Console',
           'Intended Audience :: Developers',
           'Intended Audience :: Science/Research',
