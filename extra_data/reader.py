@@ -1047,8 +1047,8 @@ class DataCollection:
         first_train = self.train_ids[0]
         last_train = self.train_ids[-1]
         train_count = len(self.train_ids)
-        span_sec = (last_train - first_train) / 10
-        span_txt = str(datetime.timedelta(seconds=span_sec))
+        seconds, deciseconds = divmod((last_train - first_train + 1), 10)
+        span_txt = f'{datetime.timedelta(seconds=seconds)}.{int(deciseconds)}'
 
         detector_modules = {}
         for source in self.detector_sources:
