@@ -74,6 +74,7 @@ class FileAccess:
     """
     _file = None
     _format_version = None
+    metadata_fstat = None
 
     def __init__(self, filename, _cache_info=None):
         self.filename = filename
@@ -87,6 +88,11 @@ class FileAccess:
             self.train_ids = tid_data[tid_data != 0]
 
             self.control_sources, self.instrument_sources = self._read_data_sources()
+
+            # Store the stat of the file as it was when we read the metadata.
+            # This is used by the run files map.
+            self.metadata_fstat = os.stat(self.file.id.get_vfd_handle())
+
             # Close the file again - crude way to avoid hitting the limit of
             # open files, which is only 1024 by default.
             self.close()
