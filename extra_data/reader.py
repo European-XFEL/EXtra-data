@@ -87,6 +87,9 @@ class FileAccess:
             self.train_ids = tid_data[tid_data != 0]
 
             self.control_sources, self.instrument_sources = self._read_data_sources()
+            # Close the file again - crude way to avoid hitting the limit of
+            # open files, which is only 1024 by default.
+            self.close()
 
         # {(file, source, group): (firsts, counts)}
         self._index_cache = {}
@@ -151,7 +154,7 @@ class FileAccess:
         return isinstance(other, FileAccess) and (other.filename == self.filename)
 
     def __repr__(self):
-        return "{}({})".format(type(self).__name__, repr(self.file))
+        return "{}({})".format(type(self).__name__, repr(self.filename))
 
     @property
     def all_sources(self):
