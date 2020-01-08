@@ -71,7 +71,6 @@ Documentation contents
    xpd_examples
    inspection
    iterate_trains
-   Demo
    lpd_data
    xpd_examples2
    parallel_example
