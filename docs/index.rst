@@ -69,6 +69,7 @@ Documentation contents
    :maxdepth: 2
 
    xpd_examples
+   inspection
    Demo
    lpd_data
    xpd_examples2
