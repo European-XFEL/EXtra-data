@@ -71,10 +71,11 @@ Documentation contents
    xpd_examples
    inspection
    iterate_trains
+   dask_averaging
+   parallel_example
    lpd_data
    xpd_examples2
-   parallel_example
-   dask_averaging
+   
 
 .. toctree::
    :caption: Reference
