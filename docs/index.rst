@@ -68,9 +68,9 @@ Documentation contents
    :caption: Tutorials and Examples
    :maxdepth: 2
 
+   xpd_examples
    Demo
    lpd_data
-   xpd_examples
    xpd_examples2
    parallel_example
    dask_averaging
