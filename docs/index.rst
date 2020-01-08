@@ -65,6 +65,18 @@ Documentation contents
 ----------------------
 
 .. toctree::
+   :caption: Tutorials and Examples
+   :maxdepth: 2
+
+   Demo
+   lpd_data
+   xpd_examples
+   xpd_examples2
+   parallel_example
+   dask_averaging
+
+.. toctree::
+   :caption: Reference
    :maxdepth: 2
 
    reading_files
@@ -74,16 +86,6 @@ Documentation contents
    cli
    data_format
    performance
-
-.. toctree::
-   :caption: Examples
-
-   Demo
-   lpd_data
-   xpd_examples
-   xpd_examples2
-   parallel_example
-   dask_averaging
 
 .. toctree::
    :caption: Development
