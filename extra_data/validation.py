@@ -191,6 +191,9 @@ class RunValidator:
         cache = RunFilesMap(self.run_dir)
         for f_access in self.run.files:
             f_cache = cache.get(f_access.filename)
+            if f_cache is None:
+                continue
+
             if (
                     f_cache['control_sources'] != f_access.control_sources
                  or f_cache['instrument_sources'] != f_access.instrument_sources
