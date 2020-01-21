@@ -1,5 +1,5 @@
-European XFEL Python data tools
-===============================
+EXtra-data
+==========
 
 **EXtra-data** is a Python library for accessing and working with data
 produced at `European XFEL <https://www.xfel.eu/>`_.
@@ -7,7 +7,7 @@ produced at `European XFEL <https://www.xfel.eu/>`_.
 .. note::
    EXtra-data is the new name for karabo_data.
    The code to work with detector geometry has been separated as
-   `extra_geom <https://github.com/European-XFEL/EXtra-geom>`__.
+   `EXtra-geom <https://github.com/European-XFEL/EXtra-geom>`__.
 
 Installation
 ------------
@@ -65,6 +65,20 @@ Documentation contents
 ----------------------
 
 .. toctree::
+   :caption: Tutorials and Examples
+   :maxdepth: 2
+
+   xpd_examples
+   inspection
+   iterate_trains
+   dask_averaging
+   parallel_example
+   lpd_data
+   xpd_examples2
+   
+
+.. toctree::
+   :caption: Reference
    :maxdepth: 2
 
    reading_files
@@ -74,16 +88,6 @@ Documentation contents
    cli
    data_format
    performance
-
-.. toctree::
-   :caption: Examples
-
-   Demo
-   lpd_data
-   xpd_examples
-   xpd_examples2
-   parallel_example
-   dask_averaging
 
 .. toctree::
    :caption: Development

@@ -51,7 +51,7 @@ as using :meth:`~.DataCollection.select` like this.
 Reduce before assembling
 ------------------------
 
-Assembling detector images (see :doc:`geometry`) is relatively slow.
+Assembling detector images (see `EXtra-geom <https://extra-geom.readthedocs.io/en/latest/>`_) is relatively slow.
 If your analysis involves a reduction step like summing or averaging over
 a number of images, try to do this on the data from separate modules before
 assembling them into images.

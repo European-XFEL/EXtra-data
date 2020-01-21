@@ -54,7 +54,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'European XFEL Python data tools'
+project = u'EXtra-data'
 copyright = u'2018, European XFEL'
 author = u'European XFEL'
 
