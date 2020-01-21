@@ -117,7 +117,7 @@ def test_write_virtual_cxi(mock_spb_proc_run, tmpdir):
     det.write_virtual_cxi(test_file)
     assert_isfile(test_file)
 
-    with h5py.File(test_file) as f:
+    with h5py.File(test_file, 'r') as f:
         det_grp = f['entry_1/instrument_1/detector_1']
         ds = det_grp['data']
         assert isinstance(ds, h5py.Dataset)
@@ -149,7 +149,7 @@ def test_write_virtual_cxi_some_modules(mock_spb_proc_run, tmpdir):
     det.write_virtual_cxi(test_file)
     assert_isfile(test_file)
 
-    with h5py.File(test_file) as f:
+    with h5py.File(test_file, 'r') as f:
         det_grp = f['entry_1/instrument_1/detector_1']
         ds = det_grp['data']
         assert ds.shape[1:] == (16, 512, 128)

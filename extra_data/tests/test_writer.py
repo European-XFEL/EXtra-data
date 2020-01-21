@@ -36,7 +36,7 @@ def test_write_virtual(mock_fxe_raw_run):
 
         assert_isfile(new_file)
 
-        with h5py.File(new_file) as f:
+        with h5py.File(new_file, 'r') as f:
             ds = f['CONTROL/SPB_XTD9_XGM/DOOCS/MAIN/beamPosition/ixPos/value']
             assert ds.is_virtual
 
