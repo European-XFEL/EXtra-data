@@ -184,6 +184,7 @@ class RunValidator:
         for f in self.run.files:
             fv = FileValidator(f)
             self.problems.extend(fv.run_checks())
+            f.close()
 
     def check_files_map(self):
         # Outdated cache entries we can detect with the file's stat() are not a
@@ -204,6 +205,8 @@ class RunValidator:
                     cache_file=cache.cache_file,
                     data_file=f_access.filename,
                 ))
+
+            f_access.close()
 
 def main(argv=None):
     if argv is None:
