@@ -1,0 +1,61 @@
+#!/gpfs/exfel/sw/software/xfel_anaconda3/1.1/bin/python
+
+import os
+import socket
+import sys
+from time import time
+from extra_data import RunDirectory, stack_detector_data
+from extra_data.export import ZMQStreamer
+
+def gen_time():
+
+    timestamp = time()
+    sec, frac = str(timestamp).split('.')
+    frac = frac.ljust(18, '0') # attosecond resolution
+    return sec, frac
+
+
+def main(path, port, **kwargs):
+    host = socket.gethostname()
+    print(f'Streaming data to tcp://{host}:{port}')
+    print(f'Check stream using "karabo-bridge-glimpse tcp://{host}:{port}"')
+    print(f'Run OnDA monitor using "mpirun -n 2 onda_monitor.py {host}:{port}"')
+    data = RunDirectory(path)
+    data = data.select('*/DET/*', '*')
+    streamer = ZMQStreamer(port, **kwargs)
+    streamer.start()
+    for tid, train_data in data.trains(require_all=True):
+        if train_data:
+            stacked = stack_detector_data(train_data, 'image.data')
+            merged_data = {}
+            merged_data['SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED'] = {
+                'image.data': stacked
+            }
+            sec, frac = gen_time()
+            metadata = {}
+            metadata['SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED'] = {
+                'source': 'SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED',
+                'timestamp.tid': tid,
+                'timestamp.sec': sec,
+                'timestamp.frac': frac
+            }
+            streamer.feed(merged_data, metadata)
+    streamer.stop()
+
+
+if __name__ == '__main__':
+    try:
+        if os.path.exists(sys.argv[1]):
+            path = sys.argv[1]
+        else:
+            print('Invalid PATH given')
+            exit(0)
+    except IndexError:
+        print('mandatory PATH argument is missing.')
+        exit(0)
+    try:
+        port = int(sys.argv[2])
+    except IndexError:
+        port = 4321
+    main(path, port)
+
