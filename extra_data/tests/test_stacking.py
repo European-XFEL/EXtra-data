@@ -145,3 +145,6 @@ def test_stackview_squeeze():
 
     assert sv.squeeze(axis=0).shape == (1, 4)
     assert sv.squeeze(axis=-2).shape == (1, 4)
+
+    with pytest.raises(np.AxisError):
+        sv.squeeze(axis=4)

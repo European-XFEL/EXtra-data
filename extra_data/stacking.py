@@ -220,9 +220,15 @@ class StackView:
             slices = [slice(None, None)] * self.ndim
 
             for ax in axis:
+                try:
+                    slices[ax] = 0
+                except IndexError:
+                    raise np.AxisError(
+                        "axis {} is out of bounds for array of dimension {}"
+                        .format(ax, self.ndim)
+                    )
                 if self.shape[ax] != 1:
                     raise ValueError("cannot squeeze out an axis with size != 1")
-                slices[ax] = 0
         else:
             raise TypeError("axis={!r} not supported".format(axis))
 
