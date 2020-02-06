@@ -208,3 +208,28 @@ class StackView:
         for modno, data in self._data.items():
             arr[modno] = data
         return np.moveaxis(arr, 0, self._stack_axis)
+
+    def squeeze(self, axis=None):
+        """Drop axes of length 1 - see numpy.squeeze()"""
+        if axis is None:
+            slices = [0 if d == 1 else slice(None, None) for d in self.shape]
+        elif isinstance(axis, (int, tuple)):
+            if isinstance(axis, int):
+                axis = (axis,)
+
+            slices = [slice(None, None)] * self.ndim
+
+            for ax in axis:
+                try:
+                    slices[ax] = 0
+                except IndexError:
+                    raise np.AxisError(
+                        "axis {} is out of bounds for array of dimension {}"
+                        .format(ax, self.ndim)
+                    )
+                if self.shape[ax] != 1:
+                    raise ValueError("cannot squeeze out an axis with size != 1")
+        else:
+            raise TypeError("axis={!r} not supported".format(axis))
+
+        return self[tuple(slices)]

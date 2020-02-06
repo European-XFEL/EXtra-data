@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from extra_data import RunDirectory, stack_data, stack_detector_data
+from extra_data.stacking import StackView
 
 def test_stack_data(mock_fxe_raw_run):
     test_run = RunDirectory(mock_fxe_raw_run)
@@ -128,3 +129,22 @@ def test_stack_detector_data_extra_mods(mock_fxe_raw_run):
     with pytest.raises(IndexError) as excinfo:
         comb = stack_detector_data(data, 'image.data')
     assert "16" in str(excinfo.value)
+
+def test_stackview_squeeze():
+    # Squeeze not dropping stacking dim
+    data = {0: np.zeros((1, 4)), 1: np.zeros((1, 4))}
+    sv = StackView(data, 2, (1, 4), data[0], 0, stack_axis=0)
+    assert sv.shape == (2, 1, 4)
+    assert sv.squeeze().shape == (2, 4)
+
+    # Squeeze dropping stacking dim
+    data = {0: np.zeros((1, 4))}
+    sv = StackView(data, 1, (1, 4), data[0].dtype, 0, stack_axis=0)
+    assert sv.shape == (1, 1, 4)
+    assert sv.squeeze().shape == (4,)
+
+    assert sv.squeeze(axis=0).shape == (1, 4)
+    assert sv.squeeze(axis=-2).shape == (1, 4)
+
+    with pytest.raises(np.AxisError):
+        sv.squeeze(axis=4)
