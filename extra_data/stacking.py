@@ -208,3 +208,8 @@ class StackView:
         for modno, data in self._data.items():
             arr[modno] = data
         return np.moveaxis(arr, 0, self._stack_axis)
+
+    def squeeze(self):
+        """Drop any length-1 dimensions - see numpy.squeeze()"""
+        slices = [0 if d == 1 else slice(None, None) for d in self.shape]
+        return self[tuple(slices)]
