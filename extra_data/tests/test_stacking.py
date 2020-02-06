@@ -142,3 +142,6 @@ def test_stackview_squeeze():
     sv = StackView(data, 1, (1, 4), data[0].dtype, 0, stack_axis=0)
     assert sv.shape == (1, 1, 4)
     assert sv.squeeze().shape == (4,)
+
+    assert sv.squeeze(axis=0).shape == (1, 4)
+    assert sv.squeeze(axis=-2).shape == (1, 4)
