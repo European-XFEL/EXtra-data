@@ -1,3 +1,4 @@
+import dask.array as da
 import h5py
 import numpy as np
 import os.path as osp
@@ -59,6 +60,23 @@ def test_get_array_pulse_indexes(mock_fxe_raw_run):
 
     arr = det.get_array('image.data', pulses=by_index[[1, 7, 22, 23]])
     assert arr.shape == (16, 3, 4, 256, 256)
+
+
+def test_get_dask_array(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    det = LPD1M(run)
+    arr = det.get_dask_array('image.data')
+
+    assert isinstance(arr.data, da.Array)
+    assert arr.shape == (16, 480 * 128, 1, 256, 256)
+    assert arr.dims == ('module', 'train_pulse', 'dim_0', 'dim_1', 'dim_2')
+    np.testing.assert_array_equal(arr.coords['module'], np.arange(16))
+    np.testing.assert_array_equal(
+        arr.coords['trainId'], np.repeat(np.arange(10000, 10480), 128)
+    )
+    np.testing.assert_array_equal(
+        arr.coords['pulseId'], np.tile(np.arange(0, 128), 480)
+    )
 
 
 def test_iterate(mock_fxe_raw_run):

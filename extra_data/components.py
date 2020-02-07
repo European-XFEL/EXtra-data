@@ -330,6 +330,45 @@ class MPxDetectorBase:
 
         return xarray.concat(arrays, pd.Index(modnos, name='module'))
 
+    def get_dask_array(self, key):
+        """Get a labelled Dask array of detector data
+
+        Dask does lazy, parallelised computing, and can work with large data
+        volumes. This method doesn't immediately load the data: that only
+        happens once you trigger a computation.
+
+        Parameters
+        ----------
+
+        key: str
+          The data to get, e.g. 'image.data' for pixel values.
+        """
+        arrays = []
+        modnos = []
+        for modno, source in sorted(self.modno_to_source.items()):
+            modnos.append(modno)
+            mod_arr = self.data.get_dask_array(source, key, labelled=True)
+
+            # At present, all the per-pulse data is stored in the 'image' key.
+            # If that changes, this check will need to change as well.
+            if key.startswith('image.'):
+                # Add pulse IDs to create multi-level index
+                pulse_id = self.data.get_array(source, 'image.pulseId')
+                # Raw files have a spurious extra dimension
+                if pulse_id.ndim >= 2 and pulse_id.shape[1] == 1:
+                    pulse_id = pulse_id[:, 0]
+
+                mod_arr = mod_arr.rename({'trainId': 'train_pulse'})
+
+                mod_arr.coords['train_pulse'] = pd.MultiIndex.from_arrays(
+                    [mod_arr.coords['train_pulse'], pulse_id],
+                    names=['trainId', 'pulseId']
+                )
+
+            arrays.append(mod_arr)
+
+        return xarray.concat(arrays, pd.Index(modnos, name='module'))
+
     def trains(self, pulses=by_index[:]):
         """Iterate over trains for detector data.
 
