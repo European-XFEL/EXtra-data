@@ -722,7 +722,7 @@ class DataCollection:
 
         return xarray.DataArray(res, dims=dims, coords=coords)
 
-    def get_dask_array(self, source, key):
+    def get_dask_array(self, source, key, labelled=False):
         """Get a Dask array for the specified data field.
 
         Dask is a system for lazy parallel computation. This method doesn't
@@ -742,6 +742,9 @@ class DataCollection:
             Source name, e.g. "SPB_DET_AGIPD1M-1/DET/7CH0:xtdf"
         key: str
             Key of parameter within that device, e.g. "image.data".
+        labelled: bool
+            If True, label the train IDs for the data, returning an
+            xarray.DataArray object wrapping a Dask array.
         """
         import dask.array as da
         chunks = sorted(
@@ -750,6 +753,8 @@ class DataCollection:
         )
 
         chunks_darrs = []
+        chunks_trainids = []
+
         for chunk in chunks:
             chunk_dim0 = int(np.sum(chunk.counts))
             chunk_shape = (chunk_dim0,) + chunk.dataset.shape[1:]
@@ -770,8 +775,23 @@ class DataCollection:
             chunks_darrs.append(
                 da.from_array(chunk.dataset, chunks=chunk_shape)[chunk.slice]
             )
+            chunks_trainids.append(
+                self._expand_trainids(chunk.counts, chunk.train_ids)
+            )
 
-        return da.concatenate(chunks_darrs, axis=0)
+        dask_arr = da.concatenate(chunks_darrs, axis=0)
+
+        if labelled:
+            # Dimension labels
+            dims = ['trainId'] + ['dim_%d' % i for i in range(dask_arr.ndim - 1)]
+
+            # Train ID index
+            coords = {'trainId': np.concatenate(chunks_trainids)}
+
+            import xarray
+            return xarray.DataArray(dask_arr, dims=dims, coords=coords)
+        else:
+            return dask_arr
 
     def union(self, *others):
         """Join the data in this collection with one or more others.
