@@ -167,8 +167,8 @@ class RunValidator:
 
         for i, filename in enumerate(self.filenames):
             if self.term_progress:
-                print(f"\r{i}/{len(self.filenames)} files "
-                      f"({len(self.problems)} problems): {filename}", end='')
+                print(f"{i}/{len(self.filenames)} files "
+                      f"({len(self.problems)} problems): {filename}", end='\r')
             path = osp.join(self.run_dir, filename)
             try:
                 fa = FileAccess(path)
@@ -181,6 +181,9 @@ class RunValidator:
                 fv = FileValidator(fa)
                 self.problems.extend(fv.run_checks())
                 fa.close()
+
+        if self.term_progress:
+            print("{0}/{0} files".format(len(self.filenames)))
 
         if not self.file_accesses:
             self.problems.append(
