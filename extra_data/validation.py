@@ -1,13 +1,12 @@
 from argparse import ArgumentParser
 from functools import partial
-from glob import glob
-import h5py
 import numpy as np
 import os
 import os.path as osp
+from shutil import get_terminal_size
 import sys
 
-from .reader import DataCollection, H5File, FileAccess
+from .reader import H5File, FileAccess
 from .run_files_map import RunFilesMap
 
 
@@ -162,13 +161,25 @@ class RunValidator:
         self.check_files_map()
         return self.problems
 
+    def progress(self, line):
+        """Show a line of progress information"""
+        if not self.term_progress:
+            return
+
+        if sys.stderr.isatty():
+            termsize = get_terminal_size()
+            # Overwrite the previous line with spaces first
+            print(' ' * termsize.columns, end='\r', file=sys.stderr)
+            print(line, end='\r', file=sys.stderr)
+        else:
+            print(line, file=sys.stderr)
+
     def check_files(self):
         self.file_accesses = []
 
         for i, filename in enumerate(self.filenames):
-            if self.term_progress:
-                print(f"{i}/{len(self.filenames)} files "
-                      f"({len(self.problems)} problems): {filename}", end='\r')
+            self.progress(f"{i}/{len(self.filenames)} files "
+                          f"({len(self.problems)} problems): {filename}")
             path = osp.join(self.run_dir, filename)
             try:
                 fa = FileAccess(path)
@@ -182,8 +193,7 @@ class RunValidator:
                 self.problems.extend(fv.run_checks())
                 fa.close()
 
-        if self.term_progress:
-            print("{0}/{0} files".format(len(self.filenames)))
+        self.progress("{0}/{0} files".format(len(self.filenames)))
 
         if not self.file_accesses:
             self.problems.append(
@@ -236,7 +246,7 @@ def main(argv=None):
         print()  # Start a new line
 
     if validator.problems:
-        print("Validation failed!")
+        print(f"Validation failed! {len(validator.problems)} problems:")
         print(str(ValidationError(validator.problems)))
         return 1
     else:
