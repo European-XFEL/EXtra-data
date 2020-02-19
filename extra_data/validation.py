@@ -1,12 +1,12 @@
 from argparse import ArgumentParser
 from functools import partial
-from glob import glob
-import h5py
 import numpy as np
 import os
+import os.path as osp
+from shutil import get_terminal_size
 import sys
 
-from .reader import DataCollection, H5File, FileAccess
+from .reader import H5File, FileAccess
 from .run_files_map import RunFilesMap
 
 
@@ -143,20 +143,11 @@ def check_index_contiguous(firsts, counts, record):
 
 
 class RunValidator:
-    def __init__(self, run_dir: str):
-        files = []
-        self.files_excluded = []
+    def __init__(self, run_dir: str, term_progress=False):
         self.run_dir = run_dir
-
-        for path in glob(os.path.join(run_dir, '*.h5')):
-            try:
-                fa = FileAccess(path)
-            except Exception as e:
-                self.files_excluded.append((path, e))
-            else:
-                files.append(fa)
-
-        self.run = DataCollection(files)
+        self.term_progress = term_progress
+        self.filenames = [f for f in os.listdir(run_dir) if f.endswith('.h5')]
+        self.file_accesses = []
         self.problems = []
 
     def validate(self):
@@ -166,31 +157,54 @@ class RunValidator:
 
     def run_checks(self):
         self.problems = []
-        self.check_files_openable()
         self.check_files()
         self.check_files_map()
         return self.problems
 
-    def check_files_openable(self):
-        for path, err in self.files_excluded:
-            self.problems.append(dict(msg="Could not open file", file=path, error=err))
+    def progress(self, line):
+        """Show a line of progress information"""
+        if not self.term_progress:
+            return
 
-        if not self.run.files:
+        if sys.stderr.isatty():
+            termsize = get_terminal_size()
+            # Overwrite the previous line with spaces first
+            print(' ' * termsize.columns, end='\r', file=sys.stderr)
+            print(line, end='\r', file=sys.stderr)
+        else:
+            print(line, file=sys.stderr)
+
+    def check_files(self):
+        self.file_accesses = []
+
+        for i, filename in enumerate(self.filenames):
+            self.progress(f"{i}/{len(self.filenames)} files "
+                          f"({len(self.problems)} problems): {filename}")
+            path = osp.join(self.run_dir, filename)
+            try:
+                fa = FileAccess(path)
+            except Exception as e:
+                self.problems.append(
+                    dict(msg="Could not open file", file=path, error=e)
+                )
+            else:
+                self.file_accesses.append(fa)
+                fv = FileValidator(fa)
+                self.problems.extend(fv.run_checks())
+                fa.close()
+
+        self.progress("{0}/{0} files".format(len(self.filenames)))
+
+        if not self.file_accesses:
             self.problems.append(
                 dict(msg="No usable files found", directory=self.run_dir)
             )
-
-    def check_files(self):
-        for f in self.run.files:
-            fv = FileValidator(f)
-            self.problems.extend(fv.run_checks())
-            f.close()
 
     def check_files_map(self):
         # Outdated cache entries we can detect with the file's stat() are not a
         # problem. Loading the cache file will discard those automatically.
         cache = RunFilesMap(self.run_dir)
-        for f_access in self.run.files:
+        for f_access in self.file_accesses:
             f_cache = cache.get(f_access.filename)
             if f_cache is None:
                 continue
@@ -219,18 +233,24 @@ def main(argv=None):
     path = args.path
     if os.path.isdir(path):
         print("Checking run directory:", path)
-        validator = RunValidator(path)
+        validator = RunValidator(path, term_progress=True)
     else:
         print("Checking file:", path)
         validator = FileValidator(H5File(path).files[0])
 
     try:
-        validator.validate()
-        print("No problems found")
-    except ValidationError as ve:
-        print("Validation failed!")
-        print(str(ve))
+        validator.run_checks()
+    except KeyboardInterrupt:
+        print('\n^C (validation cancelled)')
+    else:
+        print()  # Start a new line
+
+    if validator.problems:
+        print(f"Validation failed! {len(validator.problems)} problems:")
+        print(str(ValidationError(validator.problems)))
         return 1
+    else:
+        print("No problems found")
 
 
 if __name__ == '__main__':
