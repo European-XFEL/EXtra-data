@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-0.9
+1.0
 ---
 
 - Fix ``extra-data-validate`` with a run directory without a :ref:`cached data
