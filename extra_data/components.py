@@ -330,7 +330,7 @@ class MPxDetectorBase:
 
         return xarray.concat(arrays, pd.Index(modnos, name='module'))
 
-    def get_dask_array(self, key):
+    def get_dask_array(self, key, subtrain_index='pulseId'):
         """Get a labelled Dask array of detector data
 
         Dask does lazy, parallelised computing, and can work with large data
@@ -342,7 +342,15 @@ class MPxDetectorBase:
 
         key: str
           The data to get, e.g. 'image.data' for pixel values.
+        subtrain_index: str
+          Specify 'pulseId' (default) or 'cellId' to label the frames recorded
+          within each train. Pulse ID should allow this data to be matched with
+          other devices, but depends on how the detector was manually configured
+          when the data was taken. Cell ID refers to the memory cell used for
+          that frame in the detector hardware.
         """
+        if subtrain_index not in {'pulseId', 'cellId'}:
+            raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
         arrays = []
         modnos = []
         for modno, source in sorted(self.modno_to_source.items()):
@@ -353,16 +361,16 @@ class MPxDetectorBase:
             # If that changes, this check will need to change as well.
             if key.startswith('image.'):
                 # Add pulse IDs to create multi-level index
-                pulse_id = self.data.get_array(source, 'image.pulseId')
+                inner_ix = self.data.get_array(source, 'image.' + subtrain_index)
                 # Raw files have a spurious extra dimension
-                if pulse_id.ndim >= 2 and pulse_id.shape[1] == 1:
-                    pulse_id = pulse_id[:, 0]
+                if inner_ix.ndim >= 2 and inner_ix.shape[1] == 1:
+                    inner_ix = inner_ix[:, 0]
 
                 mod_arr = mod_arr.rename({'trainId': 'train_pulse'})
 
                 mod_arr.coords['train_pulse'] = pd.MultiIndex.from_arrays(
-                    [mod_arr.coords['train_pulse'], pulse_id],
-                    names=['trainId', 'pulseId']
+                    [mod_arr.coords['train_pulse'], inner_ix],
+                    names=['trainId', subtrain_index]
                 )
 
             arrays.append(mod_arr)

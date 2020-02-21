@@ -78,6 +78,9 @@ def test_get_dask_array(mock_fxe_raw_run):
         arr.coords['pulseId'], np.tile(np.arange(0, 128), 480)
     )
 
+    arr_cellid = det.get_dask_array('image.data', subtrain_index='cellId')
+    assert arr_cellid.coords['cellId'].shape == (480 * 128,)
+
 
 def test_iterate(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
