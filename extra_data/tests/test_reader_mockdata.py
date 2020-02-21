@@ -443,6 +443,20 @@ def test_run_get_dask_array(mock_fxe_raw_run):
     assert arr.dtype == np.float32
 
 
+def test_run_get_dask_array_labelled(mock_fxe_raw_run):
+    import dask.array as da
+    run = RunDirectory(mock_fxe_raw_run)
+    arr = run.get_dask_array(
+        'SA1_XTD2_XGM/DOOCS/MAIN:output', 'data.intensityTD', labelled=True
+    )
+
+    assert isinstance(arr, DataArray)
+    assert isinstance(arr.data, da.Array)
+    assert arr.dims == ('trainId', 'dim_0')
+    assert arr.shape == (480, 1000)
+    assert arr.coords['trainId'][0] == 10000
+
+
 def test_select(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
 

@@ -17,6 +17,8 @@ pulling together the separate modules into a single array.
 
 .. autoclass:: LPD1M
 
+   .. automethod:: get_dask_array
+
    .. automethod:: get_array
 
    .. automethod:: trains
