@@ -21,6 +21,8 @@ pulling together the separate modules into a single array.
 
    .. automethod:: get_array
 
+   .. automethod:: get_dask_array
+
    .. automethod:: trains
 
    .. automethod:: write_virtual_cxi
