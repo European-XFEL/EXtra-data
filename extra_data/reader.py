@@ -35,6 +35,7 @@ from .read_machinery import (
     contiguous_regions,
     find_proposal,
 )
+from .func_api import map_kernel_by_train, alloc_array
 from .run_files_map import RunFilesMap
 
 __all__ = [
@@ -47,6 +48,7 @@ __all__ = [
     'by_index',
     'SourceNameError',
     'PropertyNameError',
+    'alloc_array'
 ]
 
 log = logging.getLogger(__name__)
@@ -970,6 +972,7 @@ class DataCollection:
             # Select a list of trains by train ID
             new_train_ids = sorted(set(self.train_ids).intersection(tr.value))
             if not new_train_ids:
+                # BUG: This condition will trigger if by_id is an empty slice!
                 raise ValueError(
                     "Given train IDs not found among {} trains in "
                     "collection".format(len(self.train_ids))
@@ -984,6 +987,10 @@ class DataCollection:
                  if np.intersect1d(f.train_ids, new_train_ids).size > 0]
 
         return DataCollection(files, selection=self.selection, train_ids=new_train_ids)
+
+    def split_trains(self, count):
+        return [self.select_trains(by_id[train_ids])
+                for train_ids in np.array_split(self.train_ids, count)]
 
     def _check_source_conflicts(self):
         """Check for data with the same source and train ID in different files.
@@ -1235,6 +1242,9 @@ class DataCollection:
 
         f = h5py.File(filename, 'r')
         return f[ds_path]
+
+    def map_trains(self, kernel, **kwargs):
+        map_kernel_by_train(kernel, self, **kwargs)
 
 
 class TrainIterator:
