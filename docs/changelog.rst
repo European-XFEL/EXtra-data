@@ -4,10 +4,12 @@ Release Notes
 1.0
 ---
 
+- New :meth:`~.LPD1M.get_dask_array` method for accessing detector data with
+  Dask (:ghpull:`18`).
 - Fix ``extra-data-validate`` with a run directory without a :ref:`cached data
   map <run-map-caching>` (:ghpull:`12`).
 - Add ``.squeeze()`` method for virtual stacks of detector data from
-  :func:`stack_detector_data` (:ghpull:`16`).
+  :func:`.stack_detector_data` (:ghpull:`16`).
 - Close each file after reading its metadata, to avoid hitting the limit of
   open files when opening a large run (:ghpull:`8`).
   This is a mitigation: you will still hit the limit if you access data from
