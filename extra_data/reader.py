@@ -101,6 +101,8 @@ class FileAccess:
         self._index_cache = {}
         # {source: set(keys)}
         self._keys_cache = {}
+        # {source: set(keys)} - including incomplete sets
+        self._known_keys = defaultdict(set)
 
     @property
     def file(self):
@@ -220,6 +222,31 @@ class FileAccess:
         self._keys_cache[source] = res
         return res
 
+    def has_source_key(self, source, key):
+        """Check if the given source and key exist in this file
+
+        This doesn't scan for all the keys in the source, as .get_keys() does.
+        """
+        try:
+            return key in self._keys_cache[source]
+        except KeyError:
+            pass
+
+        if key in self._known_keys[source]:
+            return True
+
+        if source in self.control_sources:
+            path = '/CONTROL/{}/{}'.format(source, key.replace('.', '/'))
+        elif source in self.instrument_sources:
+            path = '/INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
+        else:
+            raise SourceNameError(source)
+
+        if path in self.file:
+            self._known_keys[source].add(key)
+            return True
+        return False
+
 
 class DataCollection:
     """An assemblage of data generated at European XFEL
@@ -312,8 +339,17 @@ class DataCollection:
     def _check_field(self, source, key):
         if source not in self.all_sources:
             raise SourceNameError(source)
-        if key not in self.keys_for_source(source):
+
+        if not self._has_source_key(source, key):
             raise PropertyNameError(key, source)
+
+    def _has_source_key(self, source, key):
+        selected_keys = self.selection[source]
+        if selected_keys is not None:
+            return key in selected_keys
+
+        for f in self._source_index[source]:
+            return f.has_source_key(source, key)
 
     def keys_for_source(self, source):
         """Get a set of key names for the given source
