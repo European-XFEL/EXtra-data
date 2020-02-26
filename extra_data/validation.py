@@ -70,6 +70,21 @@ class FileValidator:
                     dataset=ds_path,
                 )
 
+    def _get_index(self, source, group):
+        """returns first and count dataset for specified source.
+        
+        This is slightly different to the same method in FileAccess as it does
+        cut the dataset up to the trainId's dataset length.
+        """
+        ix_group = self.file.file['/INDEX/{}/{}'.format(source, group)]
+        firsts = ix_group['first'][:]
+        if 'count' in ix_group:
+            counts = ix_group['count'][:]
+        else:
+            status = ix_group['status'][:]
+            counts = np.uint64((ix_group['last'][:] - firsts + 1) * status)
+        return firsts, counts
+
     def check_indices(self):
         for src in self.file.instrument_sources:
             src_groups = set()
@@ -90,7 +105,7 @@ class FileValidator:
 
             for src, group in src_groups:
                 record = partial(self.record, dataset='INDEX/{}/{}'.format(src, group))
-                first, count = self.file.get_index(src, group)
+                first, count = self._get_index(src, group)
 
                 if (first.ndim != 1) or (count.ndim != 1):
                     record(
@@ -106,6 +121,7 @@ class FileValidator:
                         first_shape=first.shape,
                         count_shape=count.shape,
                     )
+                    continue
 
                 if first.shape != self.file.train_ids.shape:
                     record(
