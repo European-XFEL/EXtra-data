@@ -1,6 +1,22 @@
+"""
+File cache implementation
+
+File cache provides the collection for open h5 files 
+which keeps the number of opened files under the given limit
+popping the files that were accessed the longest time ago
+
+
+Implementation based on the hashed priority priority queue
+
+The module provides global instance of file cache for using
+across entire process
+"""
 import h5py
 
 class CachedFile(object):
+    """
+    The element of FileCache, wrapping a real opened h5 file
+    """
     def __init__(self, filename, prio, cache_instance=None):
         self._filename = filename
         self._fc_prio = prio
@@ -25,10 +41,17 @@ class CachedFile(object):
         return self._file
     
 class DummyCachedFile(object):
+    """
+    The fake element of FileCache allows to unify interface for FileAccess object
+    """
     file = None
         
         
 class FileCache(object):
+    """
+    FileCache is a collection for opened h5 files. It keeps the number of opened files 
+    under the given limit popping files accessed longest time ago.
+    """
     dummy = DummyCachedFile
     
     def __init__(self, maxfiles=128):
@@ -43,6 +66,9 @@ class FileCache(object):
     
     @maxfiles.setter
     def maxfiles(self, maxfiles):
+        """
+        Set the new file limit and pops redundant files
+        """
         n = len(self.pq)
         while n > maxfiles:
             f = self._pop()
@@ -59,6 +85,14 @@ class FileCache(object):
             f.close()
 
     def get_or_open(self, filename):
+        """
+        Return the opened file from the cache.
+        It opens new file only if the requested file is absent.
+        If new file exceeds the *maxfiles* limit it pops file accessed most far.
+
+        For use of the file cache, FileAccess shold use `fc.get_or_open(filename)`
+        instead of direct opening file with h5py
+        """
         try:
             f = self.cat[filename]
             pos = f._fc_pos
@@ -102,8 +136,9 @@ class FileCache(object):
         
         return last
         
-
     def _siftdown(self, startpos, pos):
+        """ Adapted from heapq
+        """
         newitem = self.pq[pos]
         # Follow the path to the root, moving parents down until finding a place
         # newitem fits.
@@ -120,6 +155,8 @@ class FileCache(object):
         self.pq[pos] = newitem
 
     def _siftup(self, pos):
+        """ Adapted from heapq
+        """
         endpos = len(self.pq)
         startpos = pos
         newitem = self.pq[pos]
@@ -152,6 +189,9 @@ def set_global_filecache():
     _extra_data_file_cache = FileCache(maxfiles)
 
 def get_global_filecache():
+    """
+    Returns the global instance of FileCache
+    """
     return _extra_data_file_cache
 
 set_global_filecache()
