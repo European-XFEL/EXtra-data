@@ -36,6 +36,7 @@ from .read_machinery import (
     find_proposal,
 )
 from .run_files_map import RunFilesMap
+from .filecache import get_global_filecache
 
 __all__ = [
     'H5File',
@@ -72,7 +73,7 @@ class FileAccess:
     file: h5py.File
         Open h5py file object
     """
-    _file = None
+    _file = get_global_filecache().dummy
     _format_version = None
     metadata_fstat = None
 
@@ -95,7 +96,7 @@ class FileAccess:
 
             # Close the file again - crude way to avoid hitting the limit of
             # open files, which is only 1024 by default.
-            self.close()
+            #self.close()
 
         # {(file, source, group): (firsts, counts)}
         self._index_cache = {}
@@ -104,14 +105,16 @@ class FileAccess:
 
     @property
     def file(self):
-        if self._file is None:
-            self._file = h5py.File(self.filename, 'r')
-        return self._file
+        f = self._file.file
+        if f is None:
+            self._file = get_global_filecache().get_or_open(self.filename)
+            f = self._file._file
+
+        return f
+
 
     def close(self):
-        if self._file:
-            self._file.close()
-            self._file = None
+            pass
 
     @property
     def format_version(self):
