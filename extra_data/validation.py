@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from concurrent.futures import FIRST_COMPLETED, as_completed, ProcessPoolExecutor, TimeoutError, wait
 from functools import partial
 import numpy as np
 import os
@@ -190,25 +191,56 @@ class RunValidator:
         else:
             print(line, file=sys.stderr)
 
+    def _check_file(self, filename):
+        path = osp.join(self.run_dir, filename)
+        problems = []
+        fa = None
+        try:
+            fa = FileAccess(path)
+        except Exception as e:
+            problems.append(
+                dict(msg="Could not open file", file=path, error=e)
+            )
+        else:
+            fv = FileValidator(fa)
+            self.problems.extend(fv.run_checks())
+            fa.close()
+        return fa, problems
+
     def check_files(self):
         self.file_accesses = []
 
-        for i, filename in enumerate(self.filenames):
-            self.progress(f"{i}/{len(self.filenames)} files "
-                          f"({len(self.problems)} problems): {filename}")
-            path = osp.join(self.run_dir, filename)
+        with ProcessPoolExecutor() as pool:
+            futures = {pool.submit(self._check_file, fname): fname
+                       for fname in self.filenames}
             try:
-                fa = FileAccess(path)
-            except Exception as e:
-                self.problems.append(
-                    dict(msg="Could not open file", file=path, error=e)
-                )
-            else:
-                self.file_accesses.append(fa)
-                fv = FileValidator(fa)
-                self.problems.extend(fv.run_checks())
-                fa.close()
-
+                timeout = 600 + 5 * len(self.filenames) / pool._max_workers
+                print(f'timeout: {timeout}')
+                for future in as_completed(futures, timeout=timeout):
+                    filename = futures[future]
+                    fa, problems = future.result()
+                    self.problems.extend(problems)
+                    if fa is not None:
+                        self.file_accesses.append(fa)
+                        fa.close()
+                    self.progress(f"{len(self.file_accesses)}/{len(self.filenames)} files "
+                                  f"({len(self.problems)} problems): {filename}")
+            except TimeoutError as te:
+                hanging = [fut for fut in futures if not fut.done()]
+                print(f'\nTimed-out processing due to {len(hanging)} (of {len(futures)}) hanging file(s):')
+                for fut in hanging:
+                    print(futures[fut])
+            except KeyboardInterrupt:
+                pass
+            finally:
+                import signal, psutil, os
+                proc = psutil.Process(os.getpid())
+                for process in proc.children(recursive=True):
+                    try:
+                        process.send_signal(signal.SIGKILL)
+                    except Exception:
+                        continue
+                pool.shutdown(wait=False)
         self.progress("{0}/{0} files".format(len(self.filenames)))
 
         if not self.file_accesses:
