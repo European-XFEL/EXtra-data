@@ -5,46 +5,20 @@ File cache provides the collection for open h5 files
 which keeps the number of opened files under the given limit
 popping the files that were accessed the longest time ago
 
-
-Implementation based on the hashed priority priority queue
+Implementation based on the OrderedDict
 
 The module provides global instance of file cache for using
 across entire process
 """
 import h5py
+from collections import OrderedDict
 
-class CachedFile(object):
+class H5FileDummy(object):
     """
-    The element of FileCache, wrapping a real opened h5 file
+    The fake `h5py.File` allows to unify interface for FileAccess object
     """
-    def __init__(self, filename, prio, cache_instance=None):
-        self._filename = filename
-        self._fc_prio = prio
-        self._fc_pos = -1
-        self._file = h5py.File(filename, 'r')
-        self._cache = cache_instance if cache_instance is not None else get_global_filecache()
-        
-
-    def close(self):
-        if self._file is not None:
-            self._file.close()
-            self._file = None
-            self._fc_pos = -1
-        
-    def __lt__(self, other):
-        return self._fc_prio < other._fc_prio
-
-    @property
-    def file(self):
-        if self._file is not None:
-            self._cache._touch(self._fc_pos)
-        return self._file
-    
-class DummyCachedFile(object):
-    """
-    The fake element of FileCache allows to unify interface for FileAccess object
-    """
-    file = None
+    class id:
+        valid = 0
         
         
 class FileCache(object):
@@ -52,13 +26,11 @@ class FileCache(object):
     FileCache is a collection for opened h5 files. It keeps the number of opened files 
     under the given limit popping files accessed longest time ago.
     """
-    dummy = DummyCachedFile
+    dummy = H5FileDummy
     
     def __init__(self, maxfiles=128):
         self._maxfiles = maxfiles
-        self.pq = []
-        self.cat = {}
-        self.counter = 0
+        self._cache = OrderedDict()
         
     @property
     def maxfiles(self):
@@ -69,115 +41,65 @@ class FileCache(object):
         """
         Set the new file limit and pops redundant files
         """
-        n = len(self.pq)
+        n = len(self._cache)
         while n > maxfiles:
-            f = self._pop()
-            del self.cat[f._filename]
-            f.close()
+            rp, rf = self._cache.popitem(last=False)
+            rf.close()
             n -= 1
         self._maxfiles = maxfiles
         
     def clean(self):
+        """
+        Closes all cached files
+        """
         self.cat = {}
         self.counter = 0
-        while self.pq:
-            f = self._pop()
-            f.close()
+        while len(self._cache):
+            rp, rf = self._cache.popitem(last=False)
+            rf.close()
 
     def get_or_open(self, filename):
         """
-        Return the opened file from the cache.
+        Returns the opened `h5.File` instance from the cache.
         It opens new file only if the requested file is absent.
         If new file exceeds the *maxfiles* limit it pops file accessed most far.
 
-        For use of the file cache, FileAccess shold use `fc.get_or_open(filename)`
+        For use of the file cache, FileAccess shold use `get_or_open(filename)`
         instead of direct opening file with h5py
         """
         try:
-            f = self.cat[filename]
-            pos = f._fc_pos
-            f._fc_prio = self.counter
-            self._siftup(pos)
+            f = self._cache[filename]
+            self._cache.move_to_end(filename)
         except:
-            f = CachedFile(filename, self.counter)
-            n = len(self.pq)
-            if n < self._maxfiles:
-                f._fc_pos = n
-                self.pq.append(f)
-                self._siftdown(0, n)
-            else:
-                redundant = self.pq[0]
-                del self.cat[redundant._filename]
-                redundant.close()
-
-                f._fc_pos = 0
-                self.pq[0] = f
-                self._siftup(0)
-
-            self.cat[filename] = f
-
-        self.counter += 1
-        
+            if len(self._cache) >= self._maxfiles:
+                rp, rf = self._cache.popitem(last=False)
+                rf.close()
+            f = h5py.File(filename, 'r')
+            self._cache[filename] = f
         return f
     
-    def _touch(self, pos):
-        self.pq[pos]._fc_prio = self.counter
-        self._siftup(pos)
-        self.counter += 1
+    def touch(self, filename):
+        """
+        Move the touched file to the end of the `cache`
+        
+        For use of the file cache, FileAccess should use `touch(filename)` every time 
+        it provides the underying instance of h5File for reading.
+        """
+        self._cache.move_to_end(filename)
+        
+    def close(self, filename):
+        """
+        Pops file from cache and closes it
+        
+        Useful, if it is necessary to reopen some file for writing.
+        """
+        try:
+            f = self._cache[filename]
+            f.close()
+            del self._cache[filename]
+        except:
+            pass
     
-    def _pop(self):
-        last = self.pq.pop()    # raises appropriate IndexError if heap is empty
-        if self.pq:
-            ret = self.pq[0]
-            last._fc_pos = 0
-            self.pq[0] = last
-            self._siftup(0)
-            return ret
-        
-        return last
-        
-    def _siftdown(self, startpos, pos):
-        """ Adapted from heapq
-        """
-        newitem = self.pq[pos]
-        # Follow the path to the root, moving parents down until finding a place
-        # newitem fits.
-        while pos > startpos:
-            parentpos = (pos - 1) >> 1
-            parent = self.pq[parentpos]
-            if newitem < parent:
-                parent._fc_pos = pos
-                self.pq[pos] = parent
-                pos = parentpos
-                continue
-            break
-        newitem._fc_pos = pos
-        self.pq[pos] = newitem
-
-    def _siftup(self, pos):
-        """ Adapted from heapq
-        """
-        endpos = len(self.pq)
-        startpos = pos
-        newitem = self.pq[pos]
-        # Bubble up the smaller child until hitting a leaf.
-        childpos = 2*pos + 1    # leftmost child position
-        while childpos < endpos:
-            # Set childpos to index of smaller child.
-            rightpos = childpos + 1
-            if rightpos < endpos and not self.pq[childpos] < self.pq[rightpos]:
-                childpos = rightpos
-            # Move the smaller child up.
-            item = self.pq[childpos]
-            item._fc_pos = pos
-            self.pq[pos] = item
-            pos = childpos
-            childpos = 2*pos + 1
-        # The leaf at pos is empty now.  Put newitem there, and bubble it up
-        # to its final resting place (by sifting its parents down).
-        newitem._fc_pos = pos
-        self.pq[pos] = newitem
-        self._siftdown(startpos, pos)
         
 import resource
 import atexit

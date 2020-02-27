@@ -105,16 +105,15 @@ class FileAccess:
 
     @property
     def file(self):
-        f = self._file.file
-        if f is None:
+        if self._file.id.valid:
+            get_global_filecache().touch(self.filename)
+        else:
             self._file = get_global_filecache().get_or_open(self.filename)
-            f = self._file._file
-
-        return f
-
+            
+        return self._file
 
     def close(self):
-            pass
+        pass
 
     @property
     def format_version(self):
