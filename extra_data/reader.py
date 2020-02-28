@@ -1242,7 +1242,18 @@ class DataCollection:
         f = h5py.File(filename, 'r')
         return f[ds_path]
 
+    def enum_trains(self):
+        """Returns a mapping of train ID to index.
+
+        Useful to write into global memory shared by workers based on train ID.
+        """
+
+        return dict(zip(self.train_ids, range(len(self.train_ids))))
+
     def map(self, kernel, map_context=LocalContext()):
+        """Apply kernel to each train in this DataCollection.
+        """
+
         map_context.run(kernel, self)
 
 
