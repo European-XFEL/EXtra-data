@@ -8,128 +8,122 @@ import threading
 import numpy
 
 
-try:
-    mp_ctx = multiprocessing.get_context('fork')
-except ValueError:
-    DEFAULT_PL_METHOD = 'threading'
-else:
-    DEFAULT_PL_METHOD = 'processes'
+class MapContext:
+    """Context to execute map operations.
 
-#DEFAULT_PL_WORKER = multiprocessing.cpu_count() // 3
-DEFAULT_PL_WORKER = 5
+    A map operation applies a single callable to each train of the
+    targeted DataCollection. The context define the runtime conditions
+    for this operation, which may be in a process pool, for example.
+
+    As some of these environments may require special memory semantics,
+    the context also provides a method of allocating ndarrays. The only
+    abstract method required by an implementation is
+    :func:run(kernel, target).
+    """
+
+    def array(self, shape, dtype, per_worker=False, **kwargs):
+        """High-level allocation.
+
+        Expects a property called n_worker.
+        """
+
+        if per_worker:
+            shape = (self.n_worker,) + shape
+
+        return self.alloc_array(shape, dtype)
+
+    def alloc_array(self, shape, dtype):
+        """Low-level allocation.
+        """
+
+        return numpy.zeros(shape, dtype=dtype)
+
+    def map(self, kernel, target, worker_id):
+        """Low-level map operation.
+        """
+
+        for train_id, data in target.trains():
+            kernel(worker_id, train_id, data)
+
+    def run(self, kernel, target):
+        raise NotImplementedError('run')
 
 
+class LocalContext(MapContext):
+    """Local map context.
 
-def parallelized(func):
-    def parallelized_func(kernel, target, **kwargs):
-        pl_worker = min(get_pl_worker(kwargs), len(target.train_ids))
-        pl_method = get_pl_method(kwargs)
+    Runs the map operation directly.
+    """
+    def __init__(self, n_worker=None):
+        self.n_worker = 1
 
-        # Don't bother with a pool for one worker.
-        if pl_worker == 1:
-            func(target, kernel, 0)
-            return
+    def run(self, kernel, target):
+        self.map(kernel, target, 0)
 
-        if pl_method == 'processes':
-            queue_class = mp_ctx.Queue
-            pool_class = mp_ctx.Pool
 
-            # - Must be a top-level function to be picklable.
-            # - Global variable shared across fork() allows any
-            #   kind of kernel, even lambda's.
+class MapPoolContext(MapContext):
+    """Map context for multiprocessing Pool interface.
+    """
 
-            def init_func():
-                global _func, _kernel, _worker_id
-                _func = func
-                _kernel = kernel
-                _worker_id = id_queue.get()
+    def run(self, kernel, target, id_queue, pool_cls):
+        self.kernel = kernel
 
-            run_func = _process_run
-
-        elif pl_method == 'threads':
-            queue_class = queue.Queue
-            pool_class = multiprocessing.pool.ThreadPool
-            worker_id_map = {}
-
-            def init_func():
-                worker_id_map[threading.get_ident()] = id_queue.get()
-
-            def run_func(target):
-                func(target, kernel, worker_id_map[threading.get_ident()])
-
-        id_queue = queue_class()
-        for worker_id in range(pl_worker):
+        for worker_id in range(self.n_worker):
             id_queue.put(worker_id)
 
-        # IMPORTANT!
-        # Force each worker to open its own file handles, as h5py horribly
-        # breaks if the same handle is used across threads or even processes.
         for f in target.files:
             f.close()
 
-        with pool_class(pl_worker, init_func) as p:
-            p.map(run_func, target.split_trains(pl_worker))
+        with pool_cls(self.n_worker, self.init_pool) as p:
+            p.map(self.map, target.split_trains(self.n_worker))
 
-    return parallelized_func
-
-
-def _process_run(target):
-    _func(target, _kernel, _worker_id)
-
-@parallelized
-def map_kernel_by_train(target, kernel, worker_id):
-    for train_id, data in target.trains():
-        kernel(worker_id, train_id, data)
+    def init_pool(self):
+        pass
 
 
-def get_pl_worker(kwargs, default=None):
-    try:
-        pl_worker = int(kwargs['pl_worker'])
-    except KeyError:
-        if default is not None:
-            pl_worker = default
-        else:
-            pl_worker = DEFAULT_PL_WORKER
+class ThreadContext(MapPoolContext):
+    """Map context in a thread pool.
+    """
 
-    except ValueError:
-        raise ValueError('invalid pl_worker value') from None
+    def __init__(self, n_worker):
+        self.n_worker = n_worker
 
-    else:
-        del kwargs['pl_worker']
+        self.worker_id_map = {}
+        self.id_queue = queue.Queue()
 
-    return pl_worker
+    def alloc_array(self, shape, dtype):
+        return numpy.zeros(shape, dtype=dtype)
 
+    def run(self, kernel, target):
+        super().run(kernel, target, self.id_queue,
+                    multiprocessing.pool.ThreadPool)
 
-def get_pl_method(kwargs, default=None):
-    try:
-        pl_method = kwargs['pl_method']
-    except KeyError:
-        if default is not None:
-            pl_method = default
-        else:
-            pl_method = DEFAULT_PL_METHOD
+    def init_pool(self):
+        self.worker_id_map[threading.get_ident()] = self.id_queue.get()
 
-    else:
-        del kwargs['pl_method']
-
-    if pl_method not in ('processes', 'threads'):
-        raise ValueError('invalid parallelization method') from None
-
-    return pl_method
+    def map(self, target):
+        super().map(self.kernel, target,
+                    self.worker_id_map[threading.get_ident()])
 
 
-def get_pl_env(kwargs, pl_worker=None, pl_method=None):
-    return get_pl_worker(kwargs, pl_worker), get_pl_method(kwargs, pl_method)
+class ProcessContext(MapPoolContext):
+    """Map context in a process pool.
+    """
 
+    _instance = None
 
-def alloc_array(shape, dtype, per_worker=False, **kwargs):
-    pl_method = get_pl_method(kwargs)
+    def __init__(self, n_worker):
+        try:
+            self.mp_ctx = multiprocessing.get_context('fork')
+        except ValueError:
+            raise ValueError('fork context required')
 
-    if per_worker:
-        pl_worker = get_pl_worker(kwargs)
-        shape = (pl_worker,) + shape
+        self.__class__._instance = self
 
-    if pl_method == 'processes':
+        self.n_worker = n_worker
+        self.id_queue = self.mp_ctx.Queue()
+
+    def alloc_array(self, shape, dtype):
         if isinstance(shape, int):
             n_elements = shape
         else:
@@ -146,5 +140,17 @@ def alloc_array(shape, dtype, per_worker=False, **kwargs):
         return numpy.frombuffer(memoryview(buf)[:n_bytes],
                                 dtype=dtype).reshape(shape)
 
-    elif pl_method == 'threads':
-        return numpy.zeros(shape, dtype=dtype)
+    def run(self, kernel, target):
+        super().run(kernel, target, self.id_queue, self.mp_ctx.Pool)
+
+    def init_pool(self):
+        self.worker_id = self.id_queue.get()
+
+    @classmethod
+    def map(cls, target):
+        # map is a classmethod here and fetches its process-local
+        # instance, as the instance in the parent process is not
+        # actually part of the execution.
+
+        self = cls._instance
+        super(cls, self).map(self.kernel, target, self.worker_id)

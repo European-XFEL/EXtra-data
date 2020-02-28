@@ -35,7 +35,7 @@ from .read_machinery import (
     contiguous_regions,
     find_proposal,
 )
-from .func_api import map_kernel_by_train, alloc_array
+from .func_api import LocalContext
 from .run_files_map import RunFilesMap
 
 __all__ = [
@@ -47,8 +47,7 @@ __all__ = [
     'by_id',
     'by_index',
     'SourceNameError',
-    'PropertyNameError',
-    'alloc_array'
+    'PropertyNameError'
 ]
 
 log = logging.getLogger(__name__)
@@ -1243,8 +1242,8 @@ class DataCollection:
         f = h5py.File(filename, 'r')
         return f[ds_path]
 
-    def map_trains(self, kernel, **kwargs):
-        map_kernel_by_train(kernel, self, **kwargs)
+    def map(self, kernel, map_context=LocalContext()):
+        map_context.run(kernel, self)
 
 
 class TrainIterator:
