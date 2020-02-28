@@ -35,7 +35,7 @@ from .read_machinery import (
     contiguous_regions,
     find_proposal,
 )
-from .func_api import LocalContext
+from .map_machinery import LocalContext
 from .run_files_map import RunFilesMap
 
 __all__ = [
