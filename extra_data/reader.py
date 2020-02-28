@@ -100,6 +100,10 @@ class FileAccess:
         # {source: set(keys)}
         self._keys_cache = {}
 
+    def __del__(self):
+        if self._file:
+            self._fc.close()
+
     @property
     def file(self):
         if self._file:
@@ -306,11 +310,6 @@ class DataCollection:
         if self.ctx_closes:
             for file in self.files:
                 file.close()
-
-    def __del__(self):
-        if self.ctx_closes:
-            for file in self.files:
-                file.close()        
 
     @property
     def all_sources(self):
