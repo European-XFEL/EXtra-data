@@ -1,10 +1,11 @@
 from argparse import ArgumentParser
-from concurrent.futures import FIRST_COMPLETED, as_completed, ProcessPoolExecutor, TimeoutError, wait
+from multiprocessing import Pool
 from functools import partial
 import numpy as np
 import os
 import os.path as osp
 from shutil import get_terminal_size
+from signal import signal, SIGINT, SIG_IGN
 import sys
 
 from .reader import H5File, FileAccess
@@ -159,6 +160,29 @@ def check_index_contiguous(firsts, counts, record):
     return probs
 
 
+def progress_bar(done, total, length=50, sufix=''):
+    filled = int(length * done // total)
+    bar = '█' * filled + '=' * (length - filled)
+    p = f'\rProgress: |{bar}| {done}/{total} files : {sufix}'
+    return p[:get_terminal_size().columns]
+
+
+def _check_file(path):
+    problems = []
+    fa = None
+    try:
+        fa = FileAccess(path)
+    except Exception as e:
+        problems.append(
+            dict(msg="Could not open file", file=path, error=e)
+        )
+    else:
+        fv = FileValidator(fa)
+        problems.extend(fv.run_checks())
+        fa.close()
+    return fa, problems
+
+
 class RunValidator:
     def __init__(self, run_dir: str, term_progress=False):
         self.run_dir = run_dir
@@ -178,11 +202,12 @@ class RunValidator:
         self.check_files_map()
         return self.problems
 
-    def progress(self, line):
+    def progress(self, done, total, nproblems):
         """Show a line of progress information"""
         if not self.term_progress:
             return
 
+        line = progress_bar(done, total, sufix=f'{nproblems} problems')
         if sys.stderr.isatty():
             termsize = get_terminal_size()
             # Overwrite the previous line with spaces first
@@ -191,58 +216,26 @@ class RunValidator:
         else:
             print(line, file=sys.stderr)
 
-    def _check_file(self, filename):
-        path = osp.join(self.run_dir, filename)
-        problems = []
-        fa = None
-        try:
-            fa = FileAccess(path)
-        except Exception as e:
-            problems.append(
-                dict(msg="Could not open file", file=path, error=e)
-            )
-        else:
-            fv = FileValidator(fa)
-            self.problems.extend(fv.run_checks())
-            fa.close()
-        return fa, problems
-
     def check_files(self):
         self.file_accesses = []
 
-        with ProcessPoolExecutor() as pool:
-            futures = {pool.submit(self._check_file, fname): fname
-                       for fname in self.filenames}
-            try:
-                timeout = 600 + 5 * len(self.filenames) / pool._max_workers
-                print(f'timeout: {timeout}')
-                for future in as_completed(futures, timeout=timeout):
-                    filename = futures[future]
-                    fa, problems = future.result()
-                    self.problems.extend(problems)
-                    if fa is not None:
-                        self.file_accesses.append(fa)
-                        fa.close()
-                    self.progress(f"{len(self.file_accesses)}/{len(self.filenames)} files "
-                                  f"({len(self.problems)} problems): {filename}")
-            except TimeoutError as te:
-                hanging = [fut for fut in futures if not fut.done()]
-                print(f'\nTimed-out processing due to {len(hanging)} (of {len(futures)}) hanging file(s):')
-                for fut in hanging:
-                    print(futures[fut])
-            except KeyboardInterrupt:
-                pass
-            finally:
-                import signal, psutil, os
-                proc = psutil.Process(os.getpid())
-                for process in proc.children(recursive=True):
-                    try:
-                        process.send_signal(signal.SIGKILL)
-                    except Exception:
-                        continue
-                pool.shutdown(wait=False)
-        self.progress("{0}/{0} files".format(len(self.filenames)))
+        def initializer():
+            # prevent child processes from receiving KeyboardInterrupt
+            signal(SIGINT, SIG_IGN)
 
+        filepaths = [osp.join(self.run_dir, fn) for fn in self.filenames]
+        nfiles = len(self.filenames)
+        with Pool(initializer=initializer) as pool:
+            for fa, problems in pool.imap_unordered(_check_file, filepaths):
+                self.problems.extend(problems)
+                if fa is not None:
+                    self.file_accesses.append(fa)
+                    fa.close()
+
+                    self.progress(
+                        len(self.file_accesses), nfiles, len(self.problems))
+
+        self.progress(len(self.file_accesses), nfiles, len(self.problems))
         if not self.file_accesses:
             self.problems.append(
                 dict(msg="No usable files found", directory=self.run_dir)
