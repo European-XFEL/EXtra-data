@@ -13,24 +13,21 @@ across entire process
 import h5py
 from collections import OrderedDict
 
-class H5FileDummy(object):
-    """
-    The fake `h5py.File` allows to unify interface for FileAccess object
-    """
-    class id:
-        valid = 0
-        
-        
+class FileRef(object):
+    __slots__ = 'nref', 'fh'
+
+
 class FileCache(object):
     """
     FileCache is a collection for opened h5 files. It keeps the number of opened files 
     under the given limit popping files accessed longest time ago.
     """
-    dummy = H5FileDummy
-    
     def __init__(self, maxfiles=128):
         self._maxfiles = maxfiles
         self._cache = OrderedDict()
+        
+    def __del__(self):
+        self.clean()
         
     @property
     def maxfiles(self):
@@ -43,22 +40,20 @@ class FileCache(object):
         """
         n = len(self._cache)
         while n > maxfiles:
-            rp, rf = self._cache.popitem(last=False)
-            rf.close()
+            p, f = self._cache.popitem(last=False)
+            f.fh.close()
             n -= 1
         self._maxfiles = maxfiles
-        
+
     def clean(self):
         """
         Closes all cached files
         """
-        self.cat = {}
-        self.counter = 0
         while len(self._cache):
-            rp, rf = self._cache.popitem(last=False)
-            rf.close()
+            p, f = self._cache.popitem(last=False)
+            f.fh.close()
 
-    def get_or_open(self, filename):
+    def open(self, filename):
         """
         Returns the opened `h5.File` instance from the cache.
         It opens new file only if the requested file is absent.
@@ -69,14 +64,17 @@ class FileCache(object):
         """
         try:
             f = self._cache[filename]
+            f.nref += 1
             self._cache.move_to_end(filename)
-        except:
+        except KeyError:
             if len(self._cache) >= self._maxfiles:
                 rp, rf = self._cache.popitem(last=False)
-                rf.close()
-            f = h5py.File(filename, 'r')
+                rf.fh.close()
+            f = FileRef()
+            f.fh = h5py.File(filename, 'r')
+            f.nref = 1
             self._cache[filename] = f
-        return f
+        return f.fh
     
     def touch(self, filename):
         """
@@ -86,27 +84,32 @@ class FileCache(object):
         it provides the underying instance of h5File for reading.
         """
         self._cache.move_to_end(filename)
-        
+
     def close(self, filename):
+        f = self._cache.get(filename, None)
+        if f is not None:
+            if f.nref <= 1:
+                f.fh.close()
+                del self._cache[filename]
+            else:
+                f.nref -= 1
+        
+    def force_close(self, filename):
         """
         Pops file from cache and closes it
         
         Useful, if it is necessary to reopen some file for writing.
         """
-        try:
-            f = self._cache[filename]
-            f.close()
-            del self._cache[filename]
-        except:
-            pass
-    
+        f = self._cache.pop(filename, None)
+        if f is not None:
+            f.fh.close()
+
         
 import resource
-import atexit
 
 def set_global_filecache():
     nofile_rlimits = resource.getrlimit(resource.RLIMIT_NOFILE)
-    maxfiles = nofile_rlimits[0] >> 1
+    maxfiles = nofile_rlimits[0] // 2
     global _extra_data_file_cache
     _extra_data_file_cache = FileCache(maxfiles)
 
@@ -114,10 +117,9 @@ def get_global_filecache():
     """
     Returns the global instance of FileCache
     """
-    return _extra_data_file_cache
+    try:
+        return _extra_data_file_cache
+    except NameError:
+        set_global_filecache()
+        return _extra_data_file_cache
 
-set_global_filecache()
-
-@atexit.register
-def clean_global_filecache():
-    _extra_data_file_cache.clean()

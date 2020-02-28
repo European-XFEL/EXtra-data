@@ -73,7 +73,8 @@ class FileAccess:
     file: h5py.File
         Open h5py file object
     """
-    _file = get_global_filecache().dummy
+    _fc = get_global_filecache()
+    _file = None
     _format_version = None
     metadata_fstat = None
 
@@ -94,10 +95,6 @@ class FileAccess:
             # This is used by the run files map.
             self.metadata_fstat = os.stat(self.file.id.get_vfd_handle())
 
-            # Close the file again - crude way to avoid hitting the limit of
-            # open files, which is only 1024 by default.
-            #self.close()
-
         # {(file, source, group): (firsts, counts)}
         self._index_cache = {}
         # {source: set(keys)}
@@ -105,15 +102,17 @@ class FileAccess:
 
     @property
     def file(self):
-        if self._file.id.valid:
-            get_global_filecache().touch(self.filename)
+        if self._file:
+            self._fc.touch(self.filename)
         else:
-            self._file = get_global_filecache().get_or_open(self.filename)
+            self._file = self._fc.open(self.filename)
             
         return self._file
 
     def close(self):
-        pass
+        if self._file:
+            self._fc.close(self.filename)
+            self._file = None
 
     @property
     def format_version(self):
@@ -163,6 +162,11 @@ class FileAccess:
 
     def __repr__(self):
         return "{}({})".format(type(self).__name__, repr(self.filename))
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['_file'] = None
+        return state
 
     @property
     def all_sources(self):
@@ -302,6 +306,11 @@ class DataCollection:
         if self.ctx_closes:
             for file in self.files:
                 file.close()
+
+    def __del__(self):
+        if self.ctx_closes:
+            for file in self.files:
+                file.close()        
 
     @property
     def all_sources(self):
