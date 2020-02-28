@@ -46,6 +46,9 @@ __all__ = [
     'DataCollection',
     'by_id',
     'by_index',
+    'by_fraction',
+    'by_sorted_index',
+    'by_sorted_fraction',
     'SourceNameError',
     'PropertyNameError'
 ]
@@ -62,6 +65,18 @@ class by_id(_SliceConstructable):
 
 
 class by_index(_SliceConstructable):
+    pass
+
+
+class by_fraction(_SliceConstructable):
+    pass
+
+
+class by_sorted_index(_SliceConstructable):
+    pass
+
+
+class by_sorted_fraction(_SliceConstructable):
     pass
 
 
@@ -969,6 +984,7 @@ class DataCollection:
             If given train IDs do not overlap with the trains in this data.
         """
         tr = train_range
+        new_order = None
         if isinstance(tr, by_id) and isinstance(tr.value, slice):
             # Slice by train IDs
             start_ix = _tid_to_slice_ix(tr.value.start, self.train_ids, stop=False)
@@ -977,6 +993,25 @@ class DataCollection:
         elif isinstance(tr, by_index) and isinstance(tr.value, slice):
             # Slice by indexes in this collection
             new_train_ids = self.train_ids[tr.value]
+        elif isinstance(tr, by_fraction) and isinstance(tr.value, slice):
+            # Slices by relative indexes in this collection
+            start = int(tr.value.start) * len(self.train_ids) \
+                    if tr.value.start is not None else None
+            stop = int(tr.value.stop) * len(self.train_ids) \
+                   if tr.value.stop is not None else None
+            new_train_ids = self.train_ids[slice(start, stop, tr.value.step)]
+        elif isinstance(tr, by_sorted_index) and isinstance(tr.value, slice):
+            # Slice by indexes in this sorted collection
+            new_order = self.train_order[tr.value]
+            new_train_ids = sorted(np.array(self.train_ids)[new_order])
+        elif isinstance(tr, by_sorted_fraction) and isinstance(tr.value, slice):
+            # Slice by relative indexes in this sorted collection
+            start = int(tr.value.start) * len(self.train_ids) \
+                    if tr.value.start is not None else None
+            stop = int(tr.value.stop) * len(self.train_ids) \
+                   if tr.value.stop is not None else None
+            new_order = self.train_order[slice(start, stop, tr.value.step)]
+            new_train_ids = sorted(np.array(self.train_ids)[new_order])
         elif isinstance(tr, by_id) and isinstance(tr.value, (list, np.ndarray)):
             # Select a list of trains by train ID
             new_train_ids = sorted(set(self.train_ids).intersection(tr.value))
@@ -989,13 +1024,18 @@ class DataCollection:
         elif isinstance(tr, by_index) and isinstance(tr.value, (list, np.ndarray)):
             # Select a list of trains by index in this collection
             new_train_ids = sorted([self.train_ids[i] for i in tr.value])
+        elif isinstance(tr, by_sorted_index) and isinstance(tr.value, (list, np.ndarray)):
+            # Select a list of trains by index in this sorted collection
+            new_order = np.array(self.train_order)[tr.value]
+            new_train_ids = sorted(np.array(new_train_ids)[new_order])
         else:
             raise TypeError(type(train_range))
 
         files = [f for f in self.files
                  if np.intersect1d(f.train_ids, new_train_ids).size > 0]
 
-        return DataCollection(files, selection=self.selection, train_ids=new_train_ids)
+        return DataCollection(files, selection=self.selection, train_ids=new_train_ids,
+                              train_order=new_order)
 
     def split_trains(self, count):
         return [self.select_trains(by_id[train_ids])
