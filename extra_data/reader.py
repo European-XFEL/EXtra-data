@@ -1351,6 +1351,36 @@ class DataCollection:
 
         return dc
 
+    def peek_format(self, device, key):
+        # Return the shape and dtype for a particular source and key.
+        # TBD
+        pass
+
+    # Original name: alloc_for_trains
+    def map_array(self, device, key, multiply_rows, map_context):
+        # Return an array (len(train_ids)*multiply_rows, *source_shape)
+        # and suitable dtype.
+        # TBD, depends on peek_format
+        pass
+
+    # Original name: load_trains
+    def map_get(self, device, key):
+        # Allocates a suitable array and loads all trains for a single
+        # source and key.
+        # TBD, depends on peek_format and map_array
+
+        # Could be used to reshuffle data according to train_order, i.e. to
+        # implement get_array obeying train_order, if enum_trains constructs
+        # the mapping according to this order.
+        pass
+
+    # Original name: average_trains
+    def map_average(self, device, key):
+        # Allocates a suitable array and averages all trains for a single
+        # source and key.
+        # TBD, depends on peek_format
+        pass
+
 
 class TrainIterator:
     """Iterate over trains in a collection of data
