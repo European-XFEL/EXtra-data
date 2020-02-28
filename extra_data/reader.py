@@ -995,9 +995,9 @@ class DataCollection:
             new_train_ids = self.train_ids[tr.value]
         elif isinstance(tr, by_fraction) and isinstance(tr.value, slice):
             # Slices by relative indexes in this collection
-            start = int(tr.value.start) * len(self.train_ids) \
+            start = int(tr.value.start * len(self.train_ids)) \
                     if tr.value.start is not None else None
-            stop = int(tr.value.stop) * len(self.train_ids) \
+            stop = int(tr.value.stop * len(self.train_ids)) \
                    if tr.value.stop is not None else None
             new_train_ids = self.train_ids[slice(start, stop, tr.value.step)]
         elif isinstance(tr, by_sorted_index) and isinstance(tr.value, slice):
@@ -1006,9 +1006,9 @@ class DataCollection:
             new_train_ids = sorted(np.array(self.train_ids)[new_order])
         elif isinstance(tr, by_sorted_fraction) and isinstance(tr.value, slice):
             # Slice by relative indexes in this sorted collection
-            start = int(tr.value.start) * len(self.train_ids) \
+            start = int(tr.value.start * len(self.train_ids)) \
                     if tr.value.start is not None else None
-            stop = int(tr.value.stop) * len(self.train_ids) \
+            stop = int(tr.value.stop * len(self.train_ids)) \
                    if tr.value.stop is not None else None
             new_order = self.train_order[slice(start, stop, tr.value.step)]
             new_train_ids = sorted(np.array(self.train_ids)[new_order])
