@@ -19,45 +19,47 @@ else:
 DEFAULT_PL_WORKER = 5
 
 
-def parallelized(func):
-    def parallelized_func(kernel, target, *args, **kwargs):
-        if 'worker_id' in kwargs:
-            raise ValueError('worker_id may not be used as a keyword '
-                             'argument for parallelized functions') from None
 
+def parallelized(func):
+    def parallelized_func(kernel, target, **kwargs):
         pl_worker = min(get_pl_worker(kwargs), len(target.train_ids))
         pl_method = get_pl_method(kwargs)
 
-        # TODO: This check only makes sense for synchronous execution.
+        # Don't bother with a pool for one worker.
         if pl_worker == 1:
-            func(kernel, target, *args, worker_id=0, **kwargs)
+            func(target, kernel, 0)
             return
 
         if pl_method == 'processes':
             queue_class = mp_ctx.Queue
             pool_class = mp_ctx.Pool
-            init_func = _worker_process_init
-            run_func = _worker_process_run
+
+            # - Must be a top-level function to be picklable.
+            # - Global variable shared across fork() allows any
+            #   kind of kernel, even lambda's.
+
+            def init_func():
+                global _func, _kernel, _worker_id
+                _func = func
+                _kernel = kernel
+                _worker_id = id_queue.get()
+
+            run_func = _process_run
 
         elif pl_method == 'threads':
             queue_class = queue.Queue
             pool_class = multiprocessing.pool.ThreadPool
-            init_func = _worker_thread_init
-            run_func = _worker_thread_run
+            worker_id_map = {}
 
-            global _worker_id_map, _worker_func, _worker_args, \
-                _worker_kwargs, _kernel
-            _worker_id_map = {}
-            _worker_func = func
-            _worker_args = args
-            _worker_kwargs = kwargs
-            _kernel = kernel
+            def init_func():
+                worker_id_map[threading.get_ident()] = id_queue.get()
+
+            def run_func(target):
+                func(target, kernel, worker_id_map[threading.get_ident()])
 
         id_queue = queue_class()
         for worker_id in range(pl_worker):
             id_queue.put(worker_id)
-
-        init_args = (id_queue, func, kernel, args, kwargs)
 
         # IMPORTANT!
         # Force each worker to open its own file handles, as h5py horribly
@@ -65,10 +67,19 @@ def parallelized(func):
         for f in target.files:
             f.close()
 
-        with pool_class(pl_worker, init_func, init_args) as p:
+        with pool_class(pl_worker, init_func) as p:
             p.map(run_func, target.split_trains(pl_worker))
 
     return parallelized_func
+
+
+def _process_run(target):
+    _func(target, _kernel, _worker_id)
+
+@parallelized
+def map_kernel_by_train(target, kernel, worker_id):
+    for train_id, data in target.trains():
+        kernel(worker_id, train_id, data)
 
 
 def get_pl_worker(kwargs, default=None):
@@ -137,34 +148,3 @@ def alloc_array(shape, dtype, per_worker=False, **kwargs):
 
     elif pl_method == 'threads':
         return numpy.zeros(shape, dtype=dtype)
-
-
-def _worker_process_init(id_queue, func, kernel, args, kwargs):
-    global _worker_id, _worker_func, _worker_args, _worker_kwargs, _kernel
-    _worker_id = id_queue.get()
-    _worker_func = func
-    _worker_args = args
-    _worker_kwargs = kwargs
-    _kernel = kernel
-
-
-def _worker_process_run(target):
-    _worker_func(_kernel, target, *_worker_args,
-                 worker_id=_worker_id, **_worker_kwargs)
-
-
-def _worker_thread_init(id_queue, func, kernel, args, kwargs):
-    global _worker_id_map
-    _worker_id_map[threading.get_ident()] = id_queue.get()
-
-
-def _worker_thread_run(target):
-    _worker_func(_kernel, target, *_worker_args,
-                 worker_id=_worker_id_map[threading.get_ident()],
-                 **_worker_kwargs)
-
-
-@parallelized
-def map_kernel_by_train(kernel, target, worker_id=0, **kwargs):
-    for train_id, data in target.trains():
-        kernel(worker_id, train_id, data)
