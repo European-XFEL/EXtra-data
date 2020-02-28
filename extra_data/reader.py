@@ -231,7 +231,8 @@ class DataCollection:
     You normally get an instance of this class by calling :func:`H5File`
     for a single file or :func:`RunDirectory` for a directory.
     """
-    def __init__(self, files, selection=None, train_ids=None, ctx_closes=False):
+    def __init__(self, files, selection=None, train_ids=None, train_order=None,
+                 ctx_closes=False):
         self.files = list(files)
         self.ctx_closes = ctx_closes
 
@@ -262,6 +263,9 @@ class DataCollection:
         if train_ids is None:
             train_ids = sorted(set().union(*(f.train_ids for f in files)))
         self.train_ids = train_ids
+
+        if train_order is not None:
+            self._train_order = train_order
 
     @classmethod
     def from_paths(cls, paths, _files_map=None):
@@ -301,6 +305,12 @@ class DataCollection:
         if self.ctx_closes:
             for file in self.files:
                 file.close()
+
+    @property
+    def train_order(self):
+        if self._train_order is None:
+            self._train_order = list(range(len(self.train_ids)))
+        return self._train_order
 
     @property
     def all_sources(self):
@@ -1275,6 +1285,31 @@ class DataCollection:
         self.map(mask_kernel, map_context)
 
         return self.select_trains(by_id[np.array(self.train_ids)[result_mask]])
+
+    def map_sort(self, kernel, pos_dtype=np.float64, pos_shape=tuple(),
+                 map_context=LocalContext()):
+        """Sort by map operation.
+
+        Return a new DataCollection with custom train order based on the
+        results of kernel for each train.
+
+        e.g. sort DataCollection by pulse energy of first pulse:
+        run.map_sort(lamba wid, tid, data: data['XGM'][0])
+        """
+
+        positions = map_context.array((len(self.train_ids), *pos_shape),
+                                      dtype=pos_dtype)
+        tid_indices = self.enum_trains()
+
+        def order_kernel(wid, tid, data):
+            positions[tid_indices[tid]] = kernel(wid, tid, data)
+
+        self.map(order_kernel, map_context)
+
+        dc = self.select_trains(by_index[:])
+        dc._train_order = list(np.argsort(positions))
+
+        return dc
 
 
 class TrainIterator:
