@@ -1256,6 +1256,26 @@ class DataCollection:
 
         map_context.run(kernel, self)
 
+    def map_filter(self, kernel, map_context=LocalContext()):
+        """Filter by map operation.
+
+        Return a new DataCollection with those trains for which kernel
+        evaluates to True.
+
+        e.g. filter to trains with actual signal in a given ROI:
+        run.map_filter(lambda wid, tid, data: data['CAMERA'][my_slice] > threshold)
+        """
+
+        result_mask = map_context.array(len(self.train_ids), dtype=bool)
+        tid_indices = self.enum_trains()
+
+        def mask_kernel(wid, tid, data):
+            result_mask[tid_indices[tid]] = kernel(wid, tid, data)
+
+        self.map(mask_kernel, map_context)
+
+        return self.select_trains(by_id[np.array(self.train_ids)[result_mask]])
+
 
 class TrainIterator:
     """Iterate over trains in a collection of data
