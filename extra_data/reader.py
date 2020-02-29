@@ -15,10 +15,13 @@ import datetime
 import fnmatch
 import h5py
 import logging
+from multiprocessing import Pool
 import numpy as np
 import os
 import os.path as osp
+import psutil
 import re
+import signal
 import sys
 import tempfile
 import time
@@ -289,18 +292,39 @@ class DataCollection:
             train_ids = sorted(set().union(*(f.train_ids for f in files)))
         self.train_ids = train_ids
 
+    @staticmethod
+    def _open_file(path, cache_info=None):
+        try:
+            fa = FileAccess(path, _cache_info=cache_info)
+        except Exception as e:
+            print("Skipping file", path, file=sys.stderr)
+            print("  (error was: {})".format(e), file=sys.stderr)
+        else:
+            return fa
+
     @classmethod
     def from_paths(cls, paths, _files_map=None):
         files = []
+        uncached = []
         for path in paths:
             cache_info = _files_map and _files_map.get(path)
-            try:
-                fa = FileAccess(path, _cache_info=cache_info)
-            except Exception as e:
-                print("Skipping file", path, file=sys.stderr)
-                print("  (error was: {})".format(e), file=sys.stderr)
+            if cache_info:
+                fa = cls._open_file(path, cache_info=cache_info)
+                if fa is not None:
+                    files.append(fa)
             else:
-                files.append(fa)
+                uncached.append(path)
+
+        if uncached:
+            def initializer():
+                # prevent child processes from receiving KeyboardInterrupt
+                signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+            nproc = min(psutil.cpu_count(), len(uncached))
+            with Pool(processes=nproc, initializer=initializer) as pool:
+                for fa in pool.imap_unordered(cls._open_file, uncached):
+                    if fa is not None:
+                        files.append(fa)
 
         if not files:
             raise Exception("All HDF5 files specified are unusable")
