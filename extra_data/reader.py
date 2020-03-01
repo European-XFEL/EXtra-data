@@ -19,6 +19,7 @@ from multiprocessing import Pool
 import numpy as np
 import os
 import os.path as osp
+import psutil
 import re
 import signal
 import sys
@@ -319,7 +320,7 @@ class DataCollection:
                 # prevent child processes from receiving KeyboardInterrupt
                 signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-            nproc = min(len(os.sched_getaffinity(0)), len(uncached))
+            nproc = min(len(psutil.Process().cpu_affinity()), len(uncached))
             with Pool(processes=nproc, initializer=initializer) as pool:
                 for fa in pool.imap_unordered(cls._open_file, uncached):
                     if fa is not None:
