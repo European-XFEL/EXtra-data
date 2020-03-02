@@ -118,8 +118,6 @@ class ProcessContext(MapPoolContext):
         except ValueError:
             raise ValueError('fork context required')
 
-        self.__class__._instance = self
-
         self.n_worker = n_worker
         self.id_queue = self.mp_ctx.Queue()
 
@@ -144,6 +142,9 @@ class ProcessContext(MapPoolContext):
         super().run(kernel, target, self.id_queue, self.mp_ctx.Pool)
 
     def init_pool(self):
+        # Save reference in process-local copy
+        self.__class__._instance = self
+
         self.worker_id = self.id_queue.get()
 
     @classmethod
