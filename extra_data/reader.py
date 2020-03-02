@@ -1447,18 +1447,15 @@ def open_run(proposal, run, data='raw', include='*'):
 
     prop_dir = find_proposal(proposal)
 
-    if isinstance(run, int):
-        run = 'r' + str(run).zfill(4)
-    elif isinstance(run, str):
+    if isinstance(run, str):
         if run.startswith('r'):
-            run = 'r' + str(run[1:]).zfill(4)
-        elif not run.startswith('r'):
-            run = 'r' + str(run).zfill(4)
-    else:
-        try:
-            run = int(run)
-        except ValueError:
-            print("Not a valid number")
-        run = 'r' + str(run).zfill(4)
+            run = run[1:]
+    try:
+        run = operator.index(run)
+    except ValueError:
+        print("Not a valid number")
+    if run < 1 or run > 9999:
+        raise(ValueError(f"run value '{run}' out of range"))
+    run = 'r' + str(run).zfill(4)
 
     return RunDirectory(osp.join(prop_dir, data, run), include=include)
