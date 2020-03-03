@@ -209,7 +209,6 @@ class RunValidator:
         if not self.term_progress:
             return
 
-        line = f'Checking {done}/{total} files ({nproblems} problems): {fname}\n'
         line = progress_bar(done, total)
         line += f'\n{nproblems} problems: {fname}'
         if sys.stderr.isatty():
