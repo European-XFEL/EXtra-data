@@ -1455,8 +1455,6 @@ def open_run(proposal, run, data='raw', include='*'):
             run = run[1:]
     else:
         run = index(run)  # Allow integers, including numpy integers
-        if run < 1 or run > 9999:
-            raise(ValueError(f"run value '{run}' out of range"))
     run = 'r' + str(run).zfill(4)
 
     return RunDirectory(osp.join(prop_dir, data, run), include=include)
