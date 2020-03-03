@@ -102,7 +102,7 @@ class FileAccess:
 
     def __del__(self):
         if self._file:
-            self._fc.close()
+            self._fc.close(self.filename)
 
     @property
     def file(self):
