@@ -297,10 +297,9 @@ class DataCollection:
         try:
             fa = FileAccess(path, _cache_info=cache_info)
         except Exception as e:
-            print("Skipping file", path, file=sys.stderr)
-            print("  (error was: {})".format(e), file=sys.stderr)
+            return osp.basename(path), str(e)
         else:
-            return fa
+            return osp.basename(path), fa
 
     @classmethod
     def from_paths(cls, paths, _files_map=None):
@@ -309,9 +308,12 @@ class DataCollection:
         for path in paths:
             cache_info = _files_map and _files_map.get(path)
             if cache_info:
-                fa = cls._open_file(path, cache_info=cache_info)
-                if fa is not None:
+                filename, fa = cls._open_file(path, cache_info=cache_info)
+                if isinstance(fa, FileAccess):
                     files.append(fa)
+                else:
+                    print(f"Skipping file {filename}", file=sys.stderr)
+                    print(f"  (error was: {fa})", file=sys.stderr)
             else:
                 uncached.append(path)
 
@@ -322,9 +324,12 @@ class DataCollection:
 
             nproc = min(len(psutil.Process().cpu_affinity()), len(uncached))
             with Pool(processes=nproc, initializer=initializer) as pool:
-                for fa in pool.imap_unordered(cls._open_file, uncached):
-                    if fa is not None:
+                for fname, fa in pool.imap_unordered(cls._open_file, uncached):
+                    if isinstance(fa, FileAccess):
                         files.append(fa)
+                    else:
+                        print(f"Skipping file {fname}", file=sys.stderr)
+                        print(f"  (error was: {fa})", file=sys.stderr)
 
         if not files:
             raise Exception("All HDF5 files specified are unusable")
