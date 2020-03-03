@@ -1451,7 +1451,7 @@ def open_run(proposal, run, data='raw', include='*'):
         if run.startswith('r'):
             run = run[1:]
     try:
-        run = operator.index(run)
+        run = int(run)
     except ValueError:
         print("Not a valid number")
     if run < 1 or run > 9999:
