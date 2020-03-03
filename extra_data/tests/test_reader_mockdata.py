@@ -587,6 +587,10 @@ def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
         run = open_run(proposal='2012', run='238')
         assert {f.filename for f in run.files} == paths
 
+        # With numpy integers
+        run = open_run(proposal=np.int64(2012), run=np.uint16(238))
+        assert {f.filename for f in run.files} == paths
+
         # Proc folder
         run = open_run(proposal=2012, run=238, data='proc')
 
