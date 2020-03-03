@@ -16,6 +16,7 @@ import fnmatch
 import h5py
 import logging
 import numpy as np
+from operator import index
 import os
 import os.path as osp
 import re
@@ -1450,12 +1451,10 @@ def open_run(proposal, run, data='raw', include='*'):
     if isinstance(run, str):
         if run.startswith('r'):
             run = run[1:]
-    try:
-        run = int(run)
-    except ValueError:
-        print("Not a valid number")
-    if run < 1 or run > 9999:
-        raise(ValueError(f"run value '{run}' out of range"))
+    else:
+        run = index(run)  # Allow integers, including numpy integers
+        if run < 1 or run > 9999:
+            raise(ValueError(f"run value '{run}' out of range"))
     run = 'r' + str(run).zfill(4)
 
     return RunDirectory(osp.join(prop_dir, data, run), include=include)
