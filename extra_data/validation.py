@@ -160,27 +160,29 @@ def check_index_contiguous(firsts, counts, record):
     return probs
 
 
-def progress_bar(done, total, length=50, sufix=''):
+def progress_bar(done, total, sufix=' '):
+    line = f'Progress: {done}/{total}{sufix}[{{}}]'
+    length = min(get_terminal_size().columns - len(line), 50)
     filled = int(length * done // total)
-    bar = '█' * filled + '=' * (length - filled)
-    p = f'\rProgress: |{bar}| {done}/{total} files : {sufix}'
-    return p[:get_terminal_size().columns]
+    bar = '#' * filled + ' ' * (length - filled)
+    return line.format(bar)
 
 
-def _check_file(path):
+def _check_file(args):
+    runpath, filename = args
     problems = []
-    fa = None
     try:
-        fa = FileAccess(path)
+        fa = FileAccess(osp.join(runpath, filename))
     except Exception as e:
         problems.append(
             dict(msg="Could not open file", file=path, error=e)
         )
+        return filename, None, problems
     else:
         fv = FileValidator(fa)
         problems.extend(fv.run_checks())
         fa.close()
-    return fa, problems
+    return filename, fa, problems
 
 
 class RunValidator:
@@ -202,17 +204,18 @@ class RunValidator:
         self.check_files_map()
         return self.problems
 
-    def progress(self, done, total, nproblems):
+    def progress(self, done, total, fname, nproblems):
         """Show a line of progress information"""
         if not self.term_progress:
             return
 
-        line = progress_bar(done, total, sufix=f'{nproblems} problems')
+        line = f'Checking {done}/{total} files ({nproblems} problems): {fname}\n'
+        line = progress_bar(done, total)
+        line += f'\n{nproblems} problems: {fname}'
         if sys.stderr.isatty():
-            termsize = get_terminal_size()
-            # Overwrite the previous line with spaces first
-            print(' ' * termsize.columns, end='\r', file=sys.stderr)
-            print(line, end='\r', file=sys.stderr)
+            # "\x1b[2K": delete whole line, "\x1b[1A": move up cursor
+            print('\x1b[2K\x1b[1A\x1b[2K', end='\r',file=sys.stderr)
+            print(line, end='', file=sys.stderr)
         else:
             print(line, file=sys.stderr)
 
@@ -223,19 +226,18 @@ class RunValidator:
             # prevent child processes from receiving KeyboardInterrupt
             signal(SIGINT, SIG_IGN)
 
-        filepaths = [osp.join(self.run_dir, fn) for fn in self.filenames]
+        filepaths = [(self.run_dir, fn) for fn in sorted(self.filenames)]
         nfiles = len(self.filenames)
+        self.progress(0, nfiles, filepaths[0][1], 0)
+
         with Pool(initializer=initializer) as pool:
-            for fa, problems in pool.imap_unordered(_check_file, filepaths):
+            iterator = pool.imap_unordered(_check_file, filepaths)
+            for done, (fname, fa, problems) in enumerate(iterator, start=1):
                 self.problems.extend(problems)
                 if fa is not None:
                     self.file_accesses.append(fa)
-                    fa.close()
+                self.progress(done, nfiles, fname, len(self.problems))
 
-                    self.progress(
-                        len(self.file_accesses), nfiles, len(self.problems))
-
-        self.progress(len(self.file_accesses), nfiles, len(self.problems))
         if not self.file_accesses:
             self.problems.append(
                 dict(msg="No usable files found", directory=self.run_dir)
@@ -274,6 +276,7 @@ def main(argv=None):
     path = args.path
     if os.path.isdir(path):
         print("Checking run directory:", path)
+        print()
         validator = RunValidator(path, term_progress=True)
     else:
         print("Checking file:", path)
