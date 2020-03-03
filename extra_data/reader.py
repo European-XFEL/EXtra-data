@@ -1441,10 +1441,12 @@ def open_run(proposal, run, data='raw', include='*'):
     include: str
         Wildcard string to filter data files.
     """
-    if isinstance(proposal, int):
-        proposal = 'p{:06d}'.format(proposal)
-    elif ('/' not in proposal) and not proposal.startswith('p'):
-        proposal = 'p' + proposal.rjust(6, '0')
+    if isinstance(proposal, str):
+        if ('/' not in proposal) and not proposal.startswith('p'):
+            proposal = 'p' + proposal.rjust(6, '0')
+    else:
+        # Allow integers, including numpy integers
+        proposal = 'p{:06d}'.format(index(proposal))
 
     prop_dir = find_proposal(proposal)
 
