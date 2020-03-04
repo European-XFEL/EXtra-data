@@ -16,6 +16,7 @@ import fnmatch
 import h5py
 import logging
 import numpy as np
+from operator import index
 import os
 import os.path as osp
 import re
@@ -1440,16 +1441,20 @@ def open_run(proposal, run, data='raw', include='*'):
     include: str
         Wildcard string to filter data files.
     """
-    if isinstance(proposal, int):
-        proposal = 'p{:06d}'.format(proposal)
-    elif ('/' not in proposal) and not proposal.startswith('p'):
-        proposal = 'p' + proposal.rjust(6, '0')
+    if isinstance(proposal, str):
+        if ('/' not in proposal) and not proposal.startswith('p'):
+            proposal = 'p' + proposal.rjust(6, '0')
+    else:
+        # Allow integers, including numpy integers
+        proposal = 'p{:06d}'.format(index(proposal))
 
     prop_dir = find_proposal(proposal)
 
-    if isinstance(run, int):
-        run = 'r{:04d}'.format(run)
-    elif not run.startswith('r'):
-        run = 'r' + run.rjust(4, '0')
+    if isinstance(run, str):
+        if run.startswith('r'):
+            run = run[1:]
+    else:
+        run = index(run)  # Allow integers, including numpy integers
+    run = 'r' + str(run).zfill(4)
 
     return RunDirectory(osp.join(prop_dir, data, run), include=include)
