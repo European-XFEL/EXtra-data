@@ -27,3 +27,8 @@ class TrainIDError(KeyError):
 
     def __str__(self):
         return "Train ID {!r} not found in this data".format(self.train_id)
+
+
+class FileTemporarilyUnavailable(OSError):
+    pass
+

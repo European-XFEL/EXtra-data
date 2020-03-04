@@ -35,6 +35,7 @@ from .read_machinery import (
     union_selections,
     contiguous_regions,
     find_proposal,
+    Locality,
 )
 from .run_files_map import RunFilesMap
 
@@ -77,8 +78,9 @@ class FileAccess:
     _format_version = None
     metadata_fstat = None
 
-    def __init__(self, filename, _cache_info=None):
+    def __init__(self, filename, _cache_info=None, accpt_loc=Locality.ANY):
         self.filename = filename
+        Locality.check(filename, accpt_loc)
 
         if _cache_info:
             self.train_ids = _cache_info['train_ids']
@@ -291,12 +293,12 @@ class DataCollection:
         self.train_ids = train_ids
 
     @classmethod
-    def from_paths(cls, paths, _files_map=None):
+    def from_paths(cls, paths, _files_map=None, accpt_loc=Locality.ANY):
         files = []
         for path in paths:
             cache_info = _files_map and _files_map.get(path)
             try:
-                fa = FileAccess(path, _cache_info=cache_info)
+                fa = FileAccess(path, _cache_info=cache_info, accpt_loc=accpt_loc)
             except Exception as e:
                 print("Skipping file", path, file=sys.stderr)
                 print("  (error was: {})".format(e), file=sys.stderr)
@@ -309,8 +311,8 @@ class DataCollection:
         return cls(files, ctx_closes=True)
 
     @classmethod
-    def from_path(cls, path):
-        files = [FileAccess(path)]
+    def from_path(cls, path, accpt_loc=Locality.ANY):
+        files = [FileAccess(path, accpt_loc=accpt_loc)]
         return cls(files, ctx_closes=True)
 
     def __enter__(self):
@@ -1381,7 +1383,7 @@ def H5File(path):
     return DataCollection.from_path(path)
 
 
-def RunDirectory(path, include='*'):
+def RunDirectory(path, include='*', accpt_loc=Locality.ANY):
     """Open data files from a 'run' at European XFEL.
 
     ::
@@ -1407,7 +1409,7 @@ def RunDirectory(path, include='*'):
 
     files_map = RunFilesMap(path)
     t0 = time.monotonic()
-    d = DataCollection.from_paths(files, files_map)
+    d = DataCollection.from_paths(files, files_map, accpt_loc=accpt_loc)
     log.debug("Opened run with %d files in %.2g s",
               len(d.files), time.monotonic() - t0)
     files_map.save(d.files)
@@ -1419,7 +1421,7 @@ def RunDirectory(path, include='*'):
 RunHandler = RunDirectory
 
 
-def open_run(proposal, run, data='raw', include='*'):
+def open_run(proposal, run, data='raw', include='*', accpt_loc=Locality.ANY):
     """Access EuXFEL data on the Maxwell cluster by proposal and run number.
 
     ::
@@ -1457,4 +1459,4 @@ def open_run(proposal, run, data='raw', include='*'):
         run = index(run)  # Allow integers, including numpy integers
     run = 'r' + str(run).zfill(4)
 
-    return RunDirectory(osp.join(prop_dir, data, run), include=include)
+    return RunDirectory(osp.join(prop_dir, data, run), include=include, accpt_loc=accpt_loc)

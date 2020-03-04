@@ -10,7 +10,7 @@ import os.path as osp
 import re
 import time
 
-from .exceptions import SourceNameError
+from .exceptions import SourceNameError, FileTemporarilyUnavailable
 
 log = logging.getLogger(__name__)
 
@@ -205,3 +205,52 @@ def find_proposal(propno):
         return d
 
     raise Exception("Couldn't find proposal dir for {!r}".format(propno))
+
+class Locality:
+    """                                                                                                                                        
+    Returns get or check a file locality
+
+    It allows to avoid hangs on reading files from dCache
+    if they are not available or stored on tape
+    """
+    MW_DCACHE_MOUNT='/pnfs/'
+
+    NONE = 0
+    GPFS = 0x1
+    DC_ONLINE = 0x2
+    DC_NEARLINE = 0x4
+    DC_ANY = 0x6
+    UNKNOWN = 0x8
+
+    FAST = 0x3
+    ANY = 0x7
+
+    DC_LOC_RESP = {
+        'UNAVAILABLE': NONE,
+        'NEARLINE': DC_NEARLINE,
+        'ONLINE': DC_ONLINE,
+        'ONLINE_AND_NEARLINE': DC_ANY,
+    }
+
+    @classmethod
+    def isondcache(cls, path):
+        return osp.realpath(osp.abspath(path)).startswith(cls.MW_DCACHE_MOUNT)
+
+    @classmethod
+    def get(cls, path):
+        if not cls.isondcache(path):
+            return cls.GPFS
+
+        bdir, fn = osp.split(path)
+        cmd = osp.join(bdir, f".(get)({fn})(locality)")
+        with open(cmd, 'rt') as f:
+            loc = cls.DC_LOC_RESP.get(f.read().strip(), cls.UNKNOWN)
+        return loc
+
+    @classmethod
+    def check(cls, path, acceptable):
+        loc = cls.get(path)
+        if not loc & cls.ANY:
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+        if not loc & acceptable:
+            raise FileTemporarilyUnavailable(errno.EAGAIN, os.strerror(errno.EAGAIN), path)
