@@ -426,11 +426,8 @@ class MPxDetectorTrainIterator:
         self._datasets_cache = {}
 
     def _find_data(self, source, key, tid):
-        try:
-            file, ds = self._datasets_cache[(source, key)]
-        except KeyError:
-            pass
-        else:
+        file, ds = self._datasets_cache.get((source, key), (None, None))
+        if ds:
             ixs = (file.train_ids == tid).nonzero()[0]
             if ixs.size > 0:
                 return file, ixs[0], ds
