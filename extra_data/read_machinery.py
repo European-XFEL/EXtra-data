@@ -6,9 +6,11 @@ from collections import defaultdict
 from glob import iglob
 import logging
 import numpy as np
+import os
 import os.path as osp
 import re
 import time
+import errno
 
 from .exceptions import SourceNameError, FileTemporarilyUnavailable
 
