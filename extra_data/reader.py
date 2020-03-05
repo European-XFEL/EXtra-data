@@ -73,8 +73,8 @@ class FileAccess:
     file: h5py.File
         Open h5py file object
     """
-    __fc = get_global_filecache()
-    __file = None
+    _fc = get_global_filecache()
+    _file = None
     _format_version = None
     metadata_fstat = None
 
@@ -100,17 +100,23 @@ class FileAccess:
         # {source: set(keys)}
         self._keys_cache = {}
 
+    def __del__(self):
+        if self._file:
+            self._fc.close(self.filename)
+
     @property
     def file(self):
-        if self.__file:
-            self.__fc.touch(self.filename)
+        if self._file:
+            self._fc.touch(self.filename)
         else:
-            self.__file = self.__fc.open(self.filename)
+            self._file = self._fc.open(self.filename)
             
-        return self.__file
+        return self._file
 
     def close(self):
-        self.__file = None
+        if self._file:
+            self._fc.close(self.filename)
+            self._file = None
 
     @property
     def format_version(self):
@@ -160,6 +166,11 @@ class FileAccess:
 
     def __repr__(self):
         return "{}({})".format(type(self).__name__, repr(self.filename))
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['_file'] = None
+        return state
 
     @property
     def all_sources(self):

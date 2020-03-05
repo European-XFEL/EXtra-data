@@ -11,8 +11,11 @@ The module provides global instance of file cache for using
 across entire process
 """
 import h5py
-import weakref
 from collections import OrderedDict
+
+class FileRef(object):
+    __slots__ = 'nref', 'fh'
+
 
 class FileCache(object):
     """
@@ -37,8 +40,8 @@ class FileCache(object):
         """
         n = len(self._cache)
         while n > maxfiles:
-            p, rf = self._cache.popitem(last=False)
-            rf().close()
+            p, f = self._cache.popitem(last=False)
+            f.fh.close()
             n -= 1
         self._maxfiles = maxfiles
 
@@ -47,8 +50,8 @@ class FileCache(object):
         Closes all cached files
         """
         while len(self._cache):
-            p, rf = self._cache.popitem(last=False)
-            rf().close()
+            p, f = self._cache.popitem(last=False)
+            f.fh.close()
 
     def open(self, filename):
         """
@@ -60,16 +63,18 @@ class FileCache(object):
         instead of direct opening file with h5py
         """
         try:
-            f = self._cache[filename]()
+            f = self._cache[filename]
+            f.nref += 1
             self._cache.move_to_end(filename)
         except KeyError:
             if len(self._cache) >= self._maxfiles:
                 rp, rf = self._cache.popitem(last=False)
-                rf().close()
-            f = h5py.File(filename, 'r')
-            r = weakref.ref(f, lambda o: self._cache.pop(filename, None))
-            self._cache[filename] = r
-        return f
+                rf.fh.close()
+            f = FileRef()
+            f.fh = h5py.File(filename, 'r')
+            f.nref = 1
+            self._cache[filename] = f
+        return f.fh
     
     def touch(self, filename):
         """
@@ -80,15 +85,24 @@ class FileCache(object):
         """
         self._cache.move_to_end(filename)
 
+    def close(self, filename):
+        f = self._cache.get(filename, None)
+        if f is not None:
+            if f.nref <= 1:
+                f.fh.close()
+                del self._cache[filename]
+            else:
+                f.nref -= 1
+        
     def force_close(self, filename):
         """
         Pops file from cache and closes it
         
         Useful, if it is necessary to reopen some file for writing.
         """
-        rf = self._cache.pop(filename, None)
-        if rf is not None:
-            rf().close()
+        f = self._cache.pop(filename, None)
+        if f is not None:
+            f.fh.close()
 
         
 import resource
