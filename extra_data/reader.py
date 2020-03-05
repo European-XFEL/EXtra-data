@@ -1438,7 +1438,7 @@ def RunDirectory(path, include='*'):
 
     files_map = RunFilesMap(path)
     t0 = time.monotonic()
-    d = DataCollection.from_paths(files, files_map, nproc=nproc)
+    d = DataCollection.from_paths(files, files_map)
     log.debug("Opened run with %d files in %.2g s",
               len(d.files), time.monotonic() - t0)
     files_map.save(d.files)
