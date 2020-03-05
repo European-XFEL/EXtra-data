@@ -172,6 +172,7 @@ class RunFilesMap:
                     'control_sources': sorted(file_access.control_sources),
                     'instrument_sources': sorted(file_access.instrument_sources),
                 }
+
         if need_save:
             t0 = time.monotonic()
             save_data = [info for (_, info) in sorted(self.files_data.items())]
