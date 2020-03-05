@@ -15,11 +15,14 @@ import datetime
 import fnmatch
 import h5py
 import logging
+from multiprocessing import Pool
 import numpy as np
 from operator import index
 import os
 import os.path as osp
+import psutil
 import re
+import signal
 import sys
 import tempfile
 import time
@@ -290,18 +293,47 @@ class DataCollection:
             train_ids = sorted(set().union(*(f.train_ids for f in files)))
         self.train_ids = train_ids
 
+    @staticmethod
+    def _open_file(path, cache_info=None):
+        try:
+            fa = FileAccess(path, _cache_info=cache_info)
+        except Exception as e:
+            return osp.basename(path), str(e)
+        else:
+            return osp.basename(path), fa
+
     @classmethod
-    def from_paths(cls, paths, _files_map=None):
+    def from_paths(cls, paths, _files_map=None, nproc=None):
         files = []
+        uncached = []
         for path in paths:
             cache_info = _files_map and _files_map.get(path)
-            try:
-                fa = FileAccess(path, _cache_info=cache_info)
-            except Exception as e:
-                print("Skipping file", path, file=sys.stderr)
-                print("  (error was: {})".format(e), file=sys.stderr)
+            if cache_info:
+                filename, fa = cls._open_file(path, cache_info=cache_info)
+                if isinstance(fa, FileAccess):
+                    files.append(fa)
+                else:
+                    print(f"Skipping file {filename}", file=sys.stderr)
+                    print(f"  (error was: {fa})", file=sys.stderr)
             else:
-                files.append(fa)
+                uncached.append(path)
+
+        if uncached:
+            def initializer():
+                # prevent child processes from receiving KeyboardInterrupt
+                signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+            # cpu_affinity give a list of cpu cores we can use, can be all or a
+            # subset of the cores the machine has.
+            nproc = nproc or min(len(psutil.Process().cpu_affinity()), len(uncached))
+            print(nproc)
+            with Pool(processes=nproc, initializer=initializer) as pool:
+                for fname, fa in pool.imap_unordered(cls._open_file, uncached):
+                    if isinstance(fa, FileAccess):
+                        files.append(fa)
+                    else:
+                        print(f"Skipping file {fname}", file=sys.stderr)
+                        print(f"  (error was: {fa})", file=sys.stderr)
 
         if not files:
             raise Exception("All HDF5 files specified are unusable")
@@ -1381,7 +1413,7 @@ def H5File(path):
     return DataCollection.from_path(path)
 
 
-def RunDirectory(path, include='*'):
+def RunDirectory(path, include='*', nproc=None):
     """Open data files from a 'run' at European XFEL.
 
     ::
@@ -1407,7 +1439,7 @@ def RunDirectory(path, include='*'):
 
     files_map = RunFilesMap(path)
     t0 = time.monotonic()
-    d = DataCollection.from_paths(files, files_map)
+    d = DataCollection.from_paths(files, files_map, nproc=nproc)
     log.debug("Opened run with %d files in %.2g s",
               len(d.files), time.monotonic() - t0)
     files_map.save(d.files)
