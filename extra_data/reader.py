@@ -161,11 +161,6 @@ class FileAccess:
     def __repr__(self):
         return "{}({})".format(type(self).__name__, repr(self.filename))
 
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        state['__file'] = None
-        return state
-
     @property
     def all_sources(self):
         return self.control_sources | self.instrument_sources
