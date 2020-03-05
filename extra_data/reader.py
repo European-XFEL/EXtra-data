@@ -322,6 +322,8 @@ class DataCollection:
                 # prevent child processes from receiving KeyboardInterrupt
                 signal.signal(signal.SIGINT, signal.SIG_IGN)
 
+            # cpu_affinity give a list of cpu cores we can use, can be all or a
+            # subset of the cores the machine has.
             nproc = min(len(psutil.Process().cpu_affinity()), len(uncached))
             with Pool(processes=nproc, initializer=initializer) as pool:
                 for fname, fa in pool.imap_unordered(cls._open_file, uncached):

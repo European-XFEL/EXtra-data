@@ -160,8 +160,8 @@ def check_index_contiguous(firsts, counts, record):
     return probs
 
 
-def progress_bar(done, total, sufix=' '):
-    line = f'Progress: {done}/{total}{sufix}[{{}}]'
+def progress_bar(done, total, suffix=' '):
+    line = f'Progress: {done}/{total}{suffix}[{{}}]'
     length = min(get_terminal_size().columns - len(line), 50)
     filled = int(length * done // total)
     bar = '#' * filled + ' ' * (length - filled)
@@ -204,13 +204,15 @@ class RunValidator:
         self.check_files_map()
         return self.problems
 
-    def progress(self, done, total, fname, nproblems):
+    def progress(self, done, total, nproblems, badfiles):
         """Show a line of progress information"""
         if not self.term_progress:
             return
 
         line = progress_bar(done, total)
-        line += f'\n{nproblems} problems: {fname}'
+        line += f'\n{nproblems} problems'
+        if badfiles:
+            line += f' in {len(badfiles)} files (last: {badfiles[-1]})'
         if sys.stderr.isatty():
             # "\x1b[2K": delete whole line, "\x1b[1A": move up cursor
             print('\x1b[2K\x1b[1A\x1b[2K', end='\r',file=sys.stderr)
@@ -227,15 +229,18 @@ class RunValidator:
 
         filepaths = [(self.run_dir, fn) for fn in sorted(self.filenames)]
         nfiles = len(self.filenames)
-        self.progress(0, nfiles, filepaths[0][1], 0)
+        badfiles = []
+        self.progress(0, nfiles, 0, badfiles)
 
         with Pool(initializer=initializer) as pool:
             iterator = pool.imap_unordered(_check_file, filepaths)
             for done, (fname, fa, problems) in enumerate(iterator, start=1):
-                self.problems.extend(problems)
+                if problems:
+                    self.problems.extend(problems)
+                    badfiles.append(fname)
                 if fa is not None:
                     self.file_accesses.append(fa)
-                self.progress(done, nfiles, fname, len(self.problems))
+                self.progress(done, nfiles, len(self.problems), badfiles)
 
         if not self.file_accesses:
             self.problems.append(
