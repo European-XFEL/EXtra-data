@@ -205,20 +205,20 @@ class RunValidator:
         return self.problems
 
     def progress(self, done, total, nproblems, badfiles):
-        """Show a line of progress information"""
+        """Show progress information"""
         if not self.term_progress:
             return
 
-        line = progress_bar(done, total)
-        line += f'\n{nproblems} problems'
+        lines = progress_bar(done, total)
+        lines += f'\n{nproblems} problems'
         if badfiles:
-            line += f' in {len(badfiles)} files (last: {badfiles[-1]})'
+            lines += f' in {len(badfiles)} files (last: {badfiles[-1]})'
         if sys.stderr.isatty():
             # "\x1b[2K": delete whole line, "\x1b[1A": move up cursor
             print('\x1b[2K\x1b[1A\x1b[2K', end='\r',file=sys.stderr)
-            print(line, end='', file=sys.stderr)
+            print(lines, end='', file=sys.stderr)
         else:
-            print(line, file=sys.stderr)
+            print(lines, file=sys.stderr)
 
     def check_files(self):
         self.file_accesses = []
