@@ -14,8 +14,8 @@ from xarray import DataArray
 from extra_data import (
     H5File, RunDirectory, by_index, by_id,
     SourceNameError, PropertyNameError, DataCollection, open_run,
+    get_global_filecache,
 )
-
 
 def test_iterate_trains(mock_agipd_data):
     with H5File(mock_agipd_data) as f:
@@ -621,3 +621,28 @@ def test_permission():
         run = RunDirectory(d)
     assert "Permission denied" in str(excinfo.value)
     assert d in str(excinfo.value)
+
+
+def test_filecache(mock_spb_raw_run):
+    fc = get_global_filecache()
+    fc.clean()
+    run = RunDirectory(mock_spb_raw_run)
+    trains_iter = run.trains()
+    tid, data = next(trains_iter)
+    assert tid == 10000
+    device = 'SPB_IRU_CAM/CAM/SIDEMIC:daqOutput'
+    assert device in data
+    assert data[device]['data.image.pixels'].shape == (1024, 768)
+    assert len(fc._cache) == len(run.files)
+    fc.maxfiles = 3
+    for i in range(3):
+        tid, data = next(trains_iter)
+        assert tid == 10001 + i
+        for j in range(16):
+            device = f'SPB_DET_AGIPD1M-1/DET/{j}CH0:xtdf'
+            assert device in data
+            assert data[device]['image.data'].shape == (64, 2, 512, 128)
+        assert len(fc._cache) == 3
+
+    del run, trains_iter
+    assert len(fc._cache) == 0
