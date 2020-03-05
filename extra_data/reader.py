@@ -303,7 +303,7 @@ class DataCollection:
             return osp.basename(path), fa
 
     @classmethod
-    def from_paths(cls, paths, _files_map=None, nproc=None):
+    def from_paths(cls, paths, _files_map=None):
         files = []
         uncached = []
         for path in paths:
@@ -325,8 +325,7 @@ class DataCollection:
 
             # cpu_affinity give a list of cpu cores we can use, can be all or a
             # subset of the cores the machine has.
-            nproc = nproc or min(len(psutil.Process().cpu_affinity()), len(uncached))
-            print(nproc)
+            nproc = min(len(psutil.Process().cpu_affinity()), len(uncached))
             with Pool(processes=nproc, initializer=initializer) as pool:
                 for fname, fa in pool.imap_unordered(cls._open_file, uncached):
                     if isinstance(fa, FileAccess):
@@ -1413,7 +1412,7 @@ def H5File(path):
     return DataCollection.from_path(path)
 
 
-def RunDirectory(path, include='*', nproc=None):
+def RunDirectory(path, include='*'):
     """Open data files from a 'run' at European XFEL.
 
     ::
