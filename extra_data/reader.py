@@ -14,6 +14,7 @@ from collections import defaultdict
 import datetime
 import fnmatch
 import h5py
+from itertools import groupby
 import logging
 from multiprocessing import Pool
 import numpy as np
@@ -1137,9 +1138,12 @@ class DataCollection:
 
         return None, None
 
-    def info(self):
+    def info(self, details_for_sources=()):
         """Show information about the selected data.
         """
+        details_sources_re = [re.compile(fnmatch.translate(p))
+                              for p in details_for_sources]
+
         # time info
         first_train = self.train_ids[0]
         last_train = self.train_ids[-1]
@@ -1180,14 +1184,46 @@ class DataCollection:
             ))
         print()
 
+        def src_data_detail(s, keys, prefix=''):
+            """Detail for how much data is present for an instrument group"""
+            if not keys:
+                return
+            counts = self.get_data_counts(s, list(keys)[0])
+            ntrains_data = (counts > 0).sum()
+            print(
+                f'{prefix}data for {ntrains_data} trains '
+                f'({ntrains_data / train_count:.2%}), '
+                f'up to {counts.max()} entries per train'
+            )
+
         non_detector_inst_srcs = self.instrument_sources - self.detector_sources
         print(len(non_detector_inst_srcs), 'instrument sources (excluding detectors):')
-        for d in sorted(non_detector_inst_srcs):
-            print('  -', d)
+        for s in sorted(non_detector_inst_srcs):
+            print('  -', s)
+            if not any(p.match(s) for p in details_sources_re):
+                continue
+
+            # Detail for instrument sources:
+            for group, keys in groupby(sorted(self.keys_for_source(s)),
+                                       key=lambda k: k.split('.')[0]):
+                print(f'    - {group}:')
+                keys = list(keys)
+                src_data_detail(s, keys, prefix='      ')
+                for k in keys:
+                    print('      -', k)
+
+
         print()
         print(len(self.control_sources), 'control sources:')
-        for d in sorted(self.control_sources):
-            print('  -', d)
+        for s in sorted(self.control_sources):
+            print('  -', s)
+            if not any(p.match(s) for p in details_sources_re):
+                continue
+
+            # Detail for control sources: list keys
+            keys = self.keys_for_source(s)
+            for k in sorted(keys):
+                print('    -', k)
         print()
 
     def detector_info(self, source):
