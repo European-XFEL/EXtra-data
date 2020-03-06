@@ -407,6 +407,20 @@ class DataCollection:
     # Leave old name in case anything external was using it:
     _keys_for_source = keys_for_source
 
+    def get_entry_shape(self, source, key):
+        """Get the shape of a single data entry for the given source & key"""
+        self._check_field(source, key)
+
+        for chunk in self._find_data_chunks(source, key):
+            # First dimension is number of entries
+            return chunk.dataset.shape[1:]
+
+    def get_dtype(self, source, key):
+        """Get the numpy data type for the given source & key"""
+        self._check_field(source, key)
+        for chunk in self._find_data_chunks(source, key):
+            return chunk.dataset.dtype
+
     def _check_data_missing(self, tid) -> bool:
         """Return True if a train does not have data for all sources"""
         for source in self.control_sources:
@@ -1196,6 +1210,17 @@ class DataCollection:
                 f'up to {counts.max()} entries per train'
             )
 
+        def keys_detail(s, keys, prefix=''):
+            """Detail for a group of keys"""
+            for k in keys:
+                entry_shape = self.get_entry_shape(s, k)
+                if entry_shape:
+                    shape_dtl = " × ".join(str(n) for n in entry_shape)
+                else:
+                    shape_dtl = "scalar"
+                dt = self.get_dtype(s, k)
+                print(f"{prefix}{k} ({dt.name}: {shape_dtl} entries)")
+
         non_detector_inst_srcs = self.instrument_sources - self.detector_sources
         print(len(non_detector_inst_srcs), 'instrument sources (excluding detectors):')
         for s in sorted(non_detector_inst_srcs):
@@ -1209,8 +1234,7 @@ class DataCollection:
                 print(f'    - {group}:')
                 keys = list(keys)
                 src_data_detail(s, keys, prefix='      ')
-                for k in keys:
-                    print('      -', k)
+                keys_detail(s, keys, prefix='      - ')
 
 
         print()
@@ -1221,9 +1245,7 @@ class DataCollection:
                 continue
 
             # Detail for control sources: list keys
-            keys = self.keys_for_source(s)
-            for k in sorted(keys):
-                print('    -', k)
+            keys_detail(s, self.keys_for_source(s), prefix='    - ')
         print()
 
     def detector_info(self, source):
