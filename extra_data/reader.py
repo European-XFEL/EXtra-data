@@ -88,7 +88,11 @@ class FileAccess:
             self.control_sources = _cache_info['control_sources']
             self.instrument_sources = _cache_info['instrument_sources']
         else:
-            tid_data = self.file['INDEX/trainId'][:]
+            if self.format_version != '0.5':
+                valid_trains = self.file['INDEX/flag'][:].nonzero()[0]
+            else:
+                valid_trains = slice(None)
+            tid_data = self.file['INDEX/trainId'][valid_trains]
             self.train_ids = tid_data[tid_data != 0]
 
             self.control_sources, self.instrument_sources = self._read_data_sources()
