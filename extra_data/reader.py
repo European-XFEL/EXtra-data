@@ -1214,8 +1214,12 @@ class DataCollection:
             """Detail for a group of keys"""
             for k in keys:
                 entry_shape = self.get_entry_shape(s, k)
+                if entry_shape:
+                    entry_info = f", entry shape {entry_shape}"
+                else:
+                    entry_info = ""
                 dt = self.get_dtype(s, k)
-                print(f"{prefix}{k}\t{dt.name}, entry shape {entry_shape}")
+                print(f"{prefix}{k}\t{dt.name}{entry_info}")
 
         non_detector_inst_srcs = self.instrument_sources - self.detector_sources
         print(len(non_detector_inst_srcs), 'instrument sources (excluding detectors):')
