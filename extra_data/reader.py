@@ -1214,12 +1214,8 @@ class DataCollection:
             """Detail for a group of keys"""
             for k in keys:
                 entry_shape = self.get_entry_shape(s, k)
-                if entry_shape:
-                    shape_dtl = " × ".join(str(n) for n in entry_shape)
-                else:
-                    shape_dtl = "scalar"
                 dt = self.get_dtype(s, k)
-                print(f"{prefix}{k} ({dt.name}: {shape_dtl} entries)")
+                print(f"{prefix}{k}\t{dt.name}, entry shape {entry_shape}")
 
         non_detector_inst_srcs = self.instrument_sources - self.detector_sources
         print(len(non_detector_inst_srcs), 'instrument sources (excluding detectors):')
@@ -1238,14 +1234,13 @@ class DataCollection:
 
 
         print()
-        print(len(self.control_sources), 'control sources:')
+        print(len(self.control_sources), 'control sources: (1 entry per train)')
         for s in sorted(self.control_sources):
             print('  -', s)
-            if not any(p.match(s) for p in details_sources_re):
-                continue
+            if any(p.match(s) for p in details_sources_re):
+                # Detail for control sources: list keys
+                keys_detail(s, self.keys_for_source(s), prefix='    - ')
 
-            # Detail for control sources: list keys
-            keys_detail(s, self.keys_for_source(s), prefix='    - ')
         print()
 
     def detector_info(self, source):
