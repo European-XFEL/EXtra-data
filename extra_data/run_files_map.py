@@ -56,13 +56,27 @@ class RunFilesMap:
         # After resolving symlinks, data on Maxwell is stored in either
         # GPFS, e.g. /gpfs/exfel/d/proc/SCS/201901/p002212  or
         # dCache, e.g. /pnfs/xfel.eu/exfel/archive/XFEL/raw/SCS/201901/p002212
-        m = re.match(
+        # On the online cluster the resolved path stay:
+        #   /gpfs/exfel/exp/inst/cycle/prop/(raw|proc)/run
+        maxwell_match = re.match(
             #     raw/proc  instr  cycle prop   run
             r'.+/(raw|proc)/(\w+)/(\w+)/(p\d+)/(r\d+)/?$',
             os.path.realpath(directory)
         )
-        if m:
-            raw_proc, instr, cycle, prop, run_nr = m.groups()
+        online_match = re.match(
+            #     instr cycle prop   raw/proc   run
+            r'^.+/(\w+)/(\w+)/(p\d+)/(raw|proc)/(r\d+)/?$',
+            os.path.realpath(directory)
+        )
+
+        if maxwell_match:
+            raw_proc, instr, cycle, prop, run_nr = maxwell_match.groups()
+        elif online_match:
+            instr, cycle, prop, raw_proc, run_nr = online_match.groups()
+        else:
+            run_nr = None
+
+        if run_nr is not None:
             fname = '%s_%s.json' % (raw_proc, run_nr)
             prop_scratch = osp.join(
                 SCRATCH_ROOT_DIR, instr, cycle, prop, 'scratch'
