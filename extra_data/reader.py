@@ -1219,7 +1219,7 @@ class DataCollection:
                 else:
                     entry_info = ""
                 dt = self.get_dtype(s, k)
-                print(f"{prefix}{k}\t{dt.name}{entry_info}")
+                print(f"{prefix}{k}\t[{dt.name}{entry_info}]")
 
         non_detector_inst_srcs = self.instrument_sources - self.detector_sources
         print(len(non_detector_inst_srcs), 'instrument sources (excluding detectors):')
