@@ -1,5 +1,10 @@
+from datetime import datetime
+import os.path as osp
+import re
+
 import h5py
 import numpy as np
+
 
 class DeviceBase:
     # Override these in subclasses
@@ -139,9 +144,24 @@ def write_metadata(h5file, data_sources, chunksize=16, format_version='0.5'):
 
     if format_version != '0.5':
         h5file['METADATA/dataFormatVersion'] = [format_version.encode('ascii')]
+        now = datetime.utcnow().replace(microsecond=0).strftime('%Y%m%dT%H%M%SZ')
+        h5file['METADATA/creationDate'] = [now.encode('ascii')]
+        h5file['METADATA/daqLibrary'] = [b'1.9.0']
+        h5file['METADATA/karaboFramework'] = [b'2.7.0']
+        h5file.create_dataset('METADATA/proposalNumber', dtype=np.uint32, data=[700000])
+        h5file.create_dataset('METADATA/runNumber', dtype=np.uint32, data=[1])
+        h5file['METADATA/runType'] = [b'Test DAQ']
+        h5file['METADATA/sample'] = [b'No Sample']
+        print('**************', h5file.filename)
+        sequence = int(re.match(r'^(RAW|PROC)\-R\d+\-.*\-S(\d+).h5$', osp.basename(h5file.filename)).groups()[1])
+        h5file.create_dataset('METADATA/sequenceNumber', dtype=np.uint32, data=[sequence])
+        h5file['METADATA/updateDate'] = [now.encode('ascii')]
 
-def write_train_ids(f, path, N, first=10000, chunksize=16):
-    """Make a dataset of fake train IDs at the given path
+
+def write_base_index(f, N, first=10000, chunksize=16):
+    """Make base datasets in the files index
+
+    3 dataset are created: flag, timestamp, trainId
 
     Real train IDs are much larger (~10^9), so hopefully these won't be mistaken
     for real ones.
@@ -150,5 +170,17 @@ def write_train_ids(f, path, N, first=10000, chunksize=16):
         Npad = N + chunksize - (N % chunksize)
     else:
         Npad = N
-    ds = f.create_dataset(path, (Npad,), 'u8', maxshape=(None,))
+
+    # flag
+    ds = f.create_dataset('INDEX/flag', (Npad,), 'u4', maxshape=(None,))
+    ds[:N] = np.ones(N)
+
+    # timestamps
+    ds = f.create_dataset('INDEX/timestamp', (Npad,), 'u8', maxshape=(None,))
+    # timestamps are stored as a single uint64 with nanoseconds resolution
+    ts = datetime.utcnow().timestamp() * 10**9
+    ds[:N] = [ts + i * 10**8 for i in range(N)]  # TODO
+
+    # trainIds
+    ds = f.create_dataset('INDEX/trainId', (Npad,), 'u8', maxshape=(None,))
     ds[:N] = np.arange(first, first + N)

@@ -4,20 +4,23 @@ import os.path as osp
 import numpy as np
 
 from .mockdata import write_file
-from .mockdata.xgm import XGM
-from .mockdata.gec_camera import GECCamera
-from .mockdata.basler_camera import BaslerCamera as BaslerCam
 from .mockdata.adc import ADC
-from .mockdata.uvlamp import UVLamp
-from .mockdata.motor import Motor
-from .mockdata.tsens import TemperatureSensor
-from .mockdata.imgfel import IMGFELCamera, IMGFELMotor
-from .mockdata.gauge import Gauge
+from .mockdata.base import write_base_index
+from .mockdata.basler_camera import BaslerCamera as BaslerCam
 from .mockdata.dctrl import DCtrl
-from .mockdata.mpod import MPOD
 from .mockdata.detectors import AGIPDModule, LPDModule
+from .mockdata.gauge import Gauge
+from .mockdata.gec_camera import GECCamera
+from .mockdata.imgfel import IMGFELCamera, IMGFELMotor
+from .mockdata.motor import Motor
+from .mockdata.mpod import MPOD
+from .mockdata.tsens import TemperatureSensor
+from .mockdata.uvlamp import UVLamp
+from .mockdata.xgm import XGM
+
 
 vlen_bytes = h5py.special_dtype(vlen=bytes)
+
 
 def make_metadata(h5file, data_sources, chunksize=16):
     N = len(data_sources)
@@ -37,18 +40,6 @@ def make_metadata(h5file, data_sources, chunksize=16):
                                        dtype=vlen_bytes, maxshape=(None,))
     devices_ds[:len(data_sources)] = devices
 
-def write_train_ids(f, path, N, chunksize=16):
-    """Make a dataset of fake train IDs at the given path
-
-    Real train IDs are much larger (~10^9), so hopefully these won't be mistaken
-    for real ones.
-    """
-    if N % chunksize:
-        Npad = N + chunksize - (N % chunksize)
-    else:
-        Npad = N
-    ds = f.create_dataset(path, (Npad,), 'u8', maxshape=(None,))
-    ds[:N] = np.arange(10000, 10000 + N)
 
 def make_agipd_example_file(path):
     """Make the structure of a data file from the AGIPD detector
@@ -76,7 +67,7 @@ def make_agipd_example_file(path):
         d[:250] = train_ids
 
     # INDEX - matching up data to train IDs
-    write_train_ids(f, 'INDEX/trainId', 250)
+    write_base_index(f, 250)
     for ch in channels:
         grp_name = 'INDEX/SPB_DET_AGIPD1M-1/DET/7CH0:xtdf/%s/' % ch
         first = f.create_dataset(grp_name + 'first', (256,), 'u8', maxshape=(None,))

@@ -89,7 +89,7 @@ class FileAccess:
             self.instrument_sources = _cache_info['instrument_sources']
         else:
             if self.format_version != '0.5':
-                valid_trains = self.file['INDEX/flag'][:].nonzero()[0]
+                valid_trains = self.file['INDEX/flag'][:].nonzero()[0].tolist()
             else:
                 valid_trains = slice(None)
             tid_data = self.file['INDEX/trainId'][valid_trains]
