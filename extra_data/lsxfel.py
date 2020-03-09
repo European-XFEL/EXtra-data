@@ -11,33 +11,14 @@ from .read_machinery import FilenameInfo
 from .reader import H5File, RunDirectory
 
 
-def describe_file(path):
+def describe_file(path, details_for_sources=()):
     """Describe a single HDF5 data file"""
     basename = os.path.basename(path)
     info = FilenameInfo(basename)
     print(basename, ":", info.description)
 
     h5file = H5File(path)
-    print(len(h5file.train_ids), "trains")
-    print()
-
-    if info.is_detector:
-        detector_source = next(iter(h5file.detector_sources))
-        detector_info = h5file.detector_info(detector_source)
-        print("{} × {} pixels".format(*detector_info['dims']))
-        print("{} frames per train, {} total".format(
-            detector_info['frames_per_train'], detector_info['total_frames'],
-        ))
-    else:
-        print(len(h5file.instrument_sources), "instrument sources")
-        for dev in sorted(h5file.instrument_sources):
-            print("  - ", dev)
-        print()
-
-        print(len(h5file.control_sources), "control sources")
-        for dev in sorted(h5file.control_sources):
-            print("  - ", dev)
-        print()
+    h5file.info(details_for_sources)
 
 
 def summarise_file(path):
@@ -58,13 +39,13 @@ def summarise_file(path):
         print("  {} trains, {} sources".format(ntrains, len(h5file.sources)))
 
 
-def describe_run(path):
+def describe_run(path, details_for_sources=()):
     basename = os.path.basename(path)
     print(basename, ": Run directory")
     print()
 
     run = RunDirectory(path)
-    run.info()
+    run.info(details_for_sources)
 
 
 def summarise_run(path, indent=''):
@@ -102,6 +83,14 @@ def main(argv=None):
         prog='lsxfel', description="Summarise XFEL data in files or folders"
     )
     ap.add_argument('paths', nargs='*', help="Files/folders to look at")
+    ap.add_argument('--source', action='append',
+        help="Show details on keys & data for specified sources. "
+             "This can slow down lsxfel considerably. "
+             "Wildcard patterns like '*/XGM/*' are allowed, though you may "
+             "need single quotes to prevent the shell processing them. "
+             "Can be used more than once to include several patterns. "
+             "Only used when inspecting a single run or file."
+    )
     args = ap.parse_args(argv)
     paths = args.paths or [os.path.abspath(os.getcwd())]
 
@@ -113,7 +102,7 @@ def main(argv=None):
             contents = sorted(os.listdir(path))
             if any(f.endswith('.h5') for f in contents):
                 # Run directory
-                describe_run(path)
+                describe_run(path, args.source)
             elif any(re.match(r'r\d+', f) for f in contents):
                 # Proposal directory, containing runs
                 print(basename, ": Proposal data directory")
@@ -134,7 +123,7 @@ def main(argv=None):
                 print(basename, ": Unrecognised directory")
         elif os.path.isfile(path):
             if path.endswith('.h5'):
-                describe_file(path)
+                describe_file(path, args.source)
             else:
                 print(basename, ": Unrecognised file")
                 return 2
