@@ -6,7 +6,7 @@ import os
 import pandas as pd
 import pytest
 import stat
-from tempfile import mkdtemp
+from tempfile import mkdtemp, TemporaryDirectory
 from testpath import assert_isfile
 from unittest import mock
 from xarray import DataArray
@@ -15,6 +15,17 @@ from extra_data import (
     H5File, RunDirectory, by_index, by_id,
     SourceNameError, PropertyNameError, DataCollection, open_run,
 )
+
+from . import make_examples
+
+
+@pytest.fixture(scope='function')
+def agipd_file():
+    with TemporaryDirectory() as td:
+        path = os.path.join(td, 'RAW-R0239-AGIPD00-S00000.h5')
+        make_examples.make_agipd_file(path, format_version='1.0')
+
+        yield path
 
 
 def test_iterate_trains(mock_agipd_data):
@@ -622,3 +633,14 @@ def test_permission():
         run = RunDirectory(d)
     assert "Permission denied" in str(excinfo.value)
     assert d in str(excinfo.value)
+
+
+def test_trainid_flag(agipd_file):
+    # only in file version >= 1.0
+    with h5py.File(agipd_file, 'r+') as f:
+        # introduce zeros in flag
+        f['/INDEX/flag'][[12, 15]] = 0
+
+    f = H5File(agipd_file)
+    assert 10012 not in f.train_ids
+    assert 10015 not in f.train_ids

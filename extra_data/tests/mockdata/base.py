@@ -180,7 +180,7 @@ def write_base_index(f, N, first=10000, chunksize=16, format_version='0.5'):
         ds = f.create_dataset('INDEX/timestamp', (Npad,), 'u8', maxshape=(None,))
         # timestamps are stored as a single uint64 with nanoseconds resolution
         ts = datetime.utcnow().timestamp() * 10**9
-        ds[:N] = [ts + i * 10**8 for i in range(N)]  # TODO
+        ds[:N] = [ts + i * 10**8 for i in range(N)]
 
     # trainIds
     ds = f.create_dataset('INDEX/trainId', (Npad,), 'u8', maxshape=(None,))

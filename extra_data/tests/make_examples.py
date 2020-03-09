@@ -195,10 +195,10 @@ def make_data_file_bad_device_name(path, format_version='0.5'):
         BaslerCam('SPB_IRU_SIDEMIC_CAM', sensor_size=(1000, 1000))
     ], ntrains=500, chunksize=50, format_version=format_version)
 
-def make_agipd_file(path):
+def make_agipd_file(path, format_version='0.5'):
     write_file(path, [
         AGIPDModule('SPB_DET_AGIPD1M-1/DET/0CH0', frames_per_train=64)
-    ], ntrains=486, chunksize=32)
+    ], ntrains=486, chunksize=32, format_version=format_version)
 
 def make_lpd_file(path, format_version='0.5'):
     write_file(path, [

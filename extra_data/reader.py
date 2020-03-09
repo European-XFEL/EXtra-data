@@ -89,6 +89,12 @@ class FileAccess:
             self.instrument_sources = _cache_info['instrument_sources']
         else:
             if self.format_version != '0.5':
+                # the INDEX/flag dataset contains a value (0 or 1) for each
+                # trainid recorded in the file. In normal case it is set to 1.
+                # If the DAQ receives a certain traindid from a data source
+                # before receiving it from the timeserver, it is assumed that
+                # the value for this trainid is wrong and we exclude it from
+                # the data collectiom.
                 valid_trains = self.file['INDEX/flag'][:].nonzero()[0].tolist()
             else:
                 valid_trains = slice(None)
