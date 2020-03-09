@@ -83,7 +83,7 @@ def main(argv=None):
         prog='lsxfel', description="Summarise XFEL data in files or folders"
     )
     ap.add_argument('paths', nargs='*', help="Files/folders to look at")
-    ap.add_argument('--source', action='append',
+    ap.add_argument('--detail', action='append',
         help="Show details on keys & data for specified sources. "
              "This can slow down lsxfel considerably. "
              "Wildcard patterns like '*/XGM/*' are allowed, though you may "
