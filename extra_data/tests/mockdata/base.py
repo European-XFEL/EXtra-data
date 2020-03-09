@@ -152,13 +152,13 @@ def write_metadata(h5file, data_sources, chunksize=16, format_version='0.5'):
         h5file.create_dataset('METADATA/runNumber', dtype=np.uint32, data=[1])
         h5file['METADATA/runType'] = [b'Test DAQ']
         h5file['METADATA/sample'] = [b'No Sample']
-        print('**************', h5file.filename)
-        sequence = int(re.match(r'^(RAW|PROC)\-R\d+\-.*\-S(\d+).h5$', osp.basename(h5file.filename)).groups()[1])
+        print(osp.basename(h5file.filename))
+        sequence = int(re.match(r'^(RAW|CORR)\-R\d+\-.*\-S(\d+).h5$', osp.basename(h5file.filename)).groups()[1])
         h5file.create_dataset('METADATA/sequenceNumber', dtype=np.uint32, data=[sequence])
         h5file['METADATA/updateDate'] = [now.encode('ascii')]
 
 
-def write_base_index(f, N, first=10000, chunksize=16):
+def write_base_index(f, N, first=10000, chunksize=16, format_version='0.5'):
     """Make base datasets in the files index
 
     3 dataset are created: flag, timestamp, trainId
@@ -171,15 +171,16 @@ def write_base_index(f, N, first=10000, chunksize=16):
     else:
         Npad = N
 
-    # flag
-    ds = f.create_dataset('INDEX/flag', (Npad,), 'u4', maxshape=(None,))
-    ds[:N] = np.ones(N)
+    if format_version != '0.5':
+        # flag
+        ds = f.create_dataset('INDEX/flag', (Npad,), 'u4', maxshape=(None,))
+        ds[:N] = np.ones(N)
 
-    # timestamps
-    ds = f.create_dataset('INDEX/timestamp', (Npad,), 'u8', maxshape=(None,))
-    # timestamps are stored as a single uint64 with nanoseconds resolution
-    ts = datetime.utcnow().timestamp() * 10**9
-    ds[:N] = [ts + i * 10**8 for i in range(N)]  # TODO
+        # timestamps
+        ds = f.create_dataset('INDEX/timestamp', (Npad,), 'u8', maxshape=(None,))
+        # timestamps are stored as a single uint64 with nanoseconds resolution
+        ts = datetime.utcnow().timestamp() * 10**9
+        ds[:N] = [ts + i * 10**8 for i in range(N)]  # TODO
 
     # trainIds
     ds = f.create_dataset('INDEX/trainId', (Npad,), 'u8', maxshape=(None,))

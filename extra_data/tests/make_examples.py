@@ -41,7 +41,7 @@ def make_metadata(h5file, data_sources, chunksize=16):
     devices_ds[:len(data_sources)] = devices
 
 
-def make_agipd_example_file(path):
+def make_agipd_example_file(path, format_version='0.5'):
     """Make the structure of a data file from the AGIPD detector
 
     Based on /gpfs/exfel/d/proc/XMPL/201750/p700000/r0803/CORR-R0803-AGIPD07-S00000.h5
@@ -67,7 +67,7 @@ def make_agipd_example_file(path):
         d[:250] = train_ids
 
     # INDEX - matching up data to train IDs
-    write_base_index(f, 250)
+    write_base_index(f, 250, format_version=format_version)
     for ch in channels:
         grp_name = 'INDEX/SPB_DET_AGIPD1M-1/DET/7CH0:xtdf/%s/' % ch
         first = f.create_dataset(grp_name + 'first', (256,), 'u8', maxshape=(None,))
@@ -140,7 +140,7 @@ def make_agipd_example_file(path):
     f.create_dataset('INSTRUMENT/SPB_DET_AGIPD1M-1/DET/7CH0:xtdf/trailer/status',
                         (256,), 'u8', maxshape=(None,))  # Empty in example
 
-def make_fxe_da_file(path):
+def make_fxe_da_file(path, format_version='0.5'):
     """Make the structure of a file with non-detector data from the FXE experiment
 
     Based on .../FXE/201830/p900023/r0450/RAW-R0450-DA01-S00001.h5
@@ -150,7 +150,7 @@ def make_fxe_da_file(path):
         XGM('SA1_XTD2_XGM/DOOCS/MAIN'),
         XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
         GECCamera('FXE_XAD_GEC/CAM/CAMERA'),
-    ], ntrains=400, chunksize=200)
+    ], ntrains=400, chunksize=200, format_version=format_version)
 
 def make_sa3_da_file(path, format_version='0.5'):
     """Make the structure of a file with non-detector data from SASE3 tunnel
@@ -189,23 +189,23 @@ def make_sa3_da_file(path, format_version='0.5'):
         MPOD('SA3_XTD10_MCP/MCPS/MPOD'),
     ], ntrains=500, chunksize=50, format_version=format_version)
 
-def make_data_file_bad_device_name(path):
+def make_data_file_bad_device_name(path, format_version='0.5'):
     """Not all devices have the Karabo standard A/B/C naming convention"""
     write_file(path, [
         BaslerCam('SPB_IRU_SIDEMIC_CAM', sensor_size=(1000, 1000))
-    ], ntrains=500, chunksize=50)
+    ], ntrains=500, chunksize=50, format_version=format_version)
 
 def make_agipd_file(path):
     write_file(path, [
         AGIPDModule('SPB_DET_AGIPD1M-1/DET/0CH0', frames_per_train=64)
     ], ntrains=486, chunksize=32)
 
-def make_lpd_file(path):
+def make_lpd_file(path, format_version='0.5'):
     write_file(path, [
         LPDModule('FXE_DET_LPD1M-1/DET/0CH0', frames_per_train=128)
-    ], ntrains=480, chunksize=32)
+    ], ntrains=480, chunksize=32, format_version=format_version)
 
-def make_fxe_run(dir_path, raw=True):
+def make_fxe_run(dir_path, raw=True, format_version='0.5'):
     prefix = 'RAW' if raw else 'CORR'
     for modno in range(16):
         path = osp.join(dir_path,
@@ -213,7 +213,7 @@ def make_fxe_run(dir_path, raw=True):
         write_file(path, [
             LPDModule('FXE_DET_LPD1M-1/DET/{}CH0'.format(modno), raw=raw,
                       frames_per_train=128)
-        ], ntrains=480, chunksize=32)
+        ], ntrains=480, chunksize=32, format_version=format_version)
     if not raw:
         return
     write_file(osp.join(dir_path, 'RAW-R0450-DA01-S00000.h5'), [
@@ -221,15 +221,15 @@ def make_fxe_run(dir_path, raw=True):
         XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
         GECCamera('FXE_XAD_GEC/CAM/CAMERA'),
         GECCamera('FXE_XAD_GEC/CAM/CAMERA_NODATA', nsamples=0),
-    ], ntrains=400, chunksize=200)
+    ], ntrains=400, chunksize=200, format_version=format_version)
     write_file(osp.join(dir_path, '{}-R0450-DA01-S00001.h5'.format(prefix)), [
         XGM('SA1_XTD2_XGM/DOOCS/MAIN'),
         XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
         GECCamera('FXE_XAD_GEC/CAM/CAMERA'),
         GECCamera('FXE_XAD_GEC/CAM/CAMERA_NODATA', nsamples=0),
-    ], ntrains=80, firsttrain=10400, chunksize=200)
+    ], ntrains=80, firsttrain=10400, chunksize=200, format_version=format_version)
 
-def make_spb_run(dir_path, raw=True, sensor_size=(1024, 768)):
+def make_spb_run(dir_path, raw=True, sensor_size=(1024, 768), format_version='0.5'):
     prefix = 'RAW' if raw else 'CORR'
     for modno in range(16):
         path = osp.join(dir_path,
@@ -237,20 +237,21 @@ def make_spb_run(dir_path, raw=True, sensor_size=(1024, 768)):
         write_file(path, [
             AGIPDModule('SPB_DET_AGIPD1M-1/DET/{}CH0'.format(modno), raw=raw,
                          frames_per_train=64)
-            ], ntrains=64, chunksize=32)
+            ], ntrains=64, chunksize=32, format_version=format_version)
     if not raw:
         return
     write_file(osp.join(dir_path, '{}-R0238-DA01-S00000.h5'.format(prefix)),
                [ XGM('SA1_XTD2_XGM/DOOCS/MAIN'),
                  XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
                  BaslerCam('SPB_IRU_CAM/CAM/SIDEMIC', sensor_size=sensor_size)
-               ], ntrains=32, chunksize=32)
+               ], ntrains=32, chunksize=32, format_version=format_version)
 
     write_file(osp.join(dir_path, '{}-R0238-DA01-S00001.h5'.format(prefix)),
                [ XGM('SA1_XTD2_XGM/DOOCS/MAIN'),
                  XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
                  BaslerCam('SPB_IRU_CAM/CAM/SIDEMIC', sensor_size=sensor_size)
-               ], ntrains=32, firsttrain=10032, chunksize=32)
+               ], ntrains=32, firsttrain=10032, chunksize=32,
+               format_version=format_version)
 
 if __name__ == '__main__':
     make_agipd_example_file('agipd_example.h5')
