@@ -102,7 +102,7 @@ def main(argv=None):
             contents = sorted(os.listdir(path))
             if any(f.endswith('.h5') for f in contents):
                 # Run directory
-                describe_run(path, args.source)
+                describe_run(path, args.detail)
             elif any(re.match(r'r\d+', f) for f in contents):
                 # Proposal directory, containing runs
                 print(basename, ": Proposal data directory")
@@ -123,7 +123,7 @@ def main(argv=None):
                 print(basename, ": Unrecognised directory")
         elif os.path.isfile(path):
             if path.endswith('.h5'):
-                describe_file(path, args.source)
+                describe_file(path, args.detail)
             else:
                 print(basename, ": Unrecognised file")
                 return 2
