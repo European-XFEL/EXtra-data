@@ -88,7 +88,7 @@ def lsdir(path, pattern='*', accpt_loc=ANY, nproc=None):
             r = pool.imap_unordered(get_locality_worker, files)
             yield from ( (ffn, loc) for ffn, loc in r if loc & accpt_loc )
     else:
-        r = ( (fn, get(fn)) for fn in files )
+        r = ( (fn, get_locality(fn)) for fn in files )
         yield from ( (ffn, loc) for ffn, loc in r if loc & accpt_loc )
         
         
