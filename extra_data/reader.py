@@ -1243,7 +1243,7 @@ class DataCollection:
             print('  -', s)
             if any(p.match(s) for p in details_sources_re):
                 # Detail for control sources: list keys
-                keys_detail(s, self.keys_for_source(s), prefix='    - ')
+                keys_detail(s, sorted(self.keys_for_source(s)), prefix='    - ')
 
         print()
 
