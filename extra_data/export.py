@@ -21,6 +21,7 @@ import numpy as np
 import zmq
 
 from .reader import RunDirectory, H5File
+from .stacking import stack_detector_data
 
 __all__ = ['ZMQStreamer', 'serve_files']
 
@@ -216,7 +217,15 @@ class ZMQStreamer:
         self._buffer.put(self._serialize(data, metadata))
 
 
-def serve_files(path, port, source_glob='*', key_glob='*', **kwargs):
+def gen_time():
+    """Create a mock timestamp for meta-data"""
+    timestamp = time()
+    sec, frac = str(timestamp).split('.')
+    frac = frac.ljust(18, '0') # attosecond resolution
+    return sec, frac
+
+
+def serve_files(path, port, data_like='file', source_glob='*', key_glob='*', **kwargs):
     """Stream data from files through a TCP socket.
 
     Parameters
@@ -225,6 +234,9 @@ def serve_files(path, port, source_glob='*', key_glob='*', **kwargs):
         Path to the HDF5 file or file folder.
     port: int
         Local TCP port to bind socket to.
+    data_like: str
+        Whether to keep data in module sources as from file ('file')
+        or to stack 'image.data' arrays for a new single source ('online')
     source_glob: str
         Only stream sources matching this glob pattern.
         Streaming data selectively is more efficient than streaming everything.
@@ -242,7 +254,24 @@ def serve_files(path, port, source_glob='*', key_glob='*', **kwargs):
     streamer.start()
     for tid, train_data in data.trains():
         if train_data:
-            streamer.feed(train_data)
+            if data_like == 'file':
+                streamer.feed(train_data)
+            elif data_like == 'online':
+                stacked = stack_detector_data(train_data, 'image.data')
+                merged_data = {}
+                # the data key pretends this is online data from SPB
+                merged_data['SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED'] = {
+                    'image.data': stacked
+                }
+                sec, frac = gen_time()
+                metadata = {}
+                metadata['SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED'] = {
+                    'source': 'SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED',
+                    'timestamp.tid': tid,
+                    'timestamp.sec': sec,
+                    'timestamp.frac': frac
+                }
+                streamer.feed(merged_data, metadata)
     streamer.stop()
 
 
@@ -258,6 +287,12 @@ def main(argv=None):
         "--key", help="Stream only matching keys ('*' is a wildcard)",
         default='*',
     )
+    ap.add_argument(
+        "--data-like", help="Optional module stacking: online -> stack module \
+           sources into a single source (default: file -> keep modules \
+           separate as in files)",
+        default='file', choices=['file', 'online']
+    )
     args = ap.parse_args(argv)
 
-    serve_files(args.path, args.port)
+    serve_files(args.path, args.port, args.data_like)
