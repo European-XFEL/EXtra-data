@@ -225,7 +225,8 @@ def gen_time():
     return sec, frac
 
 
-def serve_files(path, port, data_like='file', source_glob='*', key_glob='*', **kwargs):
+def serve_files(path, port, source_glob='*', key_glob='*',
+                detector_modules='file', **kwargs):
     """Stream data from files through a TCP socket.
 
     Parameters
@@ -234,14 +235,14 @@ def serve_files(path, port, data_like='file', source_glob='*', key_glob='*', **k
         Path to the HDF5 file or file folder.
     port: int
         Local TCP port to bind socket to.
-    data_like: str
-        Whether to keep data in module sources as from file ('file')
-        or to stack 'image.data' arrays for a new single source ('online')
     source_glob: str
         Only stream sources matching this glob pattern.
         Streaming data selectively is more efficient than streaming everything.
     key_glob: str
         Only stream keys matching this glob pattern in the selected sources.
+    detector_modules: str
+        Whether to keep data in module sources as from file ('file')
+        or to stack 'image.data' arrays for a new single source ('stack')
     """
     if osp.isdir(path):
         data = RunDirectory(path)
@@ -254,16 +255,18 @@ def serve_files(path, port, data_like='file', source_glob='*', key_glob='*', **k
     streamer.start()
     for tid, train_data in data.trains():
         if train_data:
-            if data_like == 'file':
+            if detector_modules == 'file':
                 streamer.feed(train_data)
-            elif data_like == 'online':
+            elif detector_modules == 'stack':
                 stacked = stack_detector_data(train_data, 'image.data')
                 merged_data = {}
                 # the data key pretends this is online data from SPB
                 merged_data['SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED'] = {
                     'image.data': stacked
+                    # add other data-set objects (by key) here?
                 }
-                sec, frac = gen_time()
+                # add other sources (by key) here?
+                sec, frac = gen_time() # use time-stamps from file data?
                 metadata = {}
                 metadata['SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED'] = {
                     'source': 'SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED',
@@ -288,10 +291,10 @@ def main(argv=None):
         default='*',
     )
     ap.add_argument(
-        "--data-like", help="Optional module stacking: online -> stack module \
-           sources into a single source (default: file -> keep modules \
-           separate as in files)",
-        default='file', choices=['file', 'online']
+        "--detector-modules", help="file -> keep modules in separate sources \
+           as in files (default). stack -> combine multiple module sources \
+           into one by stacking.",
+        default='file', choices=['file', 'stack']
     )
     args = ap.parse_args(argv)
 
