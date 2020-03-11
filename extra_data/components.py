@@ -425,6 +425,104 @@ class MPxDetectorBase:
         from .write_cxi import VirtualCXIWriter
         VirtualCXIWriter(self).write(filename)
 
+    def write_frames(self, filename, trains, pulses):
+        writer = FileWriter(filename, self.data)
+
+        for modno, source in sorted(self.modno_to_source.items()):
+            for key in sorted(self.data.keys_for_source(source)):
+                if key.startswith('image.'):
+                    # select frames
+                    pass
+                else:
+                    writer.copy_instrument_dataset(source, key)
+
+
+class FileWriter:
+    """Write data in European XFEL HDF5 format
+
+    This is intended to allow copying a subset of data into a smaller,
+    more portable file.
+    """
+
+    def __init__(self, path, data):
+        self.file = h5py.File(path, 'w')
+        self.data = data
+        self.indexes = {}  # {path: (first, count)}
+        self.data_sources = set()
+
+    def copy_instrument_dataset(self, source, key):
+        a = self.data.get_array(source, key)
+        path = 'INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
+        self.file[path] = a.values
+        self._make_instrument_index(source, key, a.coords['trainId'].values)
+
+    def write_selected_pulses(self, source, key, data):
+        pass
+
+    def _make_instrument_index(self, source, key, data_tids):
+        index_path = source + '/' + key.partition('.')[0]
+        if index_path not in self.indexes:
+            self.indexes[index_path] = self._generate_index(data_tids)
+            self.data_sources.add('INSTRUMENT/' + index_path)
+
+    def _generate_index(self, data_tids):
+        """Convert an array of train IDs to first/count for each train"""
+        assert (np.diff(data_tids) >= 0).all(), "Out-of-order train IDs"
+        counts = np.array([np.count_nonzero(t == data_tids)
+                          for t in self.data.train_ids], dtype=np.uint64)
+        firsts = np.zeros_like(counts)
+        firsts[1:] = np.cumsum(counts)[:-1]  # firsts[0] is always 0
+
+        return firsts, counts
+
+    def write_train_ids(self):
+        d = self.data
+        self.file.create_dataset('INDEX/trainId', data=d.train_ids, dtype='u8')
+
+    def write_indexes(self):
+        for groupname, (first, count) in self.indexes.items():
+            self.file['INDEX/{}/first'.format(groupname)] = first
+            self.file['INDEX/{}/count'.format(groupname)] = count
+
+    def write_metadata(self):
+        vlen_bytes = h5py.special_dtype(vlen=bytes)
+        data_sources = sorted(self.data_sources)
+        N = len(data_sources)
+
+        sources_ds = self.file.create_dataset(
+            'METADATA/dataSourceId', (N,), dtype=vlen_bytes, maxshape=(None,)
+        )
+        sources_ds[:] = data_sources
+
+        root_ds = self.file.create_dataset(
+            'METADATA/root', (N,), dtype=vlen_bytes, maxshape=(None,)
+        )
+        root_ds[:] = [ds.split('/', 1)[0] for ds in data_sources]
+
+        devices_ds = self.file.create_dataset(
+            'METADATA/deviceId', (N,), dtype=vlen_bytes, maxshape=(None,)
+        )
+        devices_ds[:] = [ds.split('/', 1)[1] for ds in data_sources]
+
+    def set_writer(self):
+        from . import __version__
+
+        self.file.attrs['writer'] = 'extra_data {}'.format(__version__)
+
+    def write(self):
+        d = self.data
+        self.write_train_ids()
+
+        for source in d.instrument_sources:
+            for key in d.keys_for_source(source):
+                self.add_instrument_dataset(source, key)
+
+        self.write_indexes()
+        self.write_metadata()
+        self.set_writer()
+
+
+
 
 class MPxDetectorTrainIterator:
     """Iterate over trains in detector data, assembling arrays.
