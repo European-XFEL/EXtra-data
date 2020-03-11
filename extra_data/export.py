@@ -226,7 +226,7 @@ def gen_time():
 
 
 def serve_files(path, port, source_glob='*', key_glob='*',
-                detector_modules='file', **kwargs):
+                append_detector_modules=False, **kwargs):
     """Stream data from files through a TCP socket.
 
     Parameters
@@ -240,9 +240,8 @@ def serve_files(path, port, source_glob='*', key_glob='*',
         Streaming data selectively is more efficient than streaming everything.
     key_glob: str
         Only stream keys matching this glob pattern in the selected sources.
-    detector_modules: str
-        Whether to keep data in module sources as from file ('file')
-        or to stack 'image.data' arrays for a new single source ('stack')
+    append_detector_modules: Boolean
+        Whether to combine module sources by stacking.
     """
     if osp.isdir(path):
         data = RunDirectory(path)
@@ -255,9 +254,7 @@ def serve_files(path, port, source_glob='*', key_glob='*',
     streamer.start()
     for tid, train_data in data.trains():
         if train_data:
-            if detector_modules == 'file':
-                streamer.feed(train_data)
-            elif detector_modules == 'stack':
+            if append_detector_modules:
                 stacked = stack_detector_data(train_data, 'image.data')
                 merged_data = {}
                 # the data key pretends this is online data from SPB
@@ -275,6 +272,9 @@ def serve_files(path, port, source_glob='*', key_glob='*',
                     'timestamp.frac': frac
                 }
                 streamer.feed(merged_data, metadata)
+            else:
+                streamer.feed(train_data)
+
     streamer.stop()
 
 
@@ -291,11 +291,11 @@ def main(argv=None):
         default='*',
     )
     ap.add_argument(
-        "--detector-modules", help="file -> keep modules in separate sources \
-           as in files (default). stack -> combine multiple module sources \
-           into one by stacking.",
-        default='file', choices=['file', 'stack']
+        "--append-detector-modules", help="combine multiple module sources \
+           into one.",
+        action='store_true'
     )
     args = ap.parse_args(argv)
 
-    serve_files(args.path, args.port, args.data_like)
+    serve_files(args.path, args.port,
+                append_detector_modules=args.append_detector_modules)
