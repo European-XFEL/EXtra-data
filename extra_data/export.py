@@ -15,6 +15,7 @@ import os.path as osp
 from queue import Queue
 from threading import Event, Thread
 from time import time
+from warnings import warn
 
 import msgpack
 import numpy as np
@@ -255,6 +256,10 @@ def serve_files(path, port, source_glob='*', key_glob='*',
     for tid, train_data in data.trains():
         if train_data:
             if append_detector_modules:
+                if source_glob == '*':
+                    warn(' You are trying to stack detector-module sources \
+with a global windcard (\'*\'). If there are non-detector sources in your \
+run, this will fail.\n')
                 stacked = stack_detector_data(train_data, 'image.data')
                 merged_data = {}
                 # the data key pretends this is online data from SPB
@@ -292,10 +297,11 @@ def main(argv=None):
     )
     ap.add_argument(
         "--append-detector-modules", help="combine multiple module sources \
-           into one.",
+           into one (will only work for AGIPD data currently).",
         action='store_true'
     )
     args = ap.parse_args(argv)
 
     serve_files(args.path, args.port,
+                source_glob=args.source, key_glob=args.key,
                 append_detector_modules=args.append_detector_modules)
