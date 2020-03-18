@@ -16,6 +16,9 @@ from collections import OrderedDict
 class FileRef(object):
     __slots__ = 'nref', 'fh'
 
+    def __init__(self, fh):
+        self.fh = fh
+        self.nref = 1
 
 class FileCache(object):
     """
@@ -27,7 +30,7 @@ class FileCache(object):
         self._cache = OrderedDict()
         
     def __del__(self):
-        self.clean()
+        self.close_all()
         
     @property
     def maxfiles(self):
@@ -45,7 +48,7 @@ class FileCache(object):
             n -= 1
         self._maxfiles = maxfiles
 
-    def clean(self):
+    def close_all(self):
         """
         Closes all cached files
         """
@@ -55,12 +58,12 @@ class FileCache(object):
 
     def open(self, filename):
         """
-        Returns the opened `h5.File` instance from the cache.
+        Returns the opened `h5py.File` instance from the cache.
         It opens new file only if the requested file is absent.
         If new file exceeds the *maxfiles* limit it pops file accessed most far.
 
-        For use of the file cache, FileAccess shold use `get_or_open(filename)`
-        instead of direct opening file with h5py
+        For use of the file cache, FileAccess shold use `open(filename)`
+        instead of direct opening file with `h5py.File`
         """
         try:
             f = self._cache[filename]
@@ -70,9 +73,8 @@ class FileCache(object):
             if len(self._cache) >= self._maxfiles:
                 rp, rf = self._cache.popitem(last=False)
                 rf.fh.close()
-            f = FileRef()
-            f.fh = h5py.File(filename, 'r')
-            f.nref = 1
+            fh = h5py.File(filename, 'r')
+            f = FileRef(fh)
             self._cache[filename] = f
         return f.fh
     
@@ -81,11 +83,15 @@ class FileCache(object):
         Move the touched file to the end of the `cache`
         
         For use of the file cache, FileAccess should use `touch(filename)` every time 
-        it provides the underying instance of h5File for reading.
+        it provides the underying instance of `h5py.File` for reading.
         """
         self._cache.move_to_end(filename)
 
     def close(self, filename):
+        """
+        Closes the underlying file if called the same times as `open(filename)`
+        Otherwise, just decreases the counter.
+        """
         f = self._cache.get(filename, None)
         if f is not None:
             if f.nref <= 1:
@@ -107,19 +113,11 @@ class FileCache(object):
         
 import resource
 
-def set_global_filecache():
-    nofile_rlimits = resource.getrlimit(resource.RLIMIT_NOFILE)
-    maxfiles = nofile_rlimits[0] // 2
-    global _extra_data_file_cache
-    _extra_data_file_cache = FileCache(maxfiles)
+def init_extra_data_filecache():
+    nofile = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (nofile[1], nofile[1]))
+    maxfiles = nofile[1] // 2
+    global extra_data_filecache
+    extra_data_filecache = FileCache(maxfiles)
 
-def get_global_filecache():
-    """
-    Returns the global instance of FileCache
-    """
-    try:
-        return _extra_data_file_cache
-    except NameError:
-        set_global_filecache()
-        return _extra_data_file_cache
-
+init_extra_data_filecache()

@@ -36,7 +36,7 @@ from .read_machinery import (
     find_proposal,
 )
 from .run_files_map import RunFilesMap
-from .filecache import get_global_filecache
+from .filecache import extra_data_filecache
 
 __all__ = [
     'H5File',
@@ -73,7 +73,6 @@ class FileAccess:
     file: h5py.File
         Open h5py file object
     """
-    _fc = get_global_filecache()
     _file = None
     _format_version = None
     metadata_fstat = None
@@ -101,21 +100,20 @@ class FileAccess:
         self._keys_cache = {}
 
     def __del__(self):
-        if self._file:
-            self._fc.close(self.filename)
+        self.close()
 
     @property
     def file(self):
         if self._file:
-            self._fc.touch(self.filename)
+            extra_data_filecache.touch(self.filename)
         else:
-            self._file = self._fc.open(self.filename)
+            self._file = extra_data_filecache.open(self.filename)
             
         return self._file
 
     def close(self):
         if self._file:
-            self._fc.close(self.filename)
+            extra_data_filecache.close(self.filename)
             self._file = None
 
     @property
@@ -168,6 +166,7 @@ class FileAccess:
         return "{}({})".format(type(self).__name__, repr(self.filename))
 
     def __getstate__(self):
+        """ Allows pickling `FileAccess` instance. """
         state = self.__dict__.copy()
         state['_file'] = None
         return state

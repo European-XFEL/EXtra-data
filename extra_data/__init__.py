@@ -39,8 +39,6 @@ __version__ = "1.0.0"
 from .reader import *
 from .stacking import *
 from .utils import *
-from .filecache import get_global_filecache
 
 
-__all__ = reader.__all__ + utils.__all__ + stacking.__all__ + \
-          ['get_global_filecache', ]
+__all__ = reader.__all__ + utils.__all__ + stacking.__all__
