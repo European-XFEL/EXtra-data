@@ -258,8 +258,8 @@ def serve_files(path, port, source_glob='*', key_glob='*',
             if append_detector_modules:
                 if source_glob == '*':
                     warn(' You are trying to stack detector-module sources \
-with a global windcard (\'*\'). If there are non-detector sources in your \
-run, this will fail.\n')
+with a global wildcard (\'*\'). If there are non-detector sources in your \
+run, this will fail.')
                 stacked = stack_detector_data(train_data, 'image.data')
                 merged_data = {}
                 # the data key pretends this is online data from SPB
