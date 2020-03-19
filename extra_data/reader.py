@@ -11,6 +11,7 @@ program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 """
 
 from collections import defaultdict
+from collections.abc import Iterable
 import datetime
 import fnmatch
 import h5py
@@ -894,7 +895,7 @@ class DataCollection:
 
                 res[source].update(keys or None)
 
-        elif isinstance(selection, list):
+        elif isinstance(selection, Iterable):
             # selection = [('src_glob', 'key_glob'), ...]
             res = union_selections(
                 self._select_glob(src_glob, key_glob)
@@ -944,7 +945,7 @@ class DataCollection:
             # Select data in the image group for any detector sources
             sel = run.select('*/DET/*', 'image.*')
 
-        2. With a list of (source, key) glob patterns::
+        2. With an iterable of (source, key) glob patterns::
 
             # Select image.data and image.mask for any detector sources
             sel = run.select([('*/DET/*', 'image.data'), ('*/DET/*', 'image.mask')])
