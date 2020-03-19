@@ -942,12 +942,12 @@ class DataCollection:
         1. With two glob patterns (see below) for source and key names::
 
             # Select data in the image group for any detector sources
-            sel = run.select('*/DET/*, 'image.*')
+            sel = run.select('*/DET/*', 'image.*')
 
         2. With a list of (source, key) glob patterns::
 
             # Select image.data and image.mask for any detector sources
-            sel = run.select([('*/DET/*, 'image.data'), ('*/DET/*, 'image.mask')])
+            sel = run.select([('*/DET/*', 'image.data'), ('*/DET/*', 'image.mask')])
 
            Data is included if it matches any of the pattern pairs.
 
