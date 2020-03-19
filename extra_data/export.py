@@ -57,7 +57,7 @@ class REPInterface(Thread):
 
 
 class ZMQStreamer:
-    """ZeroMQ inteface sending data over a TCP socket.
+    """ZeroMQ interface sending data over a TCP socket.
 
     ::
 
@@ -227,7 +227,8 @@ def gen_time():
 
 
 def serve_files(path, port, source_glob='*', key_glob='*',
-                append_detector_modules=False, **kwargs):
+                append_detector_modules=False, dummy_timestamps=False,
+                **kwargs):
     """Stream data from files through a TCP socket.
 
     Parameters
@@ -251,30 +252,26 @@ def serve_files(path, port, source_glob='*', key_glob='*',
 
     data = data.select(source_glob, key_glob)
 
-    streamer = ZMQStreamer(port, **kwargs)
+    streamer = ZMQStreamer(port, dummy_timestamps=dummy_timestamps, **kwargs)
     streamer.start()
     for tid, train_data in data.trains():
         if train_data:
             if append_detector_modules:
                 if source_glob == '*':
-                    warn(' You are trying to stack detector-module sources \
-with a global wildcard (\'*\'). If there are non-detector sources in your \
-run, this will fail.')
+                    warn(" You are trying to stack detector-module sources"
+                    " with a global wildcard (\'*\'). If there are non-"
+                    " detector sources in your run, this will fail.")
                 stacked = stack_detector_data(train_data, 'image.data')
                 merged_data = {}
                 # the data key pretends this is online data from SPB
                 merged_data['SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED'] = {
                     'image.data': stacked
-                    # add other data-set objects (by key) here?
                 }
-                # add other sources (by key) here?
-                sec, frac = gen_time() # use time-stamps from file data?
+                # sec, frac = gen_time() # use time-stamps from file data?
                 metadata = {}
                 metadata['SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED'] = {
                     'source': 'SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED',
-                    'timestamp.tid': tid,
-                    'timestamp.sec': sec,
-                    'timestamp.frac': frac
+                    'timestamp.tid': tid
                 }
                 streamer.feed(merged_data, metadata)
             else:
@@ -296,12 +293,18 @@ def main(argv=None):
         default='*',
     )
     ap.add_argument(
-        "--append-detector-modules", help="combine multiple module sources \
-           into one (will only work for AGIPD data currently).",
+        "--append-detector-modules", help="combine multiple module sources"
+        "into one (will only work for AGIPD data currently).",
+        action='store_true'
+    )
+    ap.add_argument(
+        "--dummy-timestamps", help="create dummy timestamps if the meta-data"
+        "lacks proper timestamps",
         action='store_true'
     )
     args = ap.parse_args(argv)
 
     serve_files(args.path, args.port,
                 source_glob=args.source, key_glob=args.key,
-                append_detector_modules=args.append_detector_modules)
+                append_detector_modules=args.append_detector_modules,
+                dummy_timestamps=args.dummy_timestamps)
