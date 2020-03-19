@@ -242,8 +242,10 @@ def serve_files(path, port, source_glob='*', key_glob='*',
         Streaming data selectively is more efficient than streaming everything.
     key_glob: str
         Only stream keys matching this glob pattern in the selected sources.
-    append_detector_modules: Boolean
+    append_detector_modules: bool
         Whether to combine module sources by stacking.
+    dummy_timestamps: bool
+        Whether to add mock timestamps if the metadata lacks them.
     """
     if osp.isdir(path):
         data = RunDirectory(path)
@@ -294,12 +296,12 @@ def main(argv=None):
     )
     ap.add_argument(
         "--append-detector-modules", help="combine multiple module sources"
-        "into one (will only work for AGIPD data currently).",
+        " into one (will only work for AGIPD data currently).",
         action='store_true'
     )
     ap.add_argument(
         "--dummy-timestamps", help="create dummy timestamps if the meta-data"
-        "lacks proper timestamps",
+        " lacks proper timestamps",
         action='store_true'
     )
     args = ap.parse_args(argv)

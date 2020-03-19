@@ -13,24 +13,8 @@ To stream the data from a file or run unmodified, use the command::
 The number (4545) must be an unused TCP port above 1024. It will bind to
 this and stream the data to any connected clients.
 
-Keyword-argument options:
-
-``--source SOURCE``: only sources matching the string SOURCE will be streamed.
-Default is '*' as a global wildcard for all sources.
-
-``--key KEY``: only data sets keyed by the string KEY will be streamed.
-Default is '*' as a global wildcard for all keys.   
-
-``--append-detector-modules``: given that the data read from file contains
-multiple detector modules as separate sources, which is the case for big area
-detectors like AGIPD, LPD and DSSC, append these into one single source, as
-expected by certain software (e.g. OnDA).
-
-The last optional feature has only been tested for AGIPD-1M data (so far).
-One should use this only for data runs that actually contain HDF5 files from
-AGIPD sources, **and** make a selection like ``--source "*/DET/*"``, because a
-global selection of all sources will cause an error if additional non-detector
-sources are found.
+Keyword-argument options are explained on the `command-line tools <cli.html>`__
+page.
 
 We provide Karabo bridge clients as Python and C++ libraries.
 

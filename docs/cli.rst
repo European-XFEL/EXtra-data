@@ -42,6 +42,41 @@ Stream data from files in the `Karabo bridge
 <https://in.xfel.eu/readthedocs/docs/data-analysis-user-documentation/en/latest/online.html#data-stream-to-user-tools>`_
 format. See :doc:`streaming` for more information.
 
+.. code-block:: shell
+
+   karabo-bridge-serve-files /gpfs/exfel/exp/XMPL/201750/p700000/proc/r0005 4321
+
+.. program:: karabo-bridge-serve-files
+
+.. option:: --source <source>
+
+   Only sources matching the string <source> will be streamed. Default is '*',
+   serving as a global wildcard for all sources.
+
+.. option:: --key <key>
+
+   Only data sets keyed by the string <key> will be streamed. Default is '*',
+   serving as a global wildcard for all keys.
+
+.. option:: --append-detector-modules
+
+   If the file data contains multiple detector modules as separate sources,
+   i. e. for big area detectors (AGIPD, LPD and DSSC), append these into one
+   single source.
+
+.. option:: --dummy-timestamps
+
+   Add mock timestamps if missing in the original meta-data.
+
+Both of the last options, appended module sources and (dummy) timestamps are
+required if streamed data shall be provided to OnDA.
+
+Module appending has only been tested for AGIPD-1M data (so far). One should
+restrict its usage to data runs that actually contain HDF5 files from AGIPD
+sources, **and** make a selection like ``--source "*/DET/*"``, because a
+global selection of all sources will cause an error if additional
+non-detector sources are found in that run.
+
 ``extra-data-make-virtual-cxi``
 --------------------------------
 
