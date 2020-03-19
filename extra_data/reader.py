@@ -901,7 +901,7 @@ class DataCollection:
                 for (src_glob, key_glob) in selection
             )
         else:
-            TypeError("Unknown selection type: {}".format(type(selection)))
+            raise TypeError("Unknown selection type: {}".format(type(selection)))
 
         return dict(res)
 
