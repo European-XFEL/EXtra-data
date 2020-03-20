@@ -184,3 +184,22 @@ def test_write_virtual_cxi_raw_data(mock_fxe_raw_run, tmpdir, caplog):
     test_file = osp.join(str(tmpdir), 'test.cxi')
     det.write_virtual_cxi(test_file)
     assert_isfile(test_file)
+
+    with h5py.File(test_file, 'r') as f:
+        det_grp = f['entry_1/instrument_1/detector_1']
+        ds = det_grp['data']
+        assert ds.shape[1:] == (16, 1, 256, 256)
+
+
+def test_write_virtual_cxi_reduced_data(mock_reduced_spb_proc_run, tmpdir):
+    run = RunDirectory(mock_reduced_spb_proc_run)
+    det = AGIPD1M(run)
+
+    test_file = osp.join(str(tmpdir), 'test.cxi')
+    det.write_virtual_cxi(test_file)
+    assert_isfile(test_file)
+
+    with h5py.File(test_file, 'r') as f:
+        det_grp = f['entry_1/instrument_1/detector_1']
+        ds = det_grp['data']
+        assert ds.shape[1:] == (16, 512, 128)
