@@ -13,6 +13,9 @@ To stream the data from a file or run unmodified, use the command::
 The number (4545) must be an unused TCP port above 1024. It will bind to
 this and stream the data to any connected clients.
 
+Command-line options are explained on the
+:ref:`command reference <cmd-serve-files>` page.
+
 We provide Karabo bridge clients as Python and C++ libraries.
 
 If you want to do some processing on the data before streaming it, you can

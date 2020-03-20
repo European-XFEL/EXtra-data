@@ -15,12 +15,14 @@ import os.path as osp
 from queue import Queue
 from threading import Event, Thread
 from time import time
+from warnings import warn
 
 import msgpack
 import numpy as np
 import zmq
 
 from .reader import RunDirectory, H5File
+from .stacking import stack_detector_data
 
 __all__ = ['ZMQStreamer', 'serve_files']
 
@@ -55,7 +57,7 @@ class REPInterface(Thread):
 
 
 class ZMQStreamer:
-    """ZeroMQ inteface sending data over a TCP socket.
+    """ZeroMQ interface sending data over a TCP socket.
 
     ::
 
@@ -216,7 +218,9 @@ class ZMQStreamer:
         self._buffer.put(self._serialize(data, metadata))
 
 
-def serve_files(path, port, source_glob='*', key_glob='*', **kwargs):
+def serve_files(path, port, source_glob='*', key_glob='*',
+                append_detector_modules=False, dummy_timestamps=False,
+                **kwargs):
     """Stream data from files through a TCP socket.
 
     Parameters
@@ -230,6 +234,10 @@ def serve_files(path, port, source_glob='*', key_glob='*', **kwargs):
         Streaming data selectively is more efficient than streaming everything.
     key_glob: str
         Only stream keys matching this glob pattern in the selected sources.
+    append_detector_modules: bool
+        Whether to combine module sources by stacking.
+    dummy_timestamps: bool
+        Whether to add mock timestamps if the metadata lacks them.
     """
     if osp.isdir(path):
         data = RunDirectory(path)
@@ -238,11 +246,31 @@ def serve_files(path, port, source_glob='*', key_glob='*', **kwargs):
 
     data = data.select(source_glob, key_glob)
 
-    streamer = ZMQStreamer(port, **kwargs)
+    streamer = ZMQStreamer(port, dummy_timestamps=dummy_timestamps, **kwargs)
     streamer.start()
     for tid, train_data in data.trains():
         if train_data:
-            streamer.feed(train_data)
+            if append_detector_modules:
+                if source_glob == '*':
+                    warn(" You are trying to stack detector-module sources"
+                    " with a global wildcard (\'*\'). If there are non-"
+                    " detector sources in your run, this will fail.")
+                stacked = stack_detector_data(train_data, 'image.data')
+                merged_data = {}
+                # the data key pretends this is online data from SPB
+                merged_data['SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED'] = {
+                    'image.data': stacked
+                }
+                # sec, frac = gen_time() # use time-stamps from file data?
+                metadata = {}
+                metadata['SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED'] = {
+                    'source': 'SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED',
+                    'timestamp.tid': tid
+                }
+                streamer.feed(merged_data, metadata)
+            else:
+                streamer.feed(train_data)
+
     streamer.stop()
 
 
@@ -258,6 +286,19 @@ def main(argv=None):
         "--key", help="Stream only matching keys ('*' is a wildcard)",
         default='*',
     )
+    ap.add_argument(
+        "--append-detector-modules", help="combine multiple module sources"
+        " into one (will only work for AGIPD data currently).",
+        action='store_true'
+    )
+    ap.add_argument(
+        "--dummy-timestamps", help="create dummy timestamps if the meta-data"
+        " lacks proper timestamps",
+        action='store_true'
+    )
     args = ap.parse_args(argv)
 
-    serve_files(args.path, args.port)
+    serve_files(args.path, args.port,
+                source_glob=args.source, key_glob=args.key,
+                append_detector_modules=args.append_detector_modules,
+                dummy_timestamps=args.dummy_timestamps)
