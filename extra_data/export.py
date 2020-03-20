@@ -218,14 +218,6 @@ class ZMQStreamer:
         self._buffer.put(self._serialize(data, metadata))
 
 
-def gen_time():
-    """Create a mock timestamp for meta-data"""
-    timestamp = time()
-    sec, frac = str(timestamp).split('.')
-    frac = frac.ljust(18, '0') # attosecond resolution
-    return sec, frac
-
-
 def serve_files(path, port, source_glob='*', key_glob='*',
                 append_detector_modules=False, dummy_timestamps=False,
                 **kwargs):
