@@ -29,17 +29,17 @@ class VirtualCXIWriter:
 
         self.modulenos = sorted(detdata.modno_to_source)
 
-        train_ids = detdata.train_ids
-        frames_per_train = detdata.frames_per_train
-        ntrains = np.uint64(len(train_ids))
-        self.nframes = ntrains * frames_per_train
-        log.info("%d frames per train, %d frames in total",
-                     frames_per_train, self.nframes)
+        frame_counts = detdata.frame_counts
+        self.nframes = frame_counts.sum()
+        log.info("Up to %d frames per train, %d frames in total",
+                 frame_counts.max(), self.nframes)
 
-        self.train_ids_perframe = np.repeat(train_ids, frames_per_train)
+        self.train_ids_perframe = np.repeat(
+            frame_counts.index.values, frame_counts.values.astype(np.intp)
+        )
 
-        positions = np.arange(0, ntrains, dtype=np.uint64) * frames_per_train
-        self.train_id_to_ix = dict(zip(train_ids, positions))
+        # cumulative sum gives the end of each train, subtract to get start
+        self.train_id_to_ix = frame_counts.cumsum() - frame_counts
 
     @property
     def nmodules(self):
