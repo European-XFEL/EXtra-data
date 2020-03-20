@@ -104,15 +104,17 @@ class MPxDetectorBase:
             for src in source_to_modno
         }).fillna(0).astype(np.uint64)
 
-        # Sanity check: all non-zero counts should be equal
-        data_count_values = set(mod_data_counts.values.flatten()) - {0}
-        if len(data_count_values) > 1:
-            raise ValueError("Inconsistent frame counts: {}"
-                             .format(data_count_values))
-        elif not data_count_values:
-            raise ValueError("No data found for selected sources")
+        # Within any train, all modules should have same count or zero
+        frame_counts = pd.Series(0, index=mod_data_counts.index, dtype=np.uint64)
+        for tid, data_counts in mod_data_counts.iterrows():
+            count_vals = set(data_counts) - {0}
+            if len(count_vals) > 1:
+                raise ValueError(
+                    f"Inconsistent frame counts for train {tid}: {count_vals}"
+                )
+            elif count_vals:
+                frame_counts[tid] = count_vals.pop()
 
-        self.frames_per_train = data_count_values.pop()
         self.data = self._select_trains(data, mod_data_counts, min_modules)
 
         # This should be a reversible 1-to-1 mapping
@@ -122,6 +124,7 @@ class MPxDetectorBase:
         train_id_arr = np.asarray(self.data.train_ids)
         split_indices = np.where(np.diff(train_id_arr) != 1)[0] + 1
         self.train_id_chunks = np.split(train_id_arr, split_indices)
+        self.frame_counts = frame_counts[train_id_arr]
 
     @classmethod
     def _find_detector_name(cls, data):
@@ -175,6 +178,13 @@ class MPxDetectorBase:
     @property
     def train_ids(self):
         return self.data.train_ids
+
+    @property
+    def frames_per_train(self):
+        counts = set(self.frame_counts.unique()) - {0}
+        if len(counts) > 1:
+            raise ValueError(f"Varying number of frames per train: {counts}")
+        return counts.pop()
 
     def __repr__(self):
         return "<{}: Data interface for detector {!r} with {} modules>".format(
