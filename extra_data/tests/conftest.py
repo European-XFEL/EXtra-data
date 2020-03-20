@@ -79,7 +79,7 @@ def mock_spb_raw_run():
 @pytest.fixture(scope='session')
 def mock_reduced_spb_proc_run():
     """Varying number of frames stored from AGIPD"""
-    rng = np.random.default_rng(123)  # Fix seed
+    rng = np.random.RandomState(123)  # Fix seed
 
     with TemporaryDirectory() as td:
         make_examples.make_reduced_spb_run(td, raw=False, rng=rng)

@@ -266,9 +266,9 @@ def make_reduced_spb_run(dir_path, raw=True, rng=None):
     # Counts across modules should be consistent
     prefix = 'RAW' if raw else 'CORR'
     if rng is None:
-        rng = np.random.default_rng()
+        rng = np.random.RandomState()
 
-    frame_counts = rng.integers(0, 20, size=64)
+    frame_counts = rng.randint(0, 20, size=64)
     for modno in range(16):
         path = osp.join(dir_path,
                         '{}-R0238-AGIPD{:0>2}-S00000.h5'.format(prefix, modno))
