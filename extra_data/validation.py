@@ -136,7 +136,8 @@ class FileValidator:
 
 
 def check_index_contiguous(firsts, counts, record):
-    probs = []
+    if firsts.size == 0:
+        return  # no data in this dataset
 
     if firsts[0] != 0:
         record("Index doesn't start at 0")
@@ -156,8 +157,6 @@ def check_index_contiguous(firsts, counts, record):
         record("Overlaps ({}) in index, e.g. at {} ({} + {} > {})".format(
             overlap_ixs.size, pos, firsts[pos], counts[pos], firsts[pos + 1]
         ))
-
-    return probs
 
 
 def progress_bar(done, total, suffix=' '):

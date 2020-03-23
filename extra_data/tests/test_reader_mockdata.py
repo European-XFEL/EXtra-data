@@ -625,3 +625,8 @@ def test_permission():
         run = RunDirectory(d)
     assert "Permission denied" in str(excinfo.value)
     assert d in str(excinfo.value)
+
+
+def test_empty_file_info(mock_empty_file, capsys):
+    f = H5File(mock_empty_file)
+    f.info()  # smoke test

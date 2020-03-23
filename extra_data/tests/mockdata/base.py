@@ -59,7 +59,9 @@ class DeviceBase:
         if self.nsamples is None:
             self.nsamples = self.ntrains
 
-        if self.nsamples == 0:
+        if self.ntrains == 0:
+            first, count, trainids = [], [], []
+        elif self.nsamples == 0:
             first = count = 0
             trainids = []
         elif self.nsamples < self.ntrains:
@@ -99,7 +101,8 @@ class DeviceBase:
             # INSTRUMENT
             tid = f.create_dataset('INSTRUMENT/%s/trainId' % dev_chan,
                                    (Npad,), 'u8', maxshape=(None,))
-            tid[:self.nsamples] = trainids
+            if len(trainids) > 0:
+                tid[:self.nsamples] = trainids
             for (topic, datatype, dims) in self.instrument_keys:
                 f.create_dataset('INSTRUMENT/%s/%s' % (dev_chan, topic),
                                  (Npad,) + dims, datatype, maxshape=((None,) + dims))

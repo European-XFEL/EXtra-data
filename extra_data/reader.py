@@ -1142,12 +1142,16 @@ class DataCollection:
         """Show information about the selected data.
         """
         # time info
-        first_train = self.train_ids[0]
-        last_train = self.train_ids[-1]
         train_count = len(self.train_ids)
-        seconds, deciseconds = divmod((last_train - first_train + 1), 10)
-        span_txt = '{}.{}'.format(datetime.timedelta(seconds=seconds),
-                                  int(deciseconds))
+        if train_count == 0:
+            first_train = last_train = '-'
+            span_txt = '0.0'
+        else:
+            first_train = self.train_ids[0]
+            last_train = self.train_ids[-1]
+            seconds, deciseconds = divmod((last_train - first_train + 1), 10)
+            span_txt = '{}.{}'.format(datetime.timedelta(seconds=seconds),
+                                      int(deciseconds))
 
         detector_modules = {}
         for source in self.detector_sources:
