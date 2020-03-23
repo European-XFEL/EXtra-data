@@ -625,3 +625,13 @@ def test_permission():
         run = RunDirectory(d)
     assert "Permission denied" in str(excinfo.value)
     assert d in str(excinfo.value)
+
+
+def test_empty_file_info(mock_empty_file_valid, capsys):
+    f = H5File(mock_empty_file_valid)
+    f.info()
+    out, err = capsys.readouterr()
+    assert '# of trains:    0' in out
+    assert 'Duration:       0.0' in out
+    assert 'First train ID: -' in out
+    assert 'Last train ID:  -' in out
