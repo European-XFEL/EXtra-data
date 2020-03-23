@@ -83,3 +83,10 @@ def empty_h5_file():
             pass
 
         yield path
+
+@pytest.fixture(scope='session')
+def mock_empty_file_valid():
+    with TemporaryDirectory() as td:
+        path = osp.join(td, 'RAW-R0450-DA01-S00002.h5')
+        make_examples.make_sa3_da_file(path, ntrains=0)
+        yield path

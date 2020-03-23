@@ -26,6 +26,14 @@ def data_aggregator_file():
         yield path
 
 
+@fixture(scope='function')
+def mock_empty_file():
+    with TemporaryDirectory() as td:
+        path = osp.join(td, 'RAW-R0450-DA02-S00001.h5')
+        make_examples.make_sa3_da_file(path, ntrains=0)
+        yield path
+
+
 def test_validate_run(mock_fxe_raw_run):
     rv = RunValidator(mock_fxe_raw_run)
     rv.validate()
@@ -139,3 +147,7 @@ def test_gaps(agipd_file):
     assert problem['msg'] == 'Gaps (1) in index, e.g. at 1 (0 + 64 < 128)'
     assert problem['dataset'] == 'INDEX/SPB_DET_AGIPD1M-1/DET/0CH0:xtdf/image'
     assert 'RAW-R0239-AGIPD00-S00000.h5' in problem['file']
+
+
+def test_file_without_data(mock_empty_file):
+    FileValidator(FileAccess(mock_empty_file)).validate()
