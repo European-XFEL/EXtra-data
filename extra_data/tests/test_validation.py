@@ -26,14 +26,6 @@ def data_aggregator_file():
         yield path
 
 
-@fixture(scope='function')
-def mock_empty_file():
-    with TemporaryDirectory() as td:
-        path = osp.join(td, 'RAW-R0450-DA02-S00001.h5')
-        make_examples.make_sa3_da_file(path, ntrains=0)
-        yield path
-
-
 def test_validate_run(mock_fxe_raw_run):
     rv = RunValidator(mock_fxe_raw_run)
     rv.validate()

@@ -627,8 +627,8 @@ def test_permission():
     assert d in str(excinfo.value)
 
 
-def test_empty_file_info(mock_empty_file_valid, capsys):
-    f = H5File(mock_empty_file_valid)
+def test_empty_file_info(mock_empty_file, capsys):
+    f = H5File(mock_empty_file)
     f.info()
     out, err = capsys.readouterr()
     assert '# of trains:    0' in out
