@@ -1141,14 +1141,13 @@ class DataCollection:
         """Show information about the selected data.
         """
         # time info
-        if len(self.train_ids) == 0:
+        train_count = len(self.train_ids)
+        if train_count == 0:
             first_train = last_train = '-'
-            train_count = 0
             span_txt = '0.0'
         else:
             first_train = self.train_ids[0]
             last_train = self.train_ids[-1]
-            train_count = len(self.train_ids)
             seconds, deciseconds = divmod((last_train - first_train + 1), 10)
             span_txt = '{}.{}'.format(datetime.timedelta(seconds=seconds),
                                       int(deciseconds))
