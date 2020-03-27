@@ -60,7 +60,7 @@ def partition(files, cb_disp=silent):
     fpart = defaultdict(list)
     for path, loc in list_locality(files):
         fpart[loc].append(path)
-        cb_disp(fcnt)
+        cb_disp(fpart)
     return fpart
 
 def lc_match(files, accept=ONDISK):
@@ -96,6 +96,7 @@ def check_dir(basedir):
     
     print(f"Checking {len(files)} files in {basedir}")
     fp = partition(files, print_counts)
+    print("")
     
     if fp['NEARLINE']:
         print("Only on tape:")
