@@ -37,6 +37,7 @@ from .read_machinery import (
     find_proposal,
 )
 from .run_files_map import RunFilesMap
+from . import locality
 
 __all__ = [
     'H5File',
@@ -1381,7 +1382,7 @@ def H5File(path):
     return DataCollection.from_path(path)
 
 
-def RunDirectory(path, include='*'):
+def RunDirectory(path, include='*', filt=locality.lc_any):
     """Open data files from a 'run' at European XFEL.
 
     ::
@@ -1402,6 +1403,7 @@ def RunDirectory(path, include='*'):
     """
     files = [f for f in os.listdir(path) if f.endswith('.h5')]
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
+    files = filt(files)
     if not files:
         raise Exception("No HDF5 files found in {} with glob pattern {}".format(path, include))
 
@@ -1419,7 +1421,7 @@ def RunDirectory(path, include='*'):
 RunHandler = RunDirectory
 
 
-def open_run(proposal, run, data='raw', include='*'):
+def open_run(proposal, run, data='raw', include='*', filt=locality.lc_any):
     """Access EuXFEL data on the Maxwell cluster by proposal and run number.
 
     ::
@@ -1457,4 +1459,4 @@ def open_run(proposal, run, data='raw', include='*'):
         run = index(run)  # Allow integers, including numpy integers
     run = 'r' + str(run).zfill(4)
 
-    return RunDirectory(osp.join(prop_dir, data, run), include=include)
+    return RunDirectory(osp.join(prop_dir, data, run), include=include, filt=filt)

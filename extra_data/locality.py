@@ -1,119 +1,119 @@
-"""                                                                                                                             Tool to check a file locality at EuXFEL
-
-Maybe used to avoid hangs on reading files from dCache
-if they are not available or stored on tape
 """
-import sys
+Tools to check a file locality at EuXFEL
+
+May be used to avoiding hangs on reading files from dCache
+if they are not available or stored only on tape
+"""
 import os
-import errno
-import fnmatch
+import sys
+from collections import defaultdict
 import multiprocessing as mp
-import psutil
 
-
-MW_DCACHE_MOUNT='/pnfs/xfel.eu/exfel'
-
-NONE = 0x1
-GPFS = 0x2
-DC_ONLINE = 0x4
-DC_NEARLINE = 0x8
-DC_ANY = 0xC
-UNKNOWN = 0
-
-FAST = 0x6
-ANY = 0xF
+UNAVAIL = 1
+ONTAPE = 2
+ONDISK = 4
+ANY = 7
 
 DC_LOC_RESP = {
-    'UNAVAILABLE': NONE,
-    'NEARLINE': DC_NEARLINE,
-    'ONLINE': DC_ONLINE,
-    'ONLINE_AND_NEARLINE': DC_ANY,
+    'UNAVAILABLE': UNAVAIL,
+    'NEARLINE': ONTAPE,
+    'ONLINE': ONDISK,
+    'ONLINE_AND_NEARLINE': ONTAPE | ONDISK,
+    'NOT_ON_DCACHE': ONDISK,
 }
-
-LAB = {
-    1: 'unavailable',
-    2: 'fast: GPFS',
-    4: 'slow: PNFS, on tape',
-    8: 'fast: PNFS, online',
-    12: 'fast: PNFS, online',
+LOCMSG = {
+    0: 'Unknown locality',
+    1: 'Unavailable',
+    2: 'Only on tape',
+    4: 'On disk',
+    6: 'On disk',
 }
-
-class FileTemporarilyUnavailable(OSError):
-    pass
-
-def isondcache(path, dcache_mount=MW_DCACHE_MOUNT):
-    """ Return flag that file on dCache """
-    return os.path.realpath(os.path.abspath(path)).startswith(dcache_mount)
 
 def get_locality(path):
     """ Returns locality of the file (path) """
+    basedir, filename = os.path.split(path)
+    dotcmd = os.path.join(basedir, '.(get)({})(locality)'.format(filename))
+    try:
+        with open(dotcmd, 'r') as f:
+            return path, f.read().strip()
+    except FileNotFoundError:
+        return path, 'NOT_ON_DCACHE'
     
-    if not isondcache(path):
-        return GPFS
+def list_locality(files):
+    """ Returns locality of the list of files """
+    with mp.Pool() as p:
+        yield from p.imap_unordered(get_locality, files)
 
-    bdir, fn = os.path.split(path)
-    cmd = os.path.join(bdir, f".(get)({fn})(locality)")
-    with open(cmd, 'rt') as f:
-        loc = DC_LOC_RESP.get(f.read().strip(), UNKNOWN)
-    return loc
-
-def check(path, accpt_loc):
-    """ Raises exception unless file (path) has accepted locality (accpt_loc) """
-    loc = get_locality(path)
-    if not loc & ANY:
-        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
-    if not loc & accpt_loc:
-        raise FileTemporarilyUnavailable(errno.EAGAIN, os.strerror(errno.EAGAIN), path)
-
-
-def get_locality_worker(path):
-    return path, get_locality(path)
-def init_loclaity_worker():
+def print_counts(fpart):
+    """ Prints the counters of different localities """
+    n_ondisk = len(fpart['NOT_ON_DCACHE']) + len(fpart['ONLINE_AND_NEARLINE']) + len(fpart['ONLINE'])
+    n_ontape = len(fpart['NEARLINE'])
+    n_unavail = len(fpart['UNAVAILABLE'])
+    print(f"{n_ondisk} on disk, {n_ontape} only on tape, {n_unavail} unavailable    ", end='\r')
+    
+def silent(fpart):
+    """ Prints nothing """
     pass
 
-def lsdir(path, pattern='*', accpt_loc=ANY, nproc=None):
-    """
-    Returns the list of files in the directory which are has accepted localilty (accpt_loc)
-    
-    Runs in parallel unless nproc == 1
-    """
-    
-    if nproc is None:
-        files = [ os.path.join(path, fn) for fn in os.listdir(path) if fnmatch.fnmatch(fn, pattern) ]
-        nproc = min(len(psutil.Process().cpu_affinity()), len(files), 10)
-    else:
-        files = ( os.path.join(path, fn) for fn in os.listdir(path) if fnmatch.fnmatch(fn, pattern) )
-    if nproc > 1:
-        with mp.Pool(nproc, initializer=init_loclaity_worker) as pool:
-            r = pool.imap_unordered(get_locality_worker, files)
-            yield from ( (ffn, loc) for ffn, loc in r if loc & accpt_loc )
-    else:
-        r = ( (fn, get_locality(fn)) for fn in files )
-        yield from ( (ffn, loc) for ffn, loc in r if loc & accpt_loc )
-        
-        
-def check_directory(path, display_except = ANY, nproc=None):
-    """ Check the directory and print files which do not have accepted locality """
-    lenp = len(path)
-    nflt, nacc = 0, 0
-    for f, l in lsdir(path, "*.h5", nproc=nproc):
-        if not (l & display_except):
-            nflt += 1
-            print("{:20} {}".format(LAB[l], f[lenp:]))
+def partition(files, cb_disp=silent):
+    """ Partition files by locality """
+    fpart = defaultdict(list)
+    for path, loc in list_locality(files):
+        fpart[loc].append(path)
+        cb_disp(fcnt)
+    return fpart
+
+def lc_match(files, accept=ONDISK):
+    """ Returns files which has accepted locality """
+    filtered = []
+    for path, loc in list_locality(files):
+        code = DC_LOC_RESP.get(loc, 0)
+        if code & accept:
+            filtered.append(path)
         else:
-            nacc += 1
+            print(f"Skipping file {path}", file=sys.stderr)
+            print(f"  ({LOCMSG[loc]})", file=sys.stderr)
             
-    print("accepted: {}, filtered: {}".format(nacc, nflt))
+    return filtered
         
-        
-if __name__ == '__main__':
     
-    if len (sys.argv) < 2:
-        print('Usage: {} dir1 dir2 ... dirN'.format(sys.argv[0]))
-    for argv in sys.argv[1:]:
-        print('* ', argv)
-        try:
-            check_directory(argv, FAST)
-        except Exception as e:
-            print(str(e))
-            
+def lc_any(files):
+    """ Returns all files, does nothing """
+    return files
+
+def lc_ondisk(files):
+    """ Returns files on disk """
+    return lc_match(files, ONDISK)
+
+def lc_avail(files):
+    """ Returns files which are available """
+    return lc_match(files, ONTAPE | ONDISK)
+
+def check_dir(basedir):
+    """ Check basedir and prints results """
+    ls = ( os.path.join(basedir, f) for f in os.listdir(basedir) )
+    files = [ f for f in ls if os.path.isfile(f) ]
+    
+    print(f"Checking {len(files)} files in {basedir}")
+    fp = partition(files, print_counts)
+    
+    if fp['NEARLINE']:
+        print("Only on tape:")
+        for file in sorted(fp['NEARLINE']):
+            print(f"  {file}")
+    
+    if fp['UNAVAILABLE']:
+        print("Unavailable:")
+        for file in sorted(fbl['UNAVAILABLE']):
+            print(f"  {file}")
+    
+    unknown_locality = set(fp) - set(DC_LOC_RESP)
+    if unknown_locality:
+        print("Unknown locality:", unknown_keys)
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print(f'Usage: {sys.argv[0]} <directory>')
+        exit(1)
+        
+    check_dir(sys.argv[1])
