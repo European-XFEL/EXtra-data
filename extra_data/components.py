@@ -90,6 +90,9 @@ class MPxDetectorBase:
                  *, min_modules=1):
         if detector_name is None:
             detector_name = self._find_detector_name(data)
+        if min_modules <= 0:
+            raise ValueError("min_modules must be a positive integer, not "
+                             f"{min_modules!r}")
 
         source_to_modno = self._identify_sources(data, detector_name, modules)
 
