@@ -114,6 +114,7 @@ class FileCache(object):
 import resource
 
 def init_extra_data_filecache():
+    # Raise the limit for open files (1024 -> 4096 on Maxwell)
     nofile = resource.getrlimit(resource.RLIMIT_NOFILE)
     resource.setrlimit(resource.RLIMIT_NOFILE, (nofile[1], nofile[1]))
     maxfiles = nofile[1] // 2

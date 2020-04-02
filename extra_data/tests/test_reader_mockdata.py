@@ -15,7 +15,6 @@ from extra_data import (
     H5File, RunDirectory, by_index, by_id,
     SourceNameError, PropertyNameError, DataCollection, open_run,
 )
-from extra_data.filecache import extra_data_filecache
 
 def test_iterate_trains(mock_agipd_data):
     with H5File(mock_agipd_data) as f:
