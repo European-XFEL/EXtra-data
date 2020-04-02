@@ -16,7 +16,6 @@ from extra_data import (
     SourceNameError, PropertyNameError, DataCollection, open_run,
 )
 
-
 def test_iterate_trains(mock_agipd_data):
     with H5File(mock_agipd_data) as f:
         for train_id, data in islice(f.trains(), 10):

@@ -41,6 +41,7 @@ from .read_machinery import (
     find_proposal,
 )
 from .run_files_map import RunFilesMap
+from .filecache import extra_data_filecache
 
 __all__ = [
     'H5File',
@@ -98,10 +99,6 @@ class FileAccess:
             # This is used by the run files map.
             self.metadata_fstat = os.stat(self.file.id.get_vfd_handle())
 
-            # Close the file again - crude way to avoid hitting the limit of
-            # open files, which is only 1024 by default.
-            self.close()
-
         # {(file, source, group): (firsts, counts)}
         self._index_cache = {}
         # {source: set(keys)}
@@ -109,15 +106,21 @@ class FileAccess:
         # {source: set(keys)} - including incomplete sets
         self._known_keys = defaultdict(set)
 
+    def __del__(self):
+        self.close()
+
     @property
     def file(self):
-        if self._file is None:
-            self._file = h5py.File(self.filename, 'r')
+        if self._file:
+            extra_data_filecache.touch(self.filename)
+        else:
+            self._file = extra_data_filecache.open(self.filename)
+            
         return self._file
 
     def close(self):
         if self._file:
-            self._file.close()
+            extra_data_filecache.close(self.filename)
             self._file = None
 
     @property
@@ -168,6 +171,12 @@ class FileAccess:
 
     def __repr__(self):
         return "{}({})".format(type(self).__name__, repr(self.filename))
+
+    def __getstate__(self):
+        """ Allows pickling `FileAccess` instance. """
+        state = self.__dict__.copy()
+        state['_file'] = None
+        return state
 
     @property
     def all_sources(self):
@@ -1342,11 +1351,8 @@ class TrainIterator:
         self._datasets_cache = {}
 
     def _find_data(self, source, key, tid):
-        try:
-            file, ds = self._datasets_cache[(source, key)]
-        except KeyError:
-            pass
-        else:
+        file, ds = self._datasets_cache.get((source, key), (None, None))
+        if ds:
             ixs = (file.train_ids == tid).nonzero()[0]
             if ixs.size > 0:
                 return file, ixs[0], ds
