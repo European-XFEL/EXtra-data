@@ -1,6 +1,7 @@
 import os.path as osp
 
 import h5py
+import numpy as np
 import pytest
 from tempfile import TemporaryDirectory
 
@@ -73,6 +74,15 @@ def mock_spb_proc_run():
 def mock_spb_raw_run():
     with TemporaryDirectory() as td:
         make_examples.make_spb_run(td)
+        yield td
+
+@pytest.fixture(scope='session')
+def mock_reduced_spb_proc_run():
+    """Varying number of frames stored from AGIPD"""
+    rng = np.random.RandomState(123)  # Fix seed
+
+    with TemporaryDirectory() as td:
+        make_examples.make_reduced_spb_run(td, raw=False, rng=rng)
         yield td
 
 @pytest.fixture(scope='session')

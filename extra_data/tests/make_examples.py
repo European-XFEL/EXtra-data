@@ -261,6 +261,35 @@ def make_spb_run(dir_path, raw=True, sensor_size=(1024, 768)):
                  BaslerCam('SPB_IRU_CAM/CAM/SIDEMIC', sensor_size=sensor_size)
                ], ntrains=32, firsttrain=10032, chunksize=32)
 
+def make_reduced_spb_run(dir_path, raw=True, rng=None):
+    # Simulate reduced AGIPD data, with varying number of frames per train.
+    # Counts across modules should be consistent
+    prefix = 'RAW' if raw else 'CORR'
+    if rng is None:
+        rng = np.random.RandomState()
+
+    frame_counts = rng.randint(0, 20, size=64)
+    for modno in range(16):
+        path = osp.join(dir_path,
+                        '{}-R0238-AGIPD{:0>2}-S00000.h5'.format(prefix, modno))
+        write_file(path, [
+            AGIPDModule('SPB_DET_AGIPD1M-1/DET/{}CH0'.format(modno), raw=raw,
+                         frames_per_train=frame_counts)
+            ], ntrains=64, chunksize=32)
+    if not raw:
+        return
+    write_file(osp.join(dir_path, '{}-R0238-DA01-S00000.h5'.format(prefix)),
+               [ XGM('SA1_XTD2_XGM/DOOCS/MAIN'),
+                 XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
+                 BaslerCam('SPB_IRU_CAM/CAM/SIDEMIC', sensor_size=(1024, 768))
+               ], ntrains=32, chunksize=32)
+
+    write_file(osp.join(dir_path, '{}-R0238-DA01-S00001.h5'.format(prefix)),
+               [ XGM('SA1_XTD2_XGM/DOOCS/MAIN'),
+                 XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
+                 BaslerCam('SPB_IRU_CAM/CAM/SIDEMIC', sensor_size=(1024, 768))
+               ], ntrains=32, firsttrain=10032, chunksize=32)
+
 if __name__ == '__main__':
     make_agipd_example_file('agipd_example.h5')
     make_fxe_da_file('fxe_control_example.h5')
