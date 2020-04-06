@@ -15,6 +15,7 @@ from collections.abc import Iterable
 import datetime
 import fnmatch
 import h5py
+from itertools import groupby
 import logging
 from multiprocessing import Pool
 import numpy as np
@@ -415,6 +416,20 @@ class DataCollection:
 
     # Leave old name in case anything external was using it:
     _keys_for_source = keys_for_source
+
+    def get_entry_shape(self, source, key):
+        """Get the shape of a single data entry for the given source & key"""
+        self._check_field(source, key)
+
+        for chunk in self._find_data_chunks(source, key):
+            # First dimension is number of entries
+            return chunk.dataset.shape[1:]
+
+    def get_dtype(self, source, key):
+        """Get the numpy data type for the given source & key"""
+        self._check_field(source, key)
+        for chunk in self._find_data_chunks(source, key):
+            return chunk.dataset.dtype
 
     def _check_data_missing(self, tid) -> bool:
         """Return True if a train does not have data for all sources"""
@@ -1147,9 +1162,12 @@ class DataCollection:
 
         return None, None
 
-    def info(self):
+    def info(self, details_for_sources=()):
         """Show information about the selected data.
         """
+        details_sources_re = [re.compile(fnmatch.translate(p))
+                              for p in details_for_sources]
+
         # time info
         train_count = len(self.train_ids)
         if train_count == 0:
@@ -1194,14 +1212,53 @@ class DataCollection:
             ))
         print()
 
+        def src_data_detail(s, keys, prefix=''):
+            """Detail for how much data is present for an instrument group"""
+            if not keys:
+                return
+            counts = self.get_data_counts(s, list(keys)[0])
+            ntrains_data = (counts > 0).sum()
+            print(
+                f'{prefix}data for {ntrains_data} trains '
+                f'({ntrains_data / train_count:.2%}), '
+                f'up to {counts.max()} entries per train'
+            )
+
+        def keys_detail(s, keys, prefix=''):
+            """Detail for a group of keys"""
+            for k in keys:
+                entry_shape = self.get_entry_shape(s, k)
+                if entry_shape:
+                    entry_info = f", entry shape {entry_shape}"
+                else:
+                    entry_info = ""
+                dt = self.get_dtype(s, k)
+                print(f"{prefix}{k}\t[{dt.name}{entry_info}]")
+
         non_detector_inst_srcs = self.instrument_sources - self.detector_sources
         print(len(non_detector_inst_srcs), 'instrument sources (excluding detectors):')
-        for d in sorted(non_detector_inst_srcs):
-            print('  -', d)
+        for s in sorted(non_detector_inst_srcs):
+            print('  -', s)
+            if not any(p.match(s) for p in details_sources_re):
+                continue
+
+            # Detail for instrument sources:
+            for group, keys in groupby(sorted(self.keys_for_source(s)),
+                                       key=lambda k: k.split('.')[0]):
+                print(f'    - {group}:')
+                keys = list(keys)
+                src_data_detail(s, keys, prefix='      ')
+                keys_detail(s, keys, prefix='      - ')
+
+
         print()
-        print(len(self.control_sources), 'control sources:')
-        for d in sorted(self.control_sources):
-            print('  -', d)
+        print(len(self.control_sources), 'control sources: (1 entry per train)')
+        for s in sorted(self.control_sources):
+            print('  -', s)
+            if any(p.match(s) for p in details_sources_re):
+                # Detail for control sources: list keys
+                keys_detail(s, sorted(self.keys_for_source(s)), prefix='    - ')
+
         print()
 
     def detector_info(self, source):
