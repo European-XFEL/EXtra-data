@@ -15,12 +15,42 @@ class FileWriter:
         self.indexes = {}  # {path: (first, count)}
         self.data_sources = set()
 
-    def add_control_dataset(self, source, key):
+    def prepare_source(self, source):
+        """Prepare all the datasets for one source.
+
+        We do this as a separate step so the contents of the file are defined
+        together before the main data.
+        """
+        if source in self.data.instrument_sources:
+            section = 'INSTRUMENT'
+        else:
+            section = 'CONTROL'
+
+        for key in sorted(self.data.keys_for_source(source)):
+            path = f"{section}/{source}/{key.replace('.', '/')}"
+            nentries = self.data.get_data_counts(source, key).sum()
+            src_ds1 = self.data._source_index[source][0].file[path]
+            self.file.create_dataset_like(
+                path, src_ds1, shape=(nentries,) + src_ds1.shape[1:],
+            )
+            if section == 'INSTRUMENT':
+                self.data_sources.add(f"INSTRUMENT/{source}/{key.partition('.')[0]}")
+
+        if section == 'CONTROL':
+            self.data_sources.add(f"CONTROL/{source}")
+
+    def copy_control_dataset(self, source, key):
+        """Copy data into a CONTROL dataset"""
         a = self.data.get_array(source, key)
         assert a.shape[0] == len(self.data.train_ids)
         path = 'CONTROL/{}/{}'.format(source, key.replace('.', '/'))
-        self.file[path] = a.values
+        self.file[path][:] = a.values
         self._make_control_index(source, a.coords['trainId'].values)
+
+    def copy_control_source(self, source):
+        """Copy data for all keys of one CONTROL source"""
+        for key in self.data.keys_for_source(source):
+            self.copy_control_dataset(source, key)
 
     def _make_control_index(self, source, data_tids):
         # Original files contain exactly 1 entry per train for control data,
@@ -34,19 +64,24 @@ class FileWriter:
             firsts = np.zeros_like(counts)
             firsts[1:] = np.cumsum(counts)[:-1]  # firsts[0] is always 0
             self.indexes[source] = (firsts, counts)
-            self.data_sources.add('CONTROL/' + source)
 
-    def add_instrument_dataset(self, source, key):
+    def copy_instrument_dataset(self, source, key):
+        """Copy data into an INSTRUMENT dataset"""
         a = self.data.get_array(source, key)
         path = 'INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
-        self.file[path] = a.values
+        self.file[path][:] = a.values
         self._make_instrument_index(source, key, a.coords['trainId'].values)
 
+    def copy_instrument_source(self, source):
+        """Copy data for all keys of one INSTRUMENT source"""
+        for key in self.data.keys_for_source(source):
+            self.copy_instrument_dataset(source, key)
+
     def _make_instrument_index(self, source, key, data_tids):
+        """Create & store an index for an instrument data group"""
         index_path = source + '/' + key.partition('.')[0]
         if index_path not in self.indexes:
             self.indexes[index_path] = self._generate_index(data_tids)
-            self.data_sources.add('INSTRUMENT/' + index_path)
 
     def _generate_index(self, data_tids):
         """Convert an array of train IDs to first/count for each train"""
@@ -59,15 +94,19 @@ class FileWriter:
         return firsts, counts
 
     def write_train_ids(self):
-        d = self.data
-        self.file.create_dataset('INDEX/trainId', data=d.train_ids, dtype='u8')
+        self.file.create_dataset(
+            'INDEX/trainId', data=self.data.train_ids, dtype='u8'
+        )
 
     def write_indexes(self):
+        """Write the INDEX information for all data we've copied"""
         for groupname, (first, count) in self.indexes.items():
-            self.file['INDEX/{}/first'.format(groupname)] = first
-            self.file['INDEX/{}/count'.format(groupname)] = count
+            group = self.file.create_group(f'INDEX/{groupname}')
+            group.create_dataset('first', data=first, dtype=np.uint64)
+            group.create_dataset('count', data=count, dtype=np.uint64)
 
     def write_metadata(self):
+        """Write the METADATA section, including lists of sources"""
         vlen_bytes = h5py.special_dtype(vlen=bytes)
         data_sources = sorted(self.data_sources)
         N = len(data_sources)
@@ -88,25 +127,28 @@ class FileWriter:
         devices_ds[:] = [ds.split('/', 1)[1] for ds in data_sources]
 
     def set_writer(self):
+        """Record the package & version writing the file in an attribute"""
         from . import __version__
 
         self.file.attrs['writer'] = 'extra_data {}'.format(__version__)
 
     def write(self):
         d = self.data
+        self.set_writer()
         self.write_train_ids()
 
+        for source in d.all_sources:
+            self.prepare_source(source)
+
+        self.write_metadata()
+
         for source in d.control_sources:
-            for key in d.keys_for_source(source):
-                self.add_control_dataset(source, key)
+            self.copy_control_source(source)
 
         for source in d.instrument_sources:
-            for key in d.keys_for_source(source):
-                self.add_instrument_dataset(source, key)
+            self.copy_instrument_source(source)
 
         self.write_indexes()
-        self.write_metadata()
-        self.set_writer()
 
 
 class VirtualFileWriter(FileWriter):
@@ -155,6 +197,14 @@ class VirtualFileWriter(FileWriter):
         ])
         return layout, train_ids
 
+    def prepare_source(self, source):
+        if source in self.data.instrument_sources:
+            for key in self.data.keys_for_source(source):
+                self.add_instrument_dataset(source, key)
+        else:
+            for key in self.data.keys_for_source(source):
+                self.add_control_dataset(source, key)
+
     def add_control_dataset(self, source, key):
         layout, train_ids = self._assemble_data(source, key)
         if not layout:
@@ -164,6 +214,7 @@ class VirtualFileWriter(FileWriter):
         self.file.create_virtual_dataset(path, layout)
 
         self._make_control_index(source, train_ids)
+        self.data_sources.add(f"CONTROL/{source}")
         return path
 
     def add_instrument_dataset(self, source, key):
@@ -175,4 +226,11 @@ class VirtualFileWriter(FileWriter):
         self.file.create_virtual_dataset(path, layout)
 
         self._make_instrument_index(source, key, train_ids)
+        self.data_sources.add(f"INSTRUMENT/{source}/{key.partition('.')[0]}")
         return path
+
+    def copy_control_source(self, source):
+        pass  # Override base class copying data
+
+    def copy_instrument_source(self, source):
+        pass  # Override base class copying data

@@ -585,7 +585,7 @@ class DataCollection:
 
         for f in self._source_index[source]:
             if source in self.control_sources:
-                counts = np.ones(f.train_ids, dtype=np.uint64)
+                counts = np.ones(len(f.train_ids), dtype=np.uint64)
             else:
                 group = key.partition('.')[0]
                 _, counts = f.get_index(source, group)

@@ -1,6 +1,5 @@
 """Interfaces to data from specific instruments
 """
-import h5py
 import logging
 import numpy as np
 import pandas as pd
@@ -9,6 +8,7 @@ import xarray
 
 from .exceptions import SourceNameError
 from .reader import DataCollection, by_id, by_index
+from .writer import FileWriter
 
 log = logging.getLogger(__name__)
 
@@ -437,7 +437,7 @@ class MPxDetectorBase:
             raise ValueError("trains & pulses must be 1D arrays")
         inc_tp_ids = zip_trains_pulses(trains, pulses)
 
-        writer = FileWriter(filename, self.data, inc_tp_ids)
+        writer = FramesFileWriter(filename, self.data, inc_tp_ids)
         try:
             writer.write()
         finally:
@@ -460,16 +460,13 @@ def zip_trains_pulses(trains, pulses):
     return res
 
 
-class FileWriter:
+class FramesFileWriter(FileWriter):
     """Write selected detector frames in European XFEL HDF5 format"""
     def __init__(self, path, data, inc_tp_ids):
-        self.file = h5py.File(path, 'w')
-        self.data = data
+        super().__init__(path, data)
         self.inc_tp_ids = inc_tp_ids
-        self.indexes = {}  # {path: (first, count)}
-        self.inst_sources = set()
 
-    def prepare_detector_source(self, source):
+    def prepare_source(self, source):
         """Prepare all the datasets for one source.
 
         We do this as a separate step so the contents of the file are defined
@@ -485,14 +482,7 @@ class FileWriter:
             self.file.create_dataset_like(
                 path, src_ds1, shape=(nentries,) + src_ds1.shape[1:],
             )
-            self.inst_sources.add(f"{source}/{key.partition('.')[0]}")
-
-    def copy_other_data(self, source, key):
-        """Copy non-image data for all selected trains"""
-        a = self.data.get_array(source, key)
-        path = 'INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
-        self.file[path][:] = a.values
-        self._make_instrument_index(source, key, a.coords['trainId'].values)
+            self.data_sources.add(f"INSTRUMENT/{source}/{key.partition('.')[0]}")
 
     def copy_image_data(self, source, keys):
         """Copy selected frames of the detector image data"""
@@ -532,88 +522,15 @@ class FileWriter:
         frame_tids = np.concatenate(frame_tids_piecewise)
         self._make_instrument_index(source, 'image', frame_tids)
 
-    def copy_detector_source(self, source):
+    def copy_instrument_source(self, source):
         """Copy all the relevant data for one detector source"""
         all_keys = self.data.keys_for_source(source)
         img_keys = {k for k in all_keys if k.startswith('image.')}
 
         for key in sorted(all_keys - img_keys):
-            self.copy_other_data(source, key)
+            self.copy_instrument_dataset(source, key)
 
         self.copy_image_data(source, sorted(img_keys))
-
-    def _make_instrument_index(self, source, key, data_tids):
-        """Create & store an index for an instrument data group"""
-        index_path = source + '/' + key.partition('.')[0]
-        if index_path not in self.indexes:
-            self.indexes[index_path] = self._generate_index(data_tids)
-
-    def _generate_index(self, data_tids):
-        """Convert an array of train IDs to first/count for each train"""
-        assert (np.diff(data_tids) >= 0).all(), "Out-of-order train IDs"
-        counts = np.array([np.count_nonzero(t == data_tids)
-                          for t in self.data.train_ids], dtype=np.uint64)
-        firsts = np.zeros_like(counts)
-        firsts[1:] = np.cumsum(counts)[:-1]  # firsts[0] is always 0
-
-        return firsts, counts
-
-    def write_train_ids(self):
-        self.file.create_dataset(
-            'INDEX/trainId', data=self.data.train_ids, dtype='u8'
-        )
-
-    def write_indexes(self):
-        """Write the INDEX information for all data we've copied"""
-        for groupname, (first, count) in self.indexes.items():
-            group = self.file.create_group(f'INDEX/{groupname}')
-            group.create_dataset('first', data=first, dtype=np.uint64)
-            group.create_dataset('count', data=count, dtype=np.uint64)
-
-    def write_metadata(self):
-        """Write the METADATA section of the file, listing all sources"""
-        vlen_ascii = h5py.string_dtype(encoding='ascii')
-        data_sources = [f'INSTRUMENT/{s}' for s in sorted(self.inst_sources)]
-        N = len(data_sources)
-
-        sources_ds = self.file.create_dataset(
-            'METADATA/dataSourceId', (N,), dtype=vlen_ascii, maxshape=(None,)
-        )
-        sources_ds[:] = data_sources
-
-        root_ds = self.file.create_dataset(
-            'METADATA/root', (N,), dtype=vlen_ascii, maxshape=(None,)
-        )
-        root_ds[:] = [ds.split('/', 1)[0] for ds in data_sources]
-
-        devices_ds = self.file.create_dataset(
-            'METADATA/deviceId', (N,), dtype=vlen_ascii, maxshape=(None,)
-        )
-        devices_ds[:] = [ds.split('/', 1)[1] for ds in data_sources]
-
-    def set_writer(self):
-        """Record the package & version creating the file in an attribute"""
-        from . import __version__
-
-        self.file.attrs['writer'] = 'extra_data {}'.format(__version__)
-
-    def write(self):
-        self.set_writer()
-        self.write_train_ids()
-
-        # We loop over the sources twice, so we can create all the datasets
-        # before filling them. This should put all the metadata about dataset
-        # shape and dtype together near the start of the file, making inspection
-        # more efficient.
-        for source in self.data.instrument_sources:
-            self.prepare_detector_source(source)
-
-        self.write_metadata()
-
-        for source in self.data.instrument_sources:
-            self.copy_detector_source(source)
-
-        self.write_indexes()
 
 
 class MPxDetectorTrainIterator:
