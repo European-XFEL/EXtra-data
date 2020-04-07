@@ -497,6 +497,13 @@ class FileWriter:
             _, counts = fa.get_index(source, 'image')
             file_tids = np.repeat(fa.train_ids, counts.astype(np.intp))
             file_pids = fa.file[f'/INSTRUMENT/{source}/image/pulseId'][:]
+            if file_pids.ndim == 2 and file_pids.shape[1] == 1:
+                # Raw data has a spurious extra dimension
+                file_pids = file_pids[:, 0]
+
+            # Data can have trailing 0s, seemingly
+            file_pids = file_pids[:len(file_tids)]
+
             file_tp_ids = zip_trains_pulses(file_tids, file_pids)
             ixs = np.isin(file_tp_ids, self.inc_tp_ids).nonzero()[0]
             nframes = ixs.shape[0]
