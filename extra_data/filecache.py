@@ -113,7 +113,21 @@ class FileCache(object):
         
 import resource
 
-def init_extra_data_filecache():
+def set_global_filecache(fc):
+    """
+    Sets new FileCache instance as a global file cache
+    """
+    global extra_data_filecache
+    extra_data_filecache = fc
+    
+def get_global_filecache():
+    """
+    Returns FileCache instance which is used as global file cache
+    """
+    global extra_data_filecache
+    return extra_data_filecache
+
+def init_global_filecache():
     # Raise the limit for open files (1024 -> 4096 on Maxwell)
     nofile = resource.getrlimit(resource.RLIMIT_NOFILE)
     resource.setrlimit(resource.RLIMIT_NOFILE, (nofile[1], nofile[1]))
@@ -121,4 +135,4 @@ def init_extra_data_filecache():
     global extra_data_filecache
     extra_data_filecache = FileCache(maxfiles)
 
-init_extra_data_filecache()
+init_global_filecache()
