@@ -356,6 +356,15 @@ class DataCollection:
     def from_path(cls, path):
         files = [FileAccess(path)]
         return cls(files, ctx_closes=True)
+    
+    def _close_all_files(self):
+        # Close the files if this collection was created by opening them.
+        if self.ctx_closes:
+            for file in self.files:
+                file.close()
+    
+    def __del__(self):
+        self._close_all_files()
 
     def __enter__(self):
         if not self.ctx_closes:
@@ -368,10 +377,7 @@ class DataCollection:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        # Close the files if this collection was created by opening them.
-        if self.ctx_closes:
-            for file in self.files:
-                file.close()
+        self._close_all_files()
 
     @property
     def all_sources(self):
