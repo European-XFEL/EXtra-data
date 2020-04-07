@@ -108,9 +108,6 @@ class FileAccess:
         # {source: set(keys)} - including incomplete sets
         self._known_keys = defaultdict(set)
 
-    def __del__(self):
-        self.close()
-
     @property
     def file(self):
         if self.__file:
@@ -121,9 +118,7 @@ class FileAccess:
         return self.__file
 
     def close(self):
-        if self.__file:
-            self.__fc.close(self.filename)
-            self.__file = None
+        self.__file = None
 
     @property
     def format_version(self):
