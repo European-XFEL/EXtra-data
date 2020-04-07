@@ -79,7 +79,7 @@ class FileAccess:
     file: h5py.File
         Open h5py file object
     """
-    _file = None
+    __file = None
     _format_version = None
     metadata_fstat = None
 
@@ -113,17 +113,17 @@ class FileAccess:
 
     @property
     def file(self):
-        if self._file:
+        if self.__file:
             self.__fc.touch(self.filename)
         else:
-            self._file = self.__fc.open(self.filename)
+            self.__file = self.__fc.open(self.filename)
             
-        return self._file
+        return self.__file
 
     def close(self):
-        if self._file:
+        if self.__file:
             self.__fc.close(self.filename)
-            self._file = None
+            self.__file = None
 
     @property
     def format_version(self):
@@ -178,7 +178,7 @@ class FileAccess:
         """ Allows pickling `FileAccess` instance. """
         state = self.__dict__.copy()
         del state['_FileAccess__fc']
-        state['_file'] = None
+        del state['_FileAccess__file']
         return state
     
     def __setstate__(self, state):
