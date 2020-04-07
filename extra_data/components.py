@@ -427,13 +427,21 @@ class MPxDetectorBase:
         VirtualCXIWriter(self).write(filename)
 
     def write_frames(self, filename, trains, pulses):
+        """Write selected detector frames to a new EuXFEL HDF5 file
+
+        trains and pulses should be 1D arrays of the same length, containing
+        train IDs and pulse IDs (corresponding to the pulse IDs recorded by
+        the detector). i.e. (trains[i], pulses[i]) identifies one frame.
+        """
         if (trains.ndim != 1) or (pulses.ndim != 1):
             raise ValueError("trains & pulses must be 1D arrays")
         inc_tp_ids = zip_trains_pulses(trains, pulses)
 
         writer = FileWriter(filename, self.data, inc_tp_ids)
-        writer.write()
-        writer.file.close()
+        try:
+            writer.write()
+        finally:
+            writer.file.close()
 
 
 def zip_trains_pulses(trains, pulses):
@@ -453,12 +461,7 @@ def zip_trains_pulses(trains, pulses):
 
 
 class FileWriter:
-    """Write data in European XFEL HDF5 format
-
-    This is intended to allow copying a subset of data into a smaller,
-    more portable file.
-    """
-
+    """Write selected detector frames in European XFEL HDF5 format"""
     def __init__(self, path, data, inc_tp_ids):
         self.file = h5py.File(path, 'w')
         self.data = data
@@ -467,6 +470,11 @@ class FileWriter:
         self.inst_sources = set()
 
     def prepare_detector_source(self, source):
+        """Prepare all the datasets for one source.
+
+        We do this as a separate step so the contents of the file are defined
+        together before the main data.
+        """
         for key in sorted(self.data.keys_for_source(source)):
             path = 'INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
             if key.startswith('image.'):
@@ -480,12 +488,14 @@ class FileWriter:
             self.inst_sources.add(f"{source}/{key.partition('.')[0]}")
 
     def copy_other_data(self, source, key):
+        """Copy non-image data for all selected trains"""
         a = self.data.get_array(source, key)
         path = 'INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
         self.file[path][:] = a.values
         self._make_instrument_index(source, key, a.coords['trainId'].values)
 
     def copy_image_data(self, source, keys):
+        """Copy selected frames of the detector image data"""
         frame_tids_piecewise = []
 
         src_files = sorted(
@@ -503,13 +513,14 @@ class FileWriter:
 
             # Data can have trailing 0s, seemingly
             file_pids = file_pids[:len(file_tids)]
-
             file_tp_ids = zip_trains_pulses(file_tids, file_pids)
+
+            # indexes of selected frames in datasets under .../image in this file
             ixs = np.isin(file_tp_ids, self.inc_tp_ids).nonzero()[0]
             nframes = ixs.shape[0]
 
             for key in keys:
-                path = 'INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
+                path = f"INSTRUMENT/{source}/{key.replace('.', '/')}"
 
                 dst_ds = self.file[path]
                 dst_cursor = dst_ds.shape[0]
@@ -522,19 +533,17 @@ class FileWriter:
         self._make_instrument_index(source, 'image', frame_tids)
 
     def copy_detector_source(self, source):
-        img_keys, other_keys = [], []
-        for key in self.data.keys_for_source(source):
-            if key.startswith('image'):
-                img_keys.append(key)
-            else:
-                other_keys.append(key)
+        """Copy all the relevant data for one detector source"""
+        all_keys = self.data.keys_for_source(source)
+        img_keys = {k for k in all_keys if k.startswith('image.')}
 
-        for key in sorted(other_keys):
+        for key in sorted(all_keys - img_keys):
             self.copy_other_data(source, key)
 
-        self.copy_image_data(source, img_keys)
+        self.copy_image_data(source, sorted(img_keys))
 
     def _make_instrument_index(self, source, key, data_tids):
+        """Create & store an index for an instrument data group"""
         index_path = source + '/' + key.partition('.')[0]
         if index_path not in self.indexes:
             self.indexes[index_path] = self._generate_index(data_tids)
@@ -550,22 +559,19 @@ class FileWriter:
         return firsts, counts
 
     def write_train_ids(self):
-        d = self.data
-        self.file.create_dataset('INDEX/trainId', data=d.train_ids, dtype='u8')
-
-    def create_indexes(self):
-        ntrains = len(self.data.train_ids)
-        for source_name in sorted(self.inst_sources):
-            group = self.file.create_group(f'INDEX/{source_name}')
-            group.create_dataset('first', shape=(ntrains,), dtype=np.uint64)
-            group.create_dataset('count', shape=(ntrains,), dtype=np.uint64)
+        self.file.create_dataset(
+            'INDEX/trainId', data=self.data.train_ids, dtype='u8'
+        )
 
     def write_indexes(self):
+        """Write the INDEX information for all data we've copied"""
         for groupname, (first, count) in self.indexes.items():
-            self.file[f'INDEX/{groupname}/first'][:] = first
-            self.file[f'INDEX/{groupname}/count'][:] = count
+            group = self.file.create_group(f'INDEX/{groupname}')
+            group.create_dataset('first', data=first, dtype=np.uint64)
+            group.create_dataset('count', data=count, dtype=np.uint64)
 
     def write_metadata(self):
+        """Write the METADATA section of the file, listing all sources"""
         vlen_ascii = h5py.string_dtype(encoding='ascii')
         data_sources = [f'INSTRUMENT/{s}' for s in sorted(self.inst_sources)]
         N = len(data_sources)
@@ -586,6 +592,7 @@ class FileWriter:
         devices_ds[:] = [ds.split('/', 1)[1] for ds in data_sources]
 
     def set_writer(self):
+        """Record the package & version creating the file in an attribute"""
         from . import __version__
 
         self.file.attrs['writer'] = 'extra_data {}'.format(__version__)
@@ -602,14 +609,11 @@ class FileWriter:
             self.prepare_detector_source(source)
 
         self.write_metadata()
-        self.create_indexes()
 
         for source in self.data.instrument_sources:
             self.copy_detector_source(source)
 
         self.write_indexes()
-
-
 
 
 class MPxDetectorTrainIterator:
