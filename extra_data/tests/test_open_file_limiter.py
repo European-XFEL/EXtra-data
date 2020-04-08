@@ -1,25 +1,23 @@
 import gc
 import os
 import pytest
-from collections import OrderedDict
 
-from extra_data.filecache import OpenFilesLimiter
-import extra_data.reader
+from extra_data import file_access
 from extra_data.reader import DataCollection
 
 @pytest.fixture
 def files_limit_512():
-    orig_limiter = extra_data.reader.open_files_limiter
-    extra_data.reader.open_files_limiter = l = OpenFilesLimiter(512)
+    orig_limiter = file_access.open_files_limiter
+    file_access.open_files_limiter = l = file_access.OpenFilesLimiter(512)
     yield l
-    extra_data.reader.open_files_limiter = orig_limiter
+    file_access.open_files_limiter = orig_limiter
 
 @pytest.fixture
 def files_limit_3():
-    orig_limiter = extra_data.reader.open_files_limiter
-    extra_data.reader.open_files_limiter = l = OpenFilesLimiter(3)
+    orig_limiter = file_access.open_files_limiter
+    file_access.open_files_limiter = l = file_access.OpenFilesLimiter(3)
     yield l
-    extra_data.reader.open_files_limiter = orig_limiter
+    file_access.open_files_limiter = orig_limiter
 
 
 def test_filecache_large(mock_spb_raw_run, files_limit_512):
