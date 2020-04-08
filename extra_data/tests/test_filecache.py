@@ -2,33 +2,28 @@ import gc
 import os
 import pytest
 from collections import OrderedDict
+
+from extra_data.filecache import OpenFilesLimiter
+import extra_data.reader
 from extra_data.reader import DataCollection
 
 @pytest.fixture
-def filecache_512():
-    from extra_data.filecache import extra_data_filecache
-    orig_cache = extra_data_filecache._cache
-    orig_maxfiles = extra_data_filecache.maxfiles
-    extra_data_filecache._cache = OrderedDict()
-    extra_data_filecache._maxfiles = 512
-    yield extra_data_filecache
-    extra_data_filecache._cache = orig_cache
-    extra_data_filecache._maxfiles = orig_maxfiles
+def files_limit_512():
+    orig_limiter = extra_data.reader.open_files_limiter
+    extra_data.reader.open_files_limiter = l = OpenFilesLimiter(512)
+    yield l
+    extra_data.reader.open_files_limiter = orig_limiter
 
 @pytest.fixture
-def filecache_3():
-    from extra_data.filecache import extra_data_filecache
-    orig_cache = extra_data_filecache._cache
-    orig_maxfiles = extra_data_filecache.maxfiles
-    extra_data_filecache._cache = OrderedDict()
-    extra_data_filecache._maxfiles = 3
-    yield extra_data_filecache
-    extra_data_filecache._cache = orig_cache
-    extra_data_filecache._maxfiles = orig_maxfiles
+def files_limit_3():
+    orig_limiter = extra_data.reader.open_files_limiter
+    extra_data.reader.open_files_limiter = l = OpenFilesLimiter(3)
+    yield l
+    extra_data.reader.open_files_limiter = orig_limiter
 
 
-def test_filecache_large(mock_spb_raw_run, filecache_512):
-    fc = filecache_512
+def test_filecache_large(mock_spb_raw_run, files_limit_512):
+    fc = files_limit_512
 
     files = [os.path.join(mock_spb_raw_run, f) \
              for f in os.listdir(mock_spb_raw_run) if f.endswith('.h5')]
@@ -47,8 +42,8 @@ def test_filecache_large(mock_spb_raw_run, filecache_512):
     gc.collect()
     assert fc.n_open_files() == 0
 
-def test_filecache_small(mock_spb_raw_run, filecache_3):
-    fc = filecache_3
+def test_filecache_small(mock_spb_raw_run, files_limit_3):
+    fc = files_limit_3
 
     files = [os.path.join(mock_spb_raw_run, f) \
              for f in os.listdir(mock_spb_raw_run) if f.endswith('.h5')]

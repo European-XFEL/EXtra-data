@@ -42,7 +42,7 @@ from .read_machinery import (
     find_proposal,
 )
 from .run_files_map import RunFilesMap
-from .filecache import extra_data_filecache, file_access_registry
+from .filecache import open_files_limiter, file_access_registry
 
 __all__ = [
     'H5File',
@@ -118,7 +118,7 @@ class FileAccess:
 
     @property
     def file(self):
-        extra_data_filecache.touch(self.filename)
+        open_files_limiter.touch(self.filename)
         if self._file is None:
             self._file = h5py.File(self.filename, 'r')
 
@@ -133,7 +133,7 @@ class FileAccess:
         """
         if self._file:
             self._file = None
-        extra_data_filecache.closed(self.filename)
+        open_files_limiter.closed(self.filename)
 
     @property
     def format_version(self):

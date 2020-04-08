@@ -7,7 +7,6 @@ import pytest
 from .mockdata import write_file
 from .mockdata.xgm import XGM
 from extra_data import run_files_map, RunDirectory
-from extra_data.filecache import extra_data_filecache
 
 def test_candidate_paths(tmp_path):
     # 'real' paths (like /gpfs/exfel/d)

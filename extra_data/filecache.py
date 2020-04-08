@@ -18,10 +18,10 @@ from weakref import WeakValueDictionary
 file_access_registry = WeakValueDictionary()
 
 
-class FileCache(object):
+class OpenFilesLimiter(object):
     """
-    FileCache is a collection for opened h5 files. It keeps the number of opened files 
-    under the given limit popping files accessed longest time ago.
+    Working with FileAccess, keep the number of opened HDF5 files
+    under the given limit by closing files accessed longest time ago.
     """
     def __init__(self, maxfiles=128):
         self._maxfiles = maxfiles
@@ -86,12 +86,11 @@ class FileCache(object):
         
 import resource
 
-def init_extra_data_filecache():
+def init_open_files_limiter():
     # Raise the limit for open files (1024 -> 4096 on Maxwell)
     nofile = resource.getrlimit(resource.RLIMIT_NOFILE)
     resource.setrlimit(resource.RLIMIT_NOFILE, (nofile[1], nofile[1]))
     maxfiles = nofile[1] // 2
-    global extra_data_filecache
-    extra_data_filecache = FileCache(maxfiles)
+    return OpenFilesLimiter(maxfiles)
 
-init_extra_data_filecache()
+open_files_limiter = init_open_files_limiter()
