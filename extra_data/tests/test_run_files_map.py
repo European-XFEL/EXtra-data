@@ -70,8 +70,6 @@ def test_save_load_map(run_with_extra_file, tmp_path):
     assert isinstance(file_info['train_ids'], np.ndarray)
     assert isinstance(file_info['control_sources'], frozenset)
     assert isinstance(file_info['instrument_sources'], frozenset)
-    
-    extra_data_filecache.force_close(extra_file)
 
     # Modify a file; this should make the cache invalid
     with h5py.File(extra_file, 'r+') as f:

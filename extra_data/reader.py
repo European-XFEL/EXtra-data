@@ -42,7 +42,7 @@ from .read_machinery import (
     find_proposal,
 )
 from .run_files_map import RunFilesMap
-from .filecache import extra_data_filecache
+from .filecache import extra_data_filecache, file_access_registry
 
 __all__ = [
     'H5File',
@@ -76,15 +76,24 @@ class FileAccess:
 
     Parameters
     ----------
-    file: h5py.File
-        Open h5py file object
+    filename: str
+        A path to an HDF5 file
     """
     _file = None
     _format_version = None
     metadata_fstat = None
 
+    def __new__(cls, filename, _cache_info=None):
+        # Create only one FileAccess for each path, and store it in a registry
+        filename = osp.abspath(filename)
+        inst = file_access_registry.get(filename, None)
+        if inst is None:
+            inst = file_access_registry[filename] = super().__new__(cls)
+
+        return inst
+
     def __init__(self, filename, _cache_info=None):
-        self.filename = filename
+        self.filename = osp.abspath(filename)
 
         if _cache_info:
             self.train_ids = _cache_info['train_ids']
@@ -107,22 +116,24 @@ class FileAccess:
         # {source: set(keys)} - including incomplete sets
         self._known_keys = defaultdict(set)
 
-    def __del__(self):
-        self.close()
-
     @property
     def file(self):
-        if self._file:
-            extra_data_filecache.touch(self.filename)
-        else:
-            self._file = extra_data_filecache.open(self.filename)
-            
+        extra_data_filecache.touch(self.filename)
+        if self._file is None:
+            self._file = h5py.File(self.filename, 'r')
+
         return self._file
 
     def close(self):
+        """Close* the HDF5 file this refers to.
+
+        The file may not actually be closed if there are still references to
+        objects from it, e.g. while iterating over trains. This is what HDF5
+        calls 'weak' closing.
+        """
         if self._file:
-            extra_data_filecache.close(self.filename)
             self._file = None
+        extra_data_filecache.closed(self.filename)
 
     @property
     def format_version(self):
@@ -178,6 +189,9 @@ class FileAccess:
         state = self.__dict__.copy()
         state['_file'] = None
         return state
+
+    def __getnewargs__(self):
+        return (self.filename,)
 
     @property
     def all_sources(self):

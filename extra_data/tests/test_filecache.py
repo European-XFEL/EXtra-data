@@ -1,3 +1,4 @@
+import gc
 import os
 import pytest
 from collections import OrderedDict
@@ -39,10 +40,12 @@ def test_filecache_large(mock_spb_raw_run, filecache_512):
     device = 'SPB_IRU_CAM/CAM/SIDEMIC:daqOutput'
     assert device in data
     assert data[device]['data.image.pixels'].shape == (1024, 768)
-    assert len(fc._cache) == len(run.files)
+    # 16 AGIPD files + 1st DA file, but the other sequence file may be opened
+    assert fc.n_open_files() >= 17
 
     del run, trains_iter
-    assert len(fc._cache) == 0    
+    gc.collect()
+    assert fc.n_open_files() == 0
 
 def test_filecache_small(mock_spb_raw_run, filecache_3):
     fc = filecache_3
@@ -62,5 +65,6 @@ def test_filecache_small(mock_spb_raw_run, filecache_3):
             assert len(fc._cache) == 3
 
     del run, trains_iter
-    assert len(fc._cache) == 0
+    gc.collect()
+    assert fc.n_open_files() == 0
 
