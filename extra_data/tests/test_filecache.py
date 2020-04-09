@@ -5,19 +5,19 @@ from extra_data.reader import DataCollection
 
 @pytest.fixture
 def filecache_512():
-    from extra_data.filecache import FileCache, set_global_filecache, get_global_filecache
-    orig_cache = get_global_filecache()
-    set_global_filecache(FileCache(512))
-    yield get_global_filecache()
-    set_global_filecache(orig_cache)
+    from extra_data import filecache
+    orig_cache = filecache.extra_data_filecache
+    filecache.extra_data_filecache = fc = filecache.FileCache(512)
+    yield fc
+    filecache.extra_data_filecache = orig_cache
 
 @pytest.fixture
 def filecache_3():
-    from extra_data.filecache import FileCache, set_global_filecache, get_global_filecache
-    orig_cache = get_global_filecache()
-    set_global_filecache(FileCache(3))
-    yield get_global_filecache()
-    set_global_filecache(orig_cache)
+    from extra_data import filecache
+    orig_cache = filecache.extra_data_filecache
+    filecache.extra_data_filecache = fc = filecache.FileCache(3)
+    yield fc
+    filecache.extra_data_filecache = orig_cache
 
 
 def test_filecache_large(mock_spb_raw_run, filecache_512):
@@ -46,7 +46,7 @@ def test_filecache_large(mock_spb_raw_run, filecache_512):
     assert device in data
     assert data[device]['data.image.pixels'].shape == (1024, 768)
     assert len(fc._cache) == nfiles
-
+    
     del run, trains_iter
     assert len(fc._cache) == 0
 
