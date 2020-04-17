@@ -5,6 +5,8 @@ import msgpack_numpy as numpack
 import numpy as np
 import pytest
 from queue import Full
+import shlex
+from subprocess import Popen
 
 from extra_data.export import ZMQStreamer
 from karabo_bridge import Client
@@ -59,6 +61,18 @@ def server(protocol_version):
         yield s
 
 
+@pytest.fixture(scope='function')
+def file_server(mock_fxe_raw_run):
+    port = 3333
+    args = shlex.split(
+        f'karabo-bridge-serve-files {mock_fxe_raw_run} {port} '
+        f'--append-detector-modules'
+    )
+    p = Popen(args)
+    yield f'tcp://localhost:{port}'
+    p.kill()
+
+
 @pytest.mark.parametrize('protocol_version', ['1.0', '2.2'])
 def test_fill_queue(server):
     for i in range(10):
@@ -79,6 +93,15 @@ def test_req_rep(server):
     for _ in range(3):
         data, metadata = client.next()
         compare_nested_dict(DATA, data)
+
+
+def test_serve_files(file_server):
+    with Client(file_server) as c:
+        data, meta = c.next()
+
+    assert 'FXE_DET_LPD1M-1/DET/APPEND' in data
+    assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' not in data
+    assert data['FXE_DET_LPD1M-1/DET/APPEND']['image.data'].shape == (128, 1, 16, 256, 256)
 
 
 if __name__ == '__main__':

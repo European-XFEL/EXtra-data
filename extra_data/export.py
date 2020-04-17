@@ -16,14 +16,16 @@ import os.path as osp
 from queue import Empty, Queue
 from socket import gethostname
 from threading import Thread
-from warnings import warn
 
 from karabo_bridge import serialize
 import zmq
 
+from .components import AGIPD1M, LPD1M, DSSC1M
+from .exceptions import SourceNameError
 from .reader import RunDirectory, H5File
 from .stacking import stack_detector_data
 from .utils import find_infiniband_ip
+
 
 __all__ = ['ZMQStreamer', 'serve_files']
 
@@ -181,7 +183,12 @@ def serve_files(path, port, source_glob='*', key_glob='*',
     key_glob: str
         Only stream keys matching this glob pattern in the selected sources.
     append_detector_modules: bool
-        Whether to combine module sources by stacking.
+        Combine multi-module detector data in a single data source (sources for
+        individual modules are removed). The last section of the source name is
+        replaces with 'APPEND', example:
+            'SPB_DET_AGIPD1M-1/DET/#CH0:xtdf' -> 'SPB_DET_AGIPD1M-1/DET/APPEND'
+
+        Supported detectors: AGIPD, DSSC, LPD
     dummy_timestamps: bool
         Whether to add mock timestamps if the metadata lacks them.
     use_infiniband: bool
@@ -194,32 +201,42 @@ def serve_files(path, port, source_glob='*', key_glob='*',
 
     data = data.select(source_glob, key_glob)
 
+    det = None
+    if append_detector_modules:
+        for detector in [AGIPD1M, DSSC1M, LPD1M]:
+            try:
+                det = detector(data)
+            except SourceNameError:
+                continue
+            else:
+                break
+
     streamer = ZMQStreamer(port, dummy_timestamps=dummy_timestamps,
                            use_infiniband=use_infiniband)
     streamer.start()
     print(f'Streamer started on: {streamer.endpoint}')
     for tid, train_data in data.trains():
-        if train_data:
-            if append_detector_modules:
-                if source_glob == '*':
-                    warn(" You are trying to stack detector-module sources"
-                    " with a global wildcard (\'*\'). If there are non-"
-                    " detector sources in your run, this will fail.")
-                stacked = stack_detector_data(train_data, 'image.data')
-                merged_data = {}
-                # the data key pretends this is online data from SPB
-                merged_data['SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED'] = {
-                    'image.data': stacked
-                }
-                # sec, frac = gen_time() # use time-stamps from file data?
-                metadata = {}
-                metadata['SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED'] = {
-                    'source': 'SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED',
-                    'timestamp.tid': tid
-                }
-                streamer.feed(merged_data, metadata)
-            else:
-                streamer.feed(train_data)
+        if not train_data:
+            continue
+
+        if det is not None:
+            source_name = f'{det.detector_name}/DET/APPEND'
+            det_data = {
+                k: v for k, v in train_data.items()
+                if k in det.data.detector_sources
+            }
+            stacked = stack_detector_data(det_data, 'image.data')
+
+            # get one of the module to reference other datasets
+            train_data[source_name] = mod_data = next(iter(det_data.values()))
+            mod_data['image.data'] = stacked
+            mod_data['metadata']['source'] = source_name
+
+            # remove individual module sources
+            for src in det.data.detector_sources:
+                del train_data[src]
+
+        streamer.feed(train_data)
 
     streamer.stop()
 
