@@ -67,7 +67,6 @@ setup(name="EXtra-data",
           'test': [
               'coverage',
               'dask[array]',
-              'mock',
               'nbval',
               'pytest',
               'pytest-cov',

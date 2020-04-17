@@ -1,8 +1,8 @@
 import h5py
-import mock
-import os
 import numpy as np
+import os
 import pytest
+import unittest.mock as mock
 
 from .mockdata import write_file
 from .mockdata.xgm import XGM
