@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 from queue import Full
 
+from extra_data.export import ZMQStreamer
 from karabo_bridge import Client
 
-from extra_data.export import ZMQStreamer
 
 DATA = {
     'source1': {
@@ -53,93 +53,32 @@ def compare_nested_dict(d1, d2, path=''):
                 raise ValueError('diff: {}{}'.format(path, key), v1, v2)
 
 
-@pytest.fixture(scope="session")
-def server_1():
-    server = ZMQStreamer(4444, maxlen=10, protocol_version='1.0')
-    yield server
+@pytest.fixture(scope='function')
+def server(protocol_version):
+    with ZMQStreamer(2222, maxlen=10, protocol_version=protocol_version) as s:
+        yield s
 
 
-@pytest.fixture(scope="session")
-def server_2_2():
-    server = ZMQStreamer(5555, maxlen=10, protocol_version='2.2')
-    yield server
-
-
-@pytest.fixture(scope="session")
-def client():
-    client = Client('tcp://localhost:5555')
-    yield client
-
-
-class DummyFrame:
-    """Client._deserialize() now expects the message in ZMQ Frame objects.
-
-    TODO: avoid using a private method from extra_data for tests.
-    """
-
-    def __init__(self, data):
-        self.bytes = data
-        self.buffer = data
-
-
-def test_serialize_1(server_1, client):
-    msg = server_1._serialize(DATA)
-
-    assert isinstance(msg, list)
-    assert len(msg) == 1
-    assert msg[-1] == msgpack.dumps(DATA, use_bin_type=True, default=numpack.encode)
-
-    msg_framed = [DummyFrame(b) for b in msg]
-    data, meta = client._deserialize(msg_framed)
-    compare_nested_dict(data, DATA)
-
-
-def test_serialize_2_2(server_2_2, client):
-    msg = server_2_2._serialize(DATA)
-    assert isinstance(msg, list)
-    assert len(msg) == 6
-
-    m0 = msgpack.loads(msg[0], raw=False)
-    assert m0['source'] == 'XMPL/DET/MOD0'
-    assert m0['content'] == 'msgpack'
-    m2 = msgpack.loads(msg[2], raw=False)
-    assert m2['source'] == 'XMPL/DET/MOD0'
-    assert m2['path'] == 'image.data'
-    assert m2['content'] == 'array'
-
-    m2 = msgpack.loads(msg[4], raw=False)
-    print(m2)
-    assert m2['source'] == 'source1'
-    assert m2['content'] == 'msgpack'
-
-    msg_framed = [DummyFrame(b) for b in msg]
-    data, meta = client._deserialize(msg_framed)
-    compare_nested_dict(data, DATA)
-
-    assert meta['source1']['timestamp.tid'] == 9876543210
-
-
-def test_fill_queue(server_2_2):
+@pytest.mark.parametrize('protocol_version', ['1.0', '2.2'])
+def test_fill_queue(server):
     for i in range(10):
-        server_2_2.feed({str(i): {str(i): i}})
+        server.feed({str(i): {str(i): i}})
 
-    assert server_2_2._buffer.full()
+    assert server.buffer.full()
     with pytest.raises(Full):
-        server_2_2._buffer.put_nowait({'too much': {'prop': 0}})
-
-    for i in range(10):
-        assert server_2_2._buffer.get()[1] == msgpack.dumps({str(i): i})
+        server.feed({'too much': {'prop': 0}}, block=False)
 
 
-def test_req_rep(server_2_2, client):
-    server_2_2.start()
+@pytest.mark.parametrize('protocol_version', ['1.0', '2.2'])
+def test_req_rep(server):
+    client = Client(server.endpoint)
 
-    for i in range(3):
-        server_2_2.feed(DATA)
+    for _ in range(3):
+        server.feed(DATA)
 
-    for i in range(3):
+    for _ in range(3):
         data, metadata = client.next()
-        compare_nested_dict(data, DATA)
+        compare_nested_dict(DATA, data)
 
 
 if __name__ == '__main__':
