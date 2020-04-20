@@ -21,8 +21,16 @@ def server():
 @pytest.fixture(scope='function')
 def file_server(mock_fxe_raw_run):
     port = 3333
+<<<<<<< 1405747a5511bdac416c4ce76262e1020e527aaa
     p = Popen(['karabo-bridge-serve-files', f'{mock_fxe_raw_run}', f'{port}',
                '--append-detector-modules'])
+=======
+    args = [
+        'karabo-bridge-serve-files', str(mock_fxe_raw_run), str(port),
+        '--append-detector-modules'
+    ]
+    p = Popen(args)
+>>>>>>> Thomas' wisdom
     yield f'tcp://localhost:{port}'
     p.kill()
 
