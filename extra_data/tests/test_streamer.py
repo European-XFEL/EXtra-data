@@ -64,10 +64,10 @@ def server(protocol_version):
 @pytest.fixture(scope='function')
 def file_server(mock_fxe_raw_run):
     port = 3333
-    args = shlex.split(
-        f'karabo-bridge-serve-files {mock_fxe_raw_run} {port} '
-        f'--append-detector-modules'
-    )
+    args = [
+        'karabo-bridge-serve-files', str(mock_fxe_raw_run), str(port),
+        '--append-detector-modules'
+    ]
     p = Popen(args)
     yield f'tcp://localhost:{port}'
     p.kill()
