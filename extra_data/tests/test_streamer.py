@@ -5,7 +5,6 @@ import msgpack_numpy as numpack
 import numpy as np
 import pytest
 from queue import Full
-import shlex
 from subprocess import Popen
 
 from extra_data.export import ZMQStreamer
@@ -20,6 +19,7 @@ def server():
 
 @pytest.fixture(scope='function')
 def file_server(mock_fxe_raw_run):
+<<<<<<< 6d2b5cfe2095f3d9cef9154b799bd806ab4fc0ad
     port = 3333
 <<<<<<< 1405747a5511bdac416c4ce76262e1020e527aaa
     p = Popen(['karabo-bridge-serve-files', f'{mock_fxe_raw_run}', f'{port}',
@@ -29,6 +29,13 @@ def file_server(mock_fxe_raw_run):
         'karabo-bridge-serve-files', str(mock_fxe_raw_run), str(port),
         '--append-detector-modules'
     ]
+=======
+    port = 45454
+    args = shlex.split(
+        f'karabo-bridge-serve-files {mock_fxe_raw_run} {port} '
+        f'--append-detector-modules'
+    )
+>>>>>>> testing a different port
     p = Popen(args)
 >>>>>>> Thomas' wisdom
     yield f'tcp://localhost:{port}'
@@ -47,7 +54,7 @@ def test_req_rep(server):
 
 
 def test_serve_files(file_server):
-    with Client(file_server) as c:
+    with Client(file_server, timeout=1) as c:
         data, meta = c.next()
 
     assert 'FXE_DET_LPD1M-1/DET/APPEND' in data
