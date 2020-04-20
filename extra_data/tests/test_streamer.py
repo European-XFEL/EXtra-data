@@ -5,7 +5,6 @@ import msgpack_numpy as numpack
 import numpy as np
 import pytest
 from queue import Full
-import shlex
 from subprocess import Popen
 
 from extra_data.export import ZMQStreamer
@@ -63,7 +62,7 @@ def server(protocol_version):
 
 @pytest.fixture(scope='function')
 def file_server(mock_fxe_raw_run):
-    port = 3333
+    port = 45454
     args = shlex.split(
         f'karabo-bridge-serve-files {mock_fxe_raw_run} {port} '
         f'--append-detector-modules'
@@ -96,7 +95,7 @@ def test_req_rep(server):
 
 
 def test_serve_files(file_server):
-    with Client(file_server) as c:
+    with Client(file_server, timeout=1) as c:
         data, meta = c.next()
 
     assert 'FXE_DET_LPD1M-1/DET/APPEND' in data
