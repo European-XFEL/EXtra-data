@@ -6,16 +6,16 @@ import re
 import sys
 
 from extra_data import RunDirectory
-from extra_data.components import AGIPD1M, LPD1M
+from extra_data.components import AGIPD1M, LPD1M, JUNGFRAU
 from extra_data.exceptions import SourceNameError
 
 log = logging.getLogger(__name__)
 
 
-def _get_detector(data, min_modules):
-    for cls in (AGIPD1M, LPD1M):
+def _get_detector(data, min_modules, modules=None):
+    for cls in (AGIPD1M, LPD1M, JUNGFRAU):
         try:
-            return cls(data, min_modules=min_modules)
+            return cls(data, min_modules=min_modules, modules=modules)
         except SourceNameError:
             continue
 
@@ -34,6 +34,10 @@ def main(argv=None):
     ap.add_argument(
         '--min-modules', type=int, default=9, metavar='N',
         help="Include trains where at least N modules have data (default 9)"
+    )
+    ap.add_argument(
+        '--n_modules', type=int, default=8,
+        help="Expect this flexibly assembled detector to have N modules"
     )
     args = ap.parse_args(argv)
     out_file = args.output
@@ -69,7 +73,7 @@ def main(argv=None):
 
     log.info("Reading run directory %s", run_dir)
     run = RunDirectory(run_dir)
-    det = _get_detector(run, args.min_modules)
+    det = _get_detector(run, args.min_modules, modules=args.n_modules)
     if det is None:
         sys.exit("No AGIPD or LPD sources found in {!r}".format(run_dir))
 
