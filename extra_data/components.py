@@ -90,12 +90,13 @@ class MPxDetectorBase:
                  *, min_modules=1):
         if detector_name is None:
             detector_name = self._find_detector_name(data)
+        print(' ### detector name:', detector_name)
         if min_modules <= 0:
             raise ValueError("min_modules must be a positive integer, not "
                              f"{min_modules!r}")
 
         source_to_modno = self._identify_sources(data, detector_name, modules)
-
+        print(' ### sources:', source_to_modno)
         data = data.select([(src, '*') for src in source_to_modno])
         self.detector_name = detector_name
         self.source_to_modno = source_to_modno
@@ -103,7 +104,8 @@ class MPxDetectorBase:
         # pandas' missing-data handling converts the data to floats if there
         # are any gaps - so fill them with 0s and convert back to uint64.
         mod_data_counts = pd.DataFrame({
-            src: data.get_data_counts(src, 'image.data')
+            #src: data.get_data_counts(src, 'image.data')
+            src: data.get_data_counts(src, 'data.adc')
             for src in source_to_modno
         }).fillna(0).astype(np.uint64)
 
@@ -149,7 +151,8 @@ class MPxDetectorBase:
 
     @staticmethod
     def _identify_sources(data, detector_name=None, modules=None):
-        detector_re = re.compile(re.escape(detector_name) + r'/DET/(\d+)CH')
+        #detector_re = re.compile(re.escape(detector_name) + r'/DET/(\d+)CH')
+        detector_re = re.compile(re.escape(detector_name) + r'/DET/MODULE_(\d+)')
         source_to_modno = {}
         for source in data.instrument_sources:
             m = detector_re.match(source)

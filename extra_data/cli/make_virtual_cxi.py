@@ -13,6 +13,11 @@ log = logging.getLogger(__name__)
 
 
 def _get_detector(data, min_modules, modules=None):
+    if modules != None and ',' in modules:
+        try:  
+            modules = [int(x) for x in modules.split(',')]
+        except ValueError:
+            modules=None
     for cls in (AGIPD1M, LPD1M, JUNGFRAU):
         try:
             return cls(data, min_modules=min_modules, modules=modules)
@@ -36,8 +41,8 @@ def main(argv=None):
         help="Include trains where at least N modules have data (default 9)"
     )
     ap.add_argument(
-        '--n_modules', type=int, default=8,
-        help="Expect this flexibly assembled detector to have N modules"
+        '--modules', type=str, default='',
+        help="String encoding a sequence of modules, e.g. 1,2,3,4"
     )
     args = ap.parse_args(argv)
     out_file = args.output
@@ -73,7 +78,7 @@ def main(argv=None):
 
     log.info("Reading run directory %s", run_dir)
     run = RunDirectory(run_dir)
-    det = _get_detector(run, args.min_modules, modules=args.n_modules)
+    det = _get_detector(run, args.min_modules, modules=args.modules)
     if det is None:
         sys.exit("No AGIPD or LPD sources found in {!r}".format(run_dir))
 
