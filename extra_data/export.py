@@ -144,7 +144,7 @@ class ZMQStreamer(Thread):
             'queue.Full' (timeout is ignored)
 
         timeout: float
-            In seconds, raises 'queue.Full' if no free slow was available
+            In seconds, raises 'queue.Full' if no free slot was available
             within that time.
         """
         self.buffer.put(self.serialize(data, metadata),
