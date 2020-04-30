@@ -65,11 +65,11 @@ setup(name="EXtra-data",
               'sphinxcontrib_github_alt',
           ],
           'test': [
+              'coverage',
               'dask[array]',
+              'nbval',
               'pytest',
               'pytest-cov',
-              'coverage',
-              'nbval',
               'testpath',
           ]
       },
