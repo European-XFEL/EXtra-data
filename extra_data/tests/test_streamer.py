@@ -19,27 +19,25 @@ def server():
 
 @pytest.fixture(scope='function')
 def file_server(mock_fxe_raw_run):
-<<<<<<< 6d2b5cfe2095f3d9cef9154b799bd806ab4fc0ad
     port = 3333
-<<<<<<< 1405747a5511bdac416c4ce76262e1020e527aaa
-    p = Popen(['karabo-bridge-serve-files', f'{mock_fxe_raw_run}', f'{port}',
-               '--append-detector-modules'])
-=======
     args = [
         'karabo-bridge-serve-files', str(mock_fxe_raw_run), str(port),
         '--append-detector-modules'
     ]
-=======
-    port = 45454
-    args = shlex.split(
-        f'karabo-bridge-serve-files {mock_fxe_raw_run} {port} '
-        f'--append-detector-modules'
-    )
->>>>>>> testing a different port
     p = Popen(args)
->>>>>>> Thomas' wisdom
     yield f'tcp://localhost:{port}'
     p.kill()
+
+
+@pytest.mark.parametrize('protocol_version', ['1.0', '2.2'])
+def test_fill_queue(server):
+    for i in range(10):
+        server.feed({str(i): {str(i): i}})
+
+    assert server.buffer.full()
+    with pytest.raises(Full):
+        server.feed({'too much': {'prop': 0}}, block=False)
+
 
 def test_req_rep(server):
     client = Client(server.endpoint)
@@ -51,6 +49,15 @@ def test_req_rep(server):
     for _ in range(3):
         d, metadata = client.next()
         assert d == data
+
+
+def test_serve_files(file_server):
+    with Client(file_server, timeout=1) as c:
+        data, meta = c.next()
+
+    assert 'FXE_DET_LPD1M-1/DET/APPEND' in data
+    assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' not in data
+    assert data['FXE_DET_LPD1M-1/DET/APPEND']['image.data'].shape == (128, 1, 16, 256, 256)
 
 
 def test_serve_files(file_server):
