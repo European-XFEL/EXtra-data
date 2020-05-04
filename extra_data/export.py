@@ -30,8 +30,9 @@ class ZMQStreamer(ServerInThread):
              DeprecationWarning, stacklevel=2)
 
         endpoint = f'tcp://*:{port}'
-        super().__init__(endpoint, sock='REP', maxlen=10,
-                         protocol_version='2.2', dummy_timestamps=False)
+        super().__init__(endpoint, sock=sock, maxlen=maxlen,
+                         protocol_version=protocol_version,
+                         dummy_timestamps=dummy_timestamps)
 
 
 def serve_files(path, port, source_glob='*', key_glob='*',
