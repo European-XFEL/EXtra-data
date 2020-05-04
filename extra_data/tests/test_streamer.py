@@ -29,16 +29,6 @@ def file_server(mock_fxe_raw_run):
     p.kill()
 
 
-@pytest.mark.parametrize('protocol_version', ['1.0', '2.2'])
-def test_fill_queue(server):
-    for i in range(10):
-        server.feed({str(i): {str(i): i}})
-
-    assert server.buffer.full()
-    with pytest.raises(Full):
-        server.feed({'too much': {'prop': 0}}, block=False)
-
-
 def test_req_rep(server):
     client = Client(server.endpoint)
     data = {'a': {'b': 1}}
@@ -49,15 +39,6 @@ def test_req_rep(server):
     for _ in range(3):
         d, metadata = client.next()
         assert d == data
-
-
-def test_serve_files(file_server):
-    with Client(file_server, timeout=1) as c:
-        data, meta = c.next()
-
-    assert 'FXE_DET_LPD1M-1/DET/APPEND' in data
-    assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' not in data
-    assert data['FXE_DET_LPD1M-1/DET/APPEND']['image.data'].shape == (128, 1, 16, 256, 256)
 
 
 def test_serve_files(file_server):
