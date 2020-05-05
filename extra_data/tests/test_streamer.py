@@ -1,10 +1,6 @@
 """Test streaming data with ZMQ interface."""
 
-import msgpack
-import msgpack_numpy as numpack
-import numpy as np
 import pytest
-from queue import Full
 
 from extra_data.export import ZMQStreamer
 from karabo_bridge import Client
