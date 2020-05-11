@@ -8,7 +8,8 @@ from karabo_bridge import Client
 
 def test_deprecated_server():
     with pytest.deprecated_call():
-        server = ZMQStreamer(2222)
+        with ZMQStreamer(2222):
+            pass
 
 
 if __name__ == '__main__':
