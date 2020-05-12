@@ -8,6 +8,9 @@ You should have received a copy of the 3-Clause BSD License along with this
 program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 """
 
+from psutil import net_if_addrs
+from socket import AF_INET
+
 import h5py
 import numpy as np
 
@@ -141,3 +144,16 @@ def hdf5_to_cbf(in_h5file, cbf_filename, index, header=None):
     cbf_out = numpy_to_cbf(images, index=index)
     cbf_out.write(cbf_filename)
     print("Convert {} index {} to {}".format(in_h5file, index, cbf_filename))
+
+
+def find_infiniband_ip():
+    """Find the first infiniband IP address
+
+    :returns: str
+        IP of the first infiniband interface if it exists else '*'
+    """
+    addrs = net_if_addrs()
+    for addr in addrs.get('ib0', ()):
+        if addr.family is AF_INET:
+            return addr.address
+    return '*'

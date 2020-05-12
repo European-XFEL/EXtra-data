@@ -12,215 +12,32 @@ program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 
 from argparse import ArgumentParser
 import os.path as osp
-from queue import Queue
-from threading import Event, Thread
-from time import time
 from warnings import warn
 
-import msgpack
-import numpy as np
-import zmq
+from karabo_bridge import ServerInThread
 
 from .reader import RunDirectory, H5File
 from .stacking import stack_detector_data
+from .utils import find_infiniband_ip
 
 __all__ = ['ZMQStreamer', 'serve_files']
 
 
-class REPInterface(Thread):
-    def __init__(self, context, port, buffer):
-        super(REPInterface, self).__init__()
-        self.context = context
-        self.port = port
-        self.buffer = buffer
-        self._stop_event = Event()
+class ZMQStreamer(ServerInThread):
+    def __init__(self, port, sock='REP', maxlen=10, protocol_version='2.2',
+                 dummy_timestamps=False):
+        warn("Please use :ref:karabo_bridge.ServerInThread instead",
+             DeprecationWarning, stacklevel=2)
 
-    def run(self):
-        interface = self.context.socket(zmq.REP)
-        try:
-            interface.bind('tcp://*:{}'.format(self.port))
-
-            while not self.stopped():
-                req = interface.recv()
-                if req != b'next':
-                    raise RuntimeError('Unknown request:', req)
-                interface.send_multipart(self.buffer.get())
-        finally:
-            interface.setsockopt(zmq.LINGER, 0)
-            interface.close()
-
-    def stop(self):
-        self._stop_event.set()
-
-    def stopped(self):
-        return self._stop_event.is_set()
-
-
-class ZMQStreamer:
-    """ZeroMQ interface sending data over a TCP socket.
-
-    ::
-
-        # Server:
-        serve = ZMQStreamer(1234)
-        serve.start()
-
-        for tid, data in run.trains():
-            result = important_processing(data)
-            serve.feed(result)
-
-        # Client:
-        from karabo_bridge import Client
-        client = Client('tcp://server.hostname:1234')
-        data = client.next()
-
-    Parameters
-    ----------
-    port: int
-        Local TCP port to bind socket to
-    maxlen: int, optional
-        How many trains to cache before sending (default: 10)
-    protocol_version: ('1.0' | '2.1')
-        Which version of the bridge protocol to use. Defaults to the latest
-        version implemented.
-    dummy_timestamps: bool
-        Some tools (such as OnDA) expect the timestamp information to be in the
-        messages. We can't give accurate timestamps where these are not in the
-        file, so this option generates fake timestamps from the time the data
-        is fed in.
-    """
-    def __init__(self, port, maxlen=10, protocol_version='2.2', dummy_timestamps=False):
-        self._context = zmq.Context()
-        self.port = port
-        if protocol_version not in {'1.0', '2.2'}:
-            raise ValueError("Unknown protocol version %r" % protocol_version)
-        elif protocol_version == '1.0':
-            import msgpack_numpy
-
-            self.pack = msgpack.Packer(
-                use_bin_type=True, default=msgpack_numpy.encode
-            ).pack
-        else:
-            self.pack = msgpack.Packer(use_bin_type=True).pack
-        self.protocol_version = protocol_version
-        self.dummy_timestamps = dummy_timestamps
-        self._buffer = Queue(maxsize=maxlen)
-        self._interface = None
-
-    def start(self):
-        """Start a zmq.REP socket.
-        """
-        self._interface = REPInterface(self._context, self.port, self._buffer)
-        self._interface.daemon = True
-        self._interface.start()
-
-    def stop(self):
-        if self._interface:
-            self._interface.stop()
-            self._interface.join()
-            self._interface = None
-
-    def _serialize(self, data, metadata=None):
-        if not metadata:
-            metadata = {src: v.get('metadata', {}) for src, v in data.items()}
-
-        if self.dummy_timestamps:
-            ts = time()
-            sec, frac = str(ts).split('.')
-            frac = frac.ljust(18, '0')
-            update_dummy = {
-                'timestamp': ts,
-                'timestamp.sec': sec,
-                'timestamp.frac': frac,
-            }
-            for src in data.keys():
-                if 'timestamp' not in metadata[src]:
-                    metadata[src].update(update_dummy)
-
-        if self.protocol_version == '1.0':
-            return [self.pack(data)]
-
-        msg = []
-        for src, props in sorted(data.items()):
-            main_data = {}
-            arrays = []
-            for key, value in props.items():
-                if isinstance(value, np.ndarray):
-                    arrays.append((key, value))
-                elif isinstance(value, np.number):
-                    # Convert numpy type to native Python type
-                    main_data[key] = value.item()
-                else:
-                    main_data[key] = value
-
-            msg.extend([
-                self.pack({
-                    'source': src, 'content': 'msgpack',
-                    'metadata': metadata[src]
-                }),
-                self.pack(main_data)
-            ])
-
-            for key, array in arrays:
-                if not array.flags['C_CONTIGUOUS']:
-                    array = np.ascontiguousarray(array)
-                msg.extend([
-                    self.pack({
-                        'source': src, 'content': 'array', 'path': key,
-                        'dtype': str(array.dtype), 'shape': array.shape
-                    }),
-                    array.data,
-                ])
-
-        return msg
-
-    def feed(self, data, metadata=None):
-        """Push data to the sending queue.
-
-        This blocks if the queue already has *maxlen* items waiting to be sent.
-
-        Parameters
-        ----------
-        data : dict
-            Contains train data. The dictionary has to follow the karabo_bridge
-            protocol structure:
-
-            - keys are source names
-            - values are dict, where the keys are the parameter names and
-              values must be python built-in types or numpy.ndarray.
-
-        metadata : dict, optional
-            Contains train metadata. The dictionary has to follow the
-            karabo_bridge protocol structure:
-
-            - keys are (str) source names
-            - values (dict) should contain the following items:
-
-              - 'timestamp' Unix time with subsecond resolution
-              - 'timestamp.sec' Unix time with second resolution
-              - 'timestamp.frac' fractional part with attosecond resolution
-              - 'timestamp.tid' is European XFEL train unique ID
-
-            ::
-
-              {
-                  'source': 'sourceName'  # str
-                  'timestamp': 1234.567890  # float
-                  'timestamp.sec': '1234'  # str
-                  'timestamp.frac': '567890000000000000'  # str
-                  'timestamp.tid': 1234567890  # int
-              }
-
-            If the metadata dict is not provided it will be extracted from
-            'data' or an empty dict if 'metadata' key is missing from a data
-            source.
-        """
-        self._buffer.put(self._serialize(data, metadata))
+        endpoint = f'tcp://*:{port}'
+        super().__init__(endpoint, sock=sock, maxlen=maxlen,
+                         protocol_version=protocol_version,
+                         dummy_timestamps=dummy_timestamps)
 
 
 def serve_files(path, port, source_glob='*', key_glob='*',
                 append_detector_modules=False, dummy_timestamps=False,
-                **kwargs):
+                use_infiniband=False):
     """Stream data from files through a TCP socket.
 
     Parameters
@@ -238,6 +55,8 @@ def serve_files(path, port, source_glob='*', key_glob='*',
         Whether to combine module sources by stacking.
     dummy_timestamps: bool
         Whether to add mock timestamps if the metadata lacks them.
+    use_infiniband: bool
+        Use infiniband interface if available
     """
     if osp.isdir(path):
         data = RunDirectory(path)
@@ -246,15 +65,17 @@ def serve_files(path, port, source_glob='*', key_glob='*',
 
     data = data.select(source_glob, key_glob)
 
-    streamer = ZMQStreamer(port, dummy_timestamps=dummy_timestamps, **kwargs)
+    endpoint = f'tcp://{find_infiniband_ip() if use_infiniband else "*"}:{port}'
+    streamer = ServerInThread(endpoint, dummy_timestamps=dummy_timestamps)
     streamer.start()
+    print(f'Streamer started on: {streamer.endpoint}')
     for tid, train_data in data.trains():
         if train_data:
             if append_detector_modules:
                 if source_glob == '*':
-                    warn(" You are trying to stack detector-module sources"
-                    " with a global wildcard (\'*\'). If there are non-"
-                    " detector sources in your run, this will fail.")
+                    warn("You are trying to stack detector-module sources"
+                         "with a global wildcard (\'*\'). If there are non-"
+                         "detector sources in your run, this will fail.")
                 stacked = stack_detector_data(train_data, 'image.data')
                 merged_data = {}
                 # the data key pretends this is online data from SPB
@@ -296,9 +117,15 @@ def main(argv=None):
         " lacks proper timestamps",
         action='store_true'
     )
+    ap.add_argument(
+        "--use-infiniband", help="Use infiniband interface if available",
+        action='store_true'
+    )
     args = ap.parse_args(argv)
 
-    serve_files(args.path, args.port,
-                source_glob=args.source, key_glob=args.key,
-                append_detector_modules=args.append_detector_modules,
-                dummy_timestamps=args.dummy_timestamps)
+    serve_files(
+        args.path, args.port, source_glob=args.source, key_glob=args.key,
+        append_detector_modules=args.append_detector_modules,
+        dummy_timestamps=args.dummy_timestamps,
+        use_infiniband=args.use_infiniband
+    )
