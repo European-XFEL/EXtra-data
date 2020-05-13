@@ -162,7 +162,7 @@ def write_metadata(h5file, data_sources, chunksize=16, format_version='0.5'):
         # get sequence number
         fname_pattern = r'^(RAW|CORR)\-R\d+\-.*\-S(\d+).h5$'
         match = re.match(fname_pattern, osp.basename(h5file.filename))
-        sequence = int(match[1]) if match is not None else 0
+        sequence = int(match[2]) if match is not None else 0
         h5file.create_dataset('METADATA/sequenceNumber', dtype=np.uint32,
                               data=[sequence])
         h5file['METADATA/updateDate'] = [
