@@ -159,7 +159,6 @@ def write_metadata(h5file, data_sources, chunksize=16, format_version='0.5'):
         h5file.create_dataset('METADATA/runNumber', dtype=np.uint32, data=[1])
         h5file['METADATA/runType'] = [b'Test DAQ']
         h5file['METADATA/sample'] = [b'No Sample']
-        print(osp.basename(h5file.filename))
         # get sequence number
         fname_pattern = r'^(RAW|CORR)\-R\d+\-.*\-S(\d+).h5$'
         match = re.match(fname_pattern, osp.basename(h5file.filename))
