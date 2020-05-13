@@ -186,7 +186,7 @@ def write_base_index(f, N, first=10000, chunksize=16, format_version='0.5'):
 
     if format_version != '0.5':
         # flag
-        ds = f.create_dataset('INDEX/flag', (Npad,), 'u4', maxshape=(None,))
+        ds = f.create_dataset('INDEX/flag', (Npad,), 'i4', maxshape=(None,))
         ds[:N] = np.ones(N)
 
         # timestamps
