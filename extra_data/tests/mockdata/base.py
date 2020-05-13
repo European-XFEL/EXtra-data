@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import os.path as osp
 import re
 
@@ -147,11 +147,15 @@ def write_metadata(h5file, data_sources, chunksize=16, format_version='0.5'):
 
     if format_version != '0.5':
         h5file['METADATA/dataFormatVersion'] = [format_version.encode('ascii')]
-        now = datetime.utcnow().replace(microsecond=0).strftime('%Y%m%dT%H%M%SZ')
-        h5file['METADATA/creationDate'] = [now.encode('ascii')]
+        now = datetime.utcnow().replace(microsecond=0)
+        updated_time = now + timedelta(minutes=5)
+        h5file['METADATA/creationDate'] = [
+            now.strftime('%Y%m%dT%H%M%SZ').encode('ascii')
+        ]
         h5file['METADATA/daqLibrary'] = [b'1.9.0']
         h5file['METADATA/karaboFramework'] = [b'2.7.0']
-        h5file.create_dataset('METADATA/proposalNumber', dtype=np.uint32, data=[700000])
+        h5file.create_dataset('METADATA/proposalNumber', dtype=np.uint32,
+                              data=[700000])
         h5file.create_dataset('METADATA/runNumber', dtype=np.uint32, data=[1])
         h5file['METADATA/runType'] = [b'Test DAQ']
         h5file['METADATA/sample'] = [b'No Sample']
@@ -159,9 +163,12 @@ def write_metadata(h5file, data_sources, chunksize=16, format_version='0.5'):
         # get sequence number
         fname_pattern = r'^(RAW|CORR)\-R\d+\-.*\-S(\d+).h5$'
         match = re.match(fname_pattern, osp.basename(h5file.filename))
-        sequence = int(match.groups()[1]) if match is not None else 0
-        h5file.create_dataset('METADATA/sequenceNumber', dtype=np.uint32, data=[sequence])
-        h5file['METADATA/updateDate'] = [now.encode('ascii')]
+        sequence = int(match[1]) if match is not None else 0
+        h5file.create_dataset('METADATA/sequenceNumber', dtype=np.uint32,
+                              data=[sequence])
+        h5file['METADATA/updateDate'] = [
+            updated_time.strftime('%Y%m%dT%H%M%SZ').encode('ascii')
+        ]
 
 
 def write_base_index(f, N, first=10000, chunksize=16, format_version='0.5'):
