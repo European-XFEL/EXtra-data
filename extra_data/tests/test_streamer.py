@@ -28,12 +28,6 @@ def file_server_with_combined_detector(mock_fxe_raw_run):
     p.kill()
 
 
-def test_server():
-    with pytest.deprecated_call():
-        with ZMQStreamer(2222):
-            pass
-
-
 def test_serve_files(file_server):
     with Client(file_server) as c:
         data, meta = c.next()
@@ -49,6 +43,12 @@ def test_serve_files_combined_detector(file_server_with_combined_detector):
     assert 'FXE_DET_LPD1M-1/DET/APPEND' in data
     assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' not in data
     assert data['FXE_DET_LPD1M-1/DET/APPEND']['image.data'].shape == (128, 1, 16, 256, 256)
+
+    
+def test_deprecated_server():
+    with pytest.deprecated_call():
+        with ZMQStreamer(2222):
+            pass
 
 
 if __name__ == '__main__':
