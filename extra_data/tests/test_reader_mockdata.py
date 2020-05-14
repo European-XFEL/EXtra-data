@@ -603,18 +603,15 @@ def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
             open_run(proposal=2012, run=999)
 
 
-def test_open_file_format_0_5(mock_sa3_control_data):
+def test_open_file(mock_sa3_control_data):
     f = H5File(mock_sa3_control_data)
     file_access = f.files[0]
-    assert file_access.format_version == '0.5'
+    assert file_access.format_version in ('0.5', '1.0')
     assert 'SA3_XTD10_VAC/TSENS/S30180K' in f.control_sources
-
-
-def test_open_file_format_1_0(mock_sa3_control_data_fmt_1_0):
-    f = H5File(mock_sa3_control_data_fmt_1_0)
-    file_access = f.files[0]
-    assert file_access.format_version == '1.0'
-    assert 'SA3_XTD10_VAC/TSENS/S30180K' in f.control_sources
+    if file_access.format_version == '0.5':
+        assert 'METADATA/dataSourceId' in file_access.file
+    else:
+        assert 'METADATA/dataSources/dataSourceId' in file_access.file
 
 
 def test_permission():
