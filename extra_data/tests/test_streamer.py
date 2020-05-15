@@ -5,7 +5,8 @@ import os
 import pytest
 from subprocess import PIPE, Popen
 
-from extra_data.export import ZMQStreamer
+from extra_data import H5File, RunDirectory
+from extra_data.export import _iter_trains, ZMQStreamer
 from karabo_bridge import Client
 
 
@@ -40,6 +41,27 @@ from karabo_bridge import Client
 #                 break
 #         yield interface
 #         p.kill()
+
+
+def test_merge_detector(mock_fxe_raw_run, mock_fxe_control_data):
+    with RunDirectory(mock_fxe_raw_run) as run:
+        for data in _iter_trains(run, merge_detector=True):
+            assert 'FXE_DET_LPD1M-1/DET/APPEND' in data
+            assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' not in data
+            shape = data['FXE_DET_LPD1M-1/DET/APPEND']['image.data'].shape
+            assert shape == (128, 1, 16, 256, 256)
+            break
+        
+        for data in _iter_trains(run):
+            assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in data
+            shape = data['FXE_DET_LPD1M-1/DET/0CH0:xtdf']['image.data'].shape
+            assert shape == (128, 1, 256, 256)
+            break
+
+    with H5File(mock_fxe_control_data) as run:
+        for data in _iter_trains(run, merge_detector=True):
+            assert frozenset(data) == run.all_sources
+            break
 
 
 def test_serve_files(mock_fxe_raw_run):

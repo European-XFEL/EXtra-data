@@ -38,6 +38,53 @@ class ZMQStreamer(ServerInThread):
                          dummy_timestamps=dummy_timestamps)
 
 
+def _iter_trains(data, merge_detector=False):
+    """Iterate over trains in data and merge detector tiles in a single source
+
+    :data: DataCollection
+    :merge_detector: bool
+        if True and data contains detector data (e.g. AGIPD) idividual sources
+        for each detector tiles are merged in a single source. The new source
+        name keep the original prefix, but replace the last 2 part with
+        '/DET/APPEND'. Individual sources are removed from the train data
+    
+    :yield: dict
+        train data
+    """
+    det, source_name = None, ''
+    if merge_detector:
+        for detector in [AGIPD1M, DSSC1M, LPD1M]:
+            try:
+                det = detector(data)
+                source_name = f'{det.detector_name}/DET/APPEND'
+            except SourceNameError:
+                continue
+            else:
+                break
+
+    for tid, train_data in data.trains():
+        if not train_data:
+            continue
+
+        if det is not None:
+            det_data = {
+                k: v for k, v in train_data.items()
+                if k in det.data.detector_sources
+            }
+            stacked = stack_detector_data(det_data, 'image.data')
+
+            # get one of the module to reference other datasets
+            train_data[source_name] = mod_data = next(iter(det_data.values()))
+            mod_data['image.data'] = stacked
+            mod_data['metadata']['source'] = source_name
+
+            # remove individual module sources
+            for src in det.data.detector_sources:
+                del train_data[src]
+
+        yield train_data
+
+
 def serve_files(path, port, source_glob='*', key_glob='*',
                 append_detector_modules=False, dummy_timestamps=False,
                 use_infiniband=False):
@@ -73,42 +120,13 @@ def serve_files(path, port, source_glob='*', key_glob='*',
 
     data = data.select(source_glob, key_glob)
 
-    det = None
-    if append_detector_modules:
-        for detector in [AGIPD1M, DSSC1M, LPD1M]:
-            try:
-                det = detector(data)
-            except SourceNameError:
-                continue
-            else:
-                break
-
     endpoint = f'tcp://{find_infiniband_ip() if use_infiniband else "*"}:{port}'
     streamer = ServerInThread(endpoint, dummy_timestamps=dummy_timestamps)
     streamer.start()
     print(f'Streamer started on: {streamer.endpoint}')
-    for tid, train_data in data.trains():
-        if not train_data:
-            continue
 
-        if det is not None:
-            source_name = f'{det.detector_name}/DET/APPEND'
-            det_data = {
-                k: v for k, v in train_data.items()
-                if k in det.data.detector_sources
-            }
-            stacked = stack_detector_data(det_data, 'image.data')
-
-            # get one of the module to reference other datasets
-            train_data[source_name] = mod_data = next(iter(det_data.values()))
-            mod_data['image.data'] = stacked
-            mod_data['metadata']['source'] = source_name
-
-            # remove individual module sources
-            for src in det.data.detector_sources:
-                del train_data[src]
-
-        streamer.feed(train_data)
+    for data in _iter_trains(data, merge_detector=append_detector_modules):
+        streamer.feed(data)
 
     streamer.stop()
 
