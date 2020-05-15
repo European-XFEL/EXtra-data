@@ -12,6 +12,7 @@ from karabo_bridge import Client
 @pytest.fixture(scope='function')
 def file_server(mock_fxe_raw_run):
     args = ['karabo-bridge-serve-files', str(mock_fxe_raw_run), str(3333)]
+    interface = ''
 
     with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, text=True,
                encoding='utf-8', env=dict(os.environ, PYTHONUNBUFFERED='1')
@@ -28,6 +29,7 @@ def file_server(mock_fxe_raw_run):
 def file_server_with_combined_detector(mock_fxe_raw_run):
     args = ['karabo-bridge-serve-files', str(mock_fxe_raw_run), str(3333),
             '--append-detector-modules']
+    interface = ''
 
     with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, text=True,
                encoding='utf-8', env=dict(os.environ, PYTHONUNBUFFERED='1')
