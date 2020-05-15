@@ -82,7 +82,7 @@ def _iter_trains(data, merge_detector=False):
             for src in det.data.detector_sources:
                 del train_data[src]
 
-        yield train_data
+        yield tid, train_data
 
 
 def serve_files(path, port, source_glob='*', key_glob='*',
@@ -125,7 +125,7 @@ def serve_files(path, port, source_glob='*', key_glob='*',
     streamer.start()
     print(f'Streamer started on: {streamer.endpoint}')
 
-    for data in _iter_trains(data, merge_detector=append_detector_modules):
+    for tid, data in _iter_trains(data, merge_detector=append_detector_modules):
         streamer.feed(data)
 
     streamer.stop()

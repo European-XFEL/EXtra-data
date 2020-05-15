@@ -5,62 +5,29 @@ import os
 import pytest
 from subprocess import PIPE, Popen
 
-from extra_data import H5File, RunDirectory
+from extra_data import by_id, H5File, RunDirectory
 from extra_data.export import _iter_trains, ZMQStreamer
 from karabo_bridge import Client
 
 
-# @pytest.fixture(scope='function')
-# def file_server(mock_fxe_raw_run):
-#     args = ['karabo-bridge-serve-files', str(mock_fxe_raw_run), str(3333)]
-#     interface = ''
-
-#     with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, text=True,
-#                encoding='utf-8', env=dict(os.environ, PYTHONUNBUFFERED='1')
-#                ) as p:
-#         for line in p.stdout:
-#             if line.startswith('Streamer started on:'):
-#                 interface = line.partition(':')[2].strip()
-#                 break
-#         yield interface
-#         p.kill()
-
-
-# @pytest.fixture(scope='function')
-# def file_server_with_combined_detector(mock_fxe_raw_run):
-#     args = ['karabo-bridge-serve-files', str(mock_fxe_raw_run), str(3333),
-#             '--append-detector-modules']
-#     interface = ''
-
-#     with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, text=True,
-#                encoding='utf-8', env=dict(os.environ, PYTHONUNBUFFERED='1')
-#                ) as p:
-#         for line in p.stdout:
-#             if line.startswith('Streamer started on:'):
-#                 interface = line.partition(':')[2].strip()
-#                 break
-#         yield interface
-#         p.kill()
-
-
 def test_merge_detector(mock_fxe_raw_run, mock_fxe_control_data):
     with RunDirectory(mock_fxe_raw_run) as run:
-        for data in _iter_trains(run, merge_detector=True):
+        for tid, data in _iter_trains(run, merge_detector=True):
             assert 'FXE_DET_LPD1M-1/DET/APPEND' in data
             assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' not in data
             shape = data['FXE_DET_LPD1M-1/DET/APPEND']['image.data'].shape
             assert shape == (128, 1, 16, 256, 256)
             break
         
-        for data in _iter_trains(run):
+        for tid, data in _iter_trains(run):
             assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in data
             shape = data['FXE_DET_LPD1M-1/DET/0CH0:xtdf']['image.data'].shape
             assert shape == (128, 1, 256, 256)
             break
 
     with H5File(mock_fxe_control_data) as run:
-        for data in _iter_trains(run, merge_detector=True):
-            assert frozenset(data) == run.all_sources
+        for tid, data in _iter_trains(run, merge_detector=True):
+            assert frozenset(data) == run.select_trains(by_id[[tid]]).all_sources
             break
 
 
@@ -79,34 +46,13 @@ def test_serve_files(mock_fxe_raw_run):
         with Client(interface, timeout=5) as c:
             data, meta = c.next()
 
-        assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in data
-        assert data['FXE_DET_LPD1M-1/DET/0CH0:xtdf']['image.data'].shape == (128, 1, 256, 256)
+        tid = next(m['timestamp.tid'] for m in meta.values())
+        sources = RunDirectory(mock_fxe_raw_run).select_trains(by_id[[tid]]).all_sources
+        assert frozenset(data) == sources
 
         p.kill()
 
 
-def test_serve_files_combined_detector(mock_fxe_raw_run):
-    args = ['karabo-bridge-serve-files', str(mock_fxe_raw_run), str(3333),
-            '--append-detector-modules']
-    interface = ''
-
-    with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, text=True,
-               encoding='utf-8', env=dict(os.environ, PYTHONUNBUFFERED='1')
-               ) as p:
-        for line in p.stdout:
-            if line.startswith('Streamer started on:'):
-                interface = line.partition(':')[2].strip()
-                break
-        with Client(interface, timeout=5) as c:
-            data, meta = c.next()
-
-        assert 'FXE_DET_LPD1M-1/DET/APPEND' in data
-        assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' not in data
-        assert data['FXE_DET_LPD1M-1/DET/APPEND']['image.data'].shape == (128, 1, 16, 256, 256)
-
-        p.kill()
-
-    
 def test_deprecated_server():
     with pytest.deprecated_call():
         with ZMQStreamer(2222):
