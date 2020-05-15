@@ -51,6 +51,8 @@ def test_serve_files(mock_fxe_raw_run):
         assert frozenset(data) == sources
 
         p.kill()
+        rc = p.wait(timeout=2)
+        assert rc == -9  # process terminated by kill signal
 
 
 def test_deprecated_server():
