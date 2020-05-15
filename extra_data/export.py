@@ -159,9 +159,13 @@ def main(argv=None):
     )
     args = ap.parse_args(argv)
 
-    serve_files(
-        args.path, args.port, source_glob=args.source, key_glob=args.key,
-        append_detector_modules=args.append_detector_modules,
-        dummy_timestamps=args.dummy_timestamps,
-        use_infiniband=args.use_infiniband
-    )
+    try:
+        serve_files(
+            args.path, args.port, source_glob=args.source, key_glob=args.key,
+            append_detector_modules=args.append_detector_modules,
+            dummy_timestamps=args.dummy_timestamps,
+            use_infiniband=args.use_infiniband
+        )
+    except KeyboardInterrupt:
+        pass
+    print('\nStopped.')
