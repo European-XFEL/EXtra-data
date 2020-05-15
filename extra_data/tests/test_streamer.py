@@ -35,10 +35,10 @@ def test_serve_files(mock_fxe_raw_run):
     args = ['karabo-bridge-serve-files', str(mock_fxe_raw_run), str(3333)]
     interface = ''
 
-    with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, text=True,
-               encoding='utf-8', env=dict(os.environ, PYTHONUNBUFFERED='1')
-               ) as p:
+    with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE,
+               env=dict(os.environ, PYTHONUNBUFFERED='1')) as p:
         for line in p.stdout:
+            line = line.decode('utf-8')
             if line.startswith('Streamer started on:'):
                 interface = line.partition(':')[2].strip()
                 break
