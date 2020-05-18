@@ -6,18 +6,24 @@ import re
 import sys
 
 from extra_data import RunDirectory
-from extra_data.components import AGIPD1M, LPD1M
+from extra_data.components import MPxDetectorBase
 from extra_data.exceptions import SourceNameError
 
 log = logging.getLogger(__name__)
 
 
 def _get_detector(data, min_modules):
-    for cls in (AGIPD1M, LPD1M):
+    for cls in MPxDetectorBase.__subclasses__():
         try:
             return cls(data, min_modules=min_modules)
         except SourceNameError:
             continue
+
+
+def _detectors():
+    """returns a list of names for all detector components available
+    """
+    return [d.__name__ for d in MPxDetectorBase.__subclasses__()]
 
 
 def main(argv=None):
@@ -77,7 +83,7 @@ def main(argv=None):
     run = RunDirectory(run_dir)
     det = _get_detector(run, args.min_modules)
     if det is None:
-        sys.exit("No AGIPD or LPD sources found in {!r}".format(run_dir))
+        sys.exit(f"No {_detectors()} sources found in {run_dir}")
 
     det.write_virtual_cxi(out_file, fill_values)
 
