@@ -4,6 +4,7 @@ import os
 import os.path as osp
 import re
 import sys
+from textwrap import dedent
 
 from extra_data import RunDirectory
 from extra_data.components import MPxDetectorBase
@@ -27,7 +28,16 @@ def _detectors():
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser('extra-data-make-virtual-cxi')
+    example = dedent("""
+        Example:
+
+          extra-data-make-virtual-cxi -o ./out_file.h5 --min-modules 15
+          --fill-value data 0 --fill-value gain 1 /path/to/source/run
+    """)
+    ap = argparse.ArgumentParser(
+        'extra-data-make-virtual-cxi', epilog=example,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument('run_dir', help="Path to an EuXFEL run directory")
     # Specifying a proposal directory & a run number is the older interface.
     # If the run_number argument is passed, run_dir is used as proposal.
@@ -43,8 +53,9 @@ def main(argv=None):
     )
     ap.add_argument(
         '-v', '--fill-value', action='append', nargs=2, metavar=('DS', 'V'),
-        help='define fill value for individual dataset (data, gain or mask)'
-             '(default nan for float arrays, 0 for int arrays)'
+        help='define fill value (V) for individual dataset (DS). Datasets are'
+             ' "data", "gain" and "mask". (default nan for float arrays, 0 for'
+             ' int arrays)'
     )
     args = ap.parse_args(argv)
     out_file = args.output
