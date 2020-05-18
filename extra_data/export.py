@@ -121,15 +121,19 @@ def serve_files(path, port, source_glob='*', key_glob='*',
     data = data.select(source_glob, key_glob)
 
     endpoint = f'tcp://{find_infiniband_ip() if use_infiniband else "*"}:{port}'
-    streamer = ServerInThread(endpoint, dummy_timestamps=dummy_timestamps)
-    streamer.start()
-    print(f'Streamer started on: {streamer.endpoint}')
+    # streamer = ServerInThread(endpoint, dummy_timestamps=dummy_timestamps)
+    # streamer.start()
+    # print(f'Streamer started on: {streamer.endpoint}')
 
-    for tid, data in _iter_trains(data, merge_detector=append_detector_modules):
-        streamer.feed(data)
+    # for tid, data in _iter_trains(data, merge_detector=append_detector_modules):
+    #     streamer.feed(data)
 
-    streamer.stop()
+    # streamer.stop()
 
+    with ServerInThread(endpoint, dummy_timestamps=dummy_timestamps) as s:
+        print(f'Streamer started on: {s.endpoint}')
+        for tid, data in _iter_trains(data, merge_detector=append_detector_modules):
+            s.feed(data)
 
 def main(argv=None):
     ap = ArgumentParser(prog="karabo-bridge-serve-files")
