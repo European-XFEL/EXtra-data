@@ -48,7 +48,7 @@ def main(argv=None):
     )
     args = ap.parse_args(argv)
     out_file = args.output
-    fill_values = dict(args.fill_value)
+    fill_values = dict(args.fill_value) if args.fill_value else None
 
     logging.basicConfig(level=logging.INFO)
 
