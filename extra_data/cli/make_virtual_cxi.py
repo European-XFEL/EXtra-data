@@ -27,7 +27,7 @@ def _detectors():
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser('karabo-data-make-virtual-cxi')
+    ap = argparse.ArgumentParser('extra-data-make-virtual-cxi')
     ap.add_argument('run_dir', help="Path to an EuXFEL run directory")
     # Specifying a proposal directory & a run number is the older interface.
     # If the run_number argument is passed, run_dir is used as proposal.
