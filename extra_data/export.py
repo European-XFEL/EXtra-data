@@ -16,7 +16,7 @@ from warnings import warn
 
 from karabo_bridge import ServerInThread
 
-from .components import AGIPD1M, LPD1M, DSSC1M
+from .components import MPxDetectorBase
 from .exceptions import SourceNameError
 from .reader import RunDirectory, H5File
 from .stacking import stack_detector_data
@@ -53,7 +53,7 @@ def _iter_trains(data, merge_detector=False):
     """
     det, source_name = None, ''
     if merge_detector:
-        for detector in [AGIPD1M, DSSC1M, LPD1M]:
+        for detector in MPxDetectorBase.__subclasses__():
             try:
                 det = detector(data)
                 source_name = f'{det.detector_name}/DET/APPEND'
