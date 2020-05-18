@@ -21,7 +21,7 @@ def _get_detector(data, min_modules):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser('karabo-data-make-virtual-cxi')
+    ap = argparse.ArgumentParser('extra-data-make-virtual-cxi')
     ap.add_argument('run_dir', help="Path to an EuXFEL run directory")
     # Specifying a proposal directory & a run number is the older interface.
     # If the run_number argument is passed, run_dir is used as proposal.
@@ -36,7 +36,7 @@ def main(argv=None):
         help="Include trains where at least N modules have data (default 9)"
     )
     ap.add_argument(
-        '--fill-zero', type=bool, default=False,
+        '--fill-zero',
         help="for missing modules, fill arrays with zeroes (default: do not"
              "do this; fill with NaNs)",
         action='store_true'
