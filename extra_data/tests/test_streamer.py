@@ -3,6 +3,7 @@
 import os
 
 import pytest
+import signal
 from subprocess import PIPE, Popen
 
 from extra_data import by_id, H5File, RunDirectory
@@ -32,7 +33,7 @@ def test_merge_detector(mock_fxe_raw_run, mock_fxe_control_data):
 
 
 def test_serve_files(mock_fxe_raw_run):
-    args = ['karabo-bridge-serve-files', str(mock_fxe_raw_run), str(3333)]
+    args = ['karabo-bridge-serve-files', str(mock_fxe_raw_run), str(44444)]
     interface = ''
 
     with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE,
@@ -50,9 +51,12 @@ def test_serve_files(mock_fxe_raw_run):
         sources = RunDirectory(mock_fxe_raw_run).select_trains(by_id[[tid]]).all_sources
         assert frozenset(data) == sources
 
-        p.kill()
-        rc = p.wait(timeout=2)
-        assert rc == -9  # process terminated by kill signal
+        p.send_signal(signal.SIGINT)
+        p.communicate(timeout=2)
+
+        # p.kill()
+        # rc = p.wait(timeout=2)
+        # assert rc == -9  # process terminated by kill signal
 
 
 def test_deprecated_server():
