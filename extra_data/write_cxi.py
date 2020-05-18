@@ -163,7 +163,7 @@ class VirtualCXIWriter:
 
         return layouts
 
-    def write(self, filename):
+    def write(self, filename, fill_zero=False):
         pulse_ids = self.collect_pulse_ids()
         experiment_ids = np.core.defchararray.add(np.core.defchararray.add(
             self.train_ids_perframe.astype(str), ':'), pulse_ids.astype(str))
@@ -199,20 +199,21 @@ class VirtualCXIWriter:
                 d[:] = (['data', 'gain'] if ndg == 2 else ['data'])
                 dgrp['data_gain'] = h5py.SoftLink('/entry_1/data_gain')
 
+            fill_value = 0 if fill_zero else np.nan
             data = dgrp.create_virtual_dataset(
-                'data', layouts['data'], fillvalue=np.nan
+                'data', layouts['data'], fillvalue=fill_value
             )
             data.attrs['axes'] = axes_s
 
             if 'gain' in layouts:
                 gain = dgrp.create_virtual_dataset(
-                    'gain', layouts['gain'], fillvalue=np.nan
+                    'gain', layouts['gain'], fillvalue=fill_value
                 )
                 gain.attrs['axes'] = axes_s
 
             if 'mask' in layouts:
                 mask = dgrp.create_virtual_dataset(
-                    'mask', layouts['mask'], fillvalue=np.nan
+                    'mask', layouts['mask'], fillvalue=fill_value
                 )
                 mask.attrs['axes'] = axes_s
 

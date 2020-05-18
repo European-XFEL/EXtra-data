@@ -35,6 +35,12 @@ def main(argv=None):
         '--min-modules', type=int, default=9, metavar='N',
         help="Include trains where at least N modules have data (default 9)"
     )
+    ap.add_argument(
+        '--fill-zero', type=bool, default=False,
+        help="for missing modules, fill arrays with zeroes (default: do not"
+             "do this; fill with NaNs)",
+        action='store_true'
+    )
     args = ap.parse_args(argv)
     out_file = args.output
 
@@ -73,7 +79,7 @@ def main(argv=None):
     if det is None:
         sys.exit("No AGIPD or LPD sources found in {!r}".format(run_dir))
 
-    det.write_virtual_cxi(out_file)
+    det.write_virtual_cxi(out_file, fill_zero=args.fill_zero)
 
 if __name__ == '__main__':
     main()
