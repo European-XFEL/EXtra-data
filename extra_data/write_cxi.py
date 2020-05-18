@@ -163,7 +163,23 @@ class VirtualCXIWriter:
 
         return layouts
 
-    def write(self, filename):
+    @staticmethod
+    def _fill_value(path, layout, fillvalues):
+        value = fillvalues.get(path, np.nan)
+        return layout[path].dtype.type(value)
+
+    def write(self, filename, fillvalues=None):
+        """Write the file on disc to filename
+
+        Parameters
+        ----------
+        filename: str
+            Path of the file to be written.
+        fillvalues: dict, optional
+            keys are datasets names (one of: data, gain, mask) and associated
+            fill value for missing data (default is np.nan)
+        """
+        fillvalues = fillvalues or {}
         pulse_ids = self.collect_pulse_ids()
         experiment_ids = np.core.defchararray.add(np.core.defchararray.add(
             self.train_ids_perframe.astype(str), ':'), pulse_ids.astype(str))
@@ -200,19 +216,22 @@ class VirtualCXIWriter:
                 dgrp['data_gain'] = h5py.SoftLink('/entry_1/data_gain')
 
             data = dgrp.create_virtual_dataset(
-                'data', layouts['data'], fillvalue=np.nan
+                'data', layouts['data'],
+                fillvalue=self._fill_value('data', layouts, fillvalues)
             )
             data.attrs['axes'] = axes_s
 
             if 'gain' in layouts:
                 gain = dgrp.create_virtual_dataset(
-                    'gain', layouts['gain'], fillvalue=np.nan
+                    'gain', layouts['gain'],
+                    fillvalue=self._fill_value('gain', layouts, fillvalues)
                 )
                 gain.attrs['axes'] = axes_s
 
             if 'mask' in layouts:
                 mask = dgrp.create_virtual_dataset(
-                    'mask', layouts['mask'], fillvalue=np.nan
+                    'mask', layouts['mask'],
+                    fillvalue=self._fill_value('mask', layouts, fillvalues)
                 )
                 mask.attrs['axes'] = axes_s
 

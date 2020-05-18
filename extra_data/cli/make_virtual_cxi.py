@@ -35,8 +35,14 @@ def main(argv=None):
         '--min-modules', type=int, default=9, metavar='N',
         help="Include trains where at least N modules have data (default 9)"
     )
+    ap.add_argument(
+        '-v', '--fill-value', action='append', nargs=2,
+        help='define fill value for individual dataset (data, gain or mask)'
+             '(default "nan")'
+    )
     args = ap.parse_args(argv)
     out_file = args.output
+    fill_values = dict(args.default_values)
 
     logging.basicConfig(level=logging.INFO)
 
@@ -73,7 +79,7 @@ def main(argv=None):
     if det is None:
         sys.exit("No AGIPD or LPD sources found in {!r}".format(run_dir))
 
-    det.write_virtual_cxi(out_file)
+    det.write_virtual_cxi(out_file, fill_values)
 
 if __name__ == '__main__':
     main()
