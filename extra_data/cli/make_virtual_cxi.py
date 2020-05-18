@@ -42,13 +42,13 @@ def main(argv=None):
         help="Include trains where at least N modules have data (default 9)"
     )
     ap.add_argument(
-        '-v', '--fill-value', action='append', nargs=2,
+        '-v', '--fill-value', action='append', nargs=2, metavar=('DS', 'V'),
         help='define fill value for individual dataset (data, gain or mask)'
-             '(default "nan")'
+             '(default nan for float arrays, 0 for int arrays)'
     )
     args = ap.parse_args(argv)
     out_file = args.output
-    fill_values = dict(args.default_values)
+    fill_values = dict(args.fill_value)
 
     logging.basicConfig(level=logging.INFO)
 

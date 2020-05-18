@@ -165,7 +165,9 @@ class VirtualCXIWriter:
 
     @staticmethod
     def _fill_value(path, layout, fillvalues):
-        value = fillvalues.get(path, np.nan)
+        array_type = layout[path].dtype.type(0).item()
+        fallback = np.nan if isinstance(array_type, float) else 0
+        value = fillvalues.get(path, fallback)
         return layout[path].dtype.type(value)
 
     def write(self, filename, fillvalues=None):
@@ -177,7 +179,8 @@ class VirtualCXIWriter:
             Path of the file to be written.
         fillvalues: dict, optional
             keys are datasets names (one of: data, gain, mask) and associated
-            fill value for missing data (default is np.nan)
+            fill value for missing data (default is np.nan for float arrays and
+            zero for integer arrays)
         """
         fillvalues = fillvalues or {}
         pulse_ids = self.collect_pulse_ids()

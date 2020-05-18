@@ -423,7 +423,8 @@ class MPxDetectorBase:
           The file to be written. Will be overwritten if it already exists.
         fillvalues: dict, optional
             keys are datasets names (one of: data, gain, mask) and associated
-            fill value for missing data (default is np.nan)
+            fill value for missing data  (default is np.nan for float arrays and
+            zero for integer arrays)
         """
         from .write_cxi import VirtualCXIWriter
         VirtualCXIWriter(self).write(filename, fillvalues=fillvalues)
