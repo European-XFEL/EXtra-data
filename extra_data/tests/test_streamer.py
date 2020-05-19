@@ -32,6 +32,20 @@ def test_merge_detector(mock_fxe_raw_run, mock_fxe_control_data):
             break
 
 
+def test_subproc():
+    args = ['sleep', '3']
+    with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE,
+               env=dict(os.environ, PYTHONUNBUFFERED='1')) as p:
+        p.kill()
+
+
+def test_long_subproc():
+    args = ['sleep', '999999999']
+    with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE,
+               env=dict(os.environ, PYTHONUNBUFFERED='1')) as p:
+        p.kill()
+
+
 def test_serve_files(mock_fxe_raw_run):
     args = ['karabo-bridge-serve-files', str(mock_fxe_raw_run), str(44444)]
     interface = ''
