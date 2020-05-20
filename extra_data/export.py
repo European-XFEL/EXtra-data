@@ -72,12 +72,20 @@ def _iter_trains(data, merge_detector=False):
                 k: v for k, v in train_data.items()
                 if k in det.data.detector_sources
             }
-            stacked = stack_detector_data(det_data, 'image.data')
 
             # get one of the module to reference other datasets
             train_data[source_name] = mod_data = next(iter(det_data.values()))
+
+            stacked = stack_detector_data(det_data, 'image.data')
             mod_data['image.data'] = stacked
             mod_data['metadata']['source'] = source_name
+
+            if 'image.gain' in mod_data:
+                stacked = stack_detector_data(det_data, 'image.gain')
+                mod_data['image.gain'] = stacked
+            if 'image.mask' in mod_data:
+                stacked = stack_detector_data(det_data, 'image.mask')
+                mod_data['image.mask'] = stacked
 
             # remove individual module sources
             for src in det.data.detector_sources:

@@ -11,7 +11,7 @@ from extra_data.export import _iter_trains, ZMQStreamer, serve_files
 from karabo_bridge import Client
 
 
-def test_merge_detector(mock_fxe_raw_run, mock_fxe_control_data):
+def test_merge_detector(mock_fxe_raw_run, mock_fxe_control_data, mock_spb_proc_run):
     with RunDirectory(mock_fxe_raw_run) as run:
         for tid, data in _iter_trains(run, merge_detector=True):
             assert 'FXE_DET_LPD1M-1/DET/APPEND' in data
@@ -29,6 +29,16 @@ def test_merge_detector(mock_fxe_raw_run, mock_fxe_control_data):
     with H5File(mock_fxe_control_data) as run:
         for tid, data in _iter_trains(run, merge_detector=True):
             assert frozenset(data) == run.select_trains(by_id[[tid]]).all_sources
+            break
+
+    with RunDirectory(mock_spb_proc_run) as run:
+        for tid, data in _iter_trains(run, merge_detector=True):
+            shape = data['SPB_DET_AGIPD1M-1/DET/APPEND']['image.data'].shape
+            assert shape == (64, 16, 512, 128)
+            shape = data['SPB_DET_AGIPD1M-1/DET/APPEND']['image.gain'].shape
+            assert shape == (64, 16, 512, 128)
+            shape = data['SPB_DET_AGIPD1M-1/DET/APPEND']['image.mask'].shape
+            assert shape == (64, 16, 512, 128)
             break
 
 
