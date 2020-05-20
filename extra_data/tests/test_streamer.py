@@ -46,6 +46,7 @@ def test_long_subproc():
         p.kill()
 
 
+@pytest.mark.skip
 def test_serve_files(mock_fxe_raw_run):
     args = ['karabo-bridge-serve-files', str(mock_fxe_raw_run), str(44444)]
     interface = ''
