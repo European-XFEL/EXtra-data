@@ -7,7 +7,7 @@ import signal
 from subprocess import PIPE, Popen
 
 from extra_data import by_id, H5File, RunDirectory
-from extra_data.export import _iter_trains, ZMQStreamer
+from extra_data.export import _iter_trains, ZMQStreamer, serve_files
 from karabo_bridge import Client
 
 
@@ -32,23 +32,9 @@ def test_merge_detector(mock_fxe_raw_run, mock_fxe_control_data):
             break
 
 
-def test_subproc():
-    args = ['sleep', '3']
-    with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE,
-               env=dict(os.environ, PYTHONUNBUFFERED='1')) as p:
-        p.kill()
-
-
-def test_long_subproc():
-    args = ['sleep', '999999999']
-    with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE,
-               env=dict(os.environ, PYTHONUNBUFFERED='1')) as p:
-        p.kill()
-
-
-@pytest.mark.skip
+# @pytest.mark.skip
 def test_serve_files(mock_fxe_raw_run):
-    args = ['karabo-bridge-serve-files', str(mock_fxe_raw_run), str(44444)]
+    args = ['karabo-bridge-serve-files', '-z', 'PUSH', str(mock_fxe_raw_run), str(44444)]
     interface = ''
 
     with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE,
@@ -59,7 +45,7 @@ def test_serve_files(mock_fxe_raw_run):
                 interface = line.partition(':')[2].strip()
                 break
 
-        with Client(interface, timeout=5) as c:
+        with Client(interface, sock='PULL', timeout=5) as c:
             data, meta = c.next()
 
         tid = next(m['timestamp.tid'] for m in meta.values())

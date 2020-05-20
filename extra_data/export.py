@@ -15,6 +15,7 @@ import os.path as osp
 from warnings import warn
 
 from karabo_bridge import ServerInThread
+from karabo_bridge.server import Sender
 
 from .components import MPxDetectorBase
 from .exceptions import SourceNameError
@@ -87,7 +88,7 @@ def _iter_trains(data, merge_detector=False):
 
 def serve_files(path, port, source_glob='*', key_glob='*',
                 append_detector_modules=False, dummy_timestamps=False,
-                use_infiniband=False):
+                use_infiniband=False, sock='REP'):
     """Stream data from files through a TCP socket.
 
     Parameters
@@ -112,6 +113,8 @@ def serve_files(path, port, source_glob='*', key_glob='*',
         Whether to add mock timestamps if the metadata lacks them.
     use_infiniband: bool
         Use infiniband interface if available
+    sock: str
+        socket type - supported: REP, PUB, PUSH (default REP).
     """
     if osp.isdir(path):
         data = RunDirectory(path)
@@ -121,19 +124,11 @@ def serve_files(path, port, source_glob='*', key_glob='*',
     data = data.select(source_glob, key_glob)
 
     endpoint = f'tcp://{find_infiniband_ip() if use_infiniband else "*"}:{port}'
-    # streamer = ServerInThread(endpoint, dummy_timestamps=dummy_timestamps)
-    # streamer.start()
-    # print(f'Streamer started on: {streamer.endpoint}')
+    sender = Sender(endpoint, sock=sock, dummy_timestamps=dummy_timestamps)
+    print(f'Streamer started on: {sender.endpoint}')
+    for tid, data in _iter_trains(data, merge_detector=append_detector_modules):
+        sender.send(data)
 
-    # for tid, data in _iter_trains(data, merge_detector=append_detector_modules):
-    #     streamer.feed(data)
-
-    # streamer.stop()
-
-    with ServerInThread(endpoint, dummy_timestamps=dummy_timestamps) as s:
-        print(f'Streamer started on: {s.endpoint}')
-        for tid, data in _iter_trains(data, merge_detector=append_detector_modules):
-            s.feed(data)
 
 def main(argv=None):
     ap = ArgumentParser(prog="karabo-bridge-serve-files")
@@ -161,6 +156,10 @@ def main(argv=None):
         "--use-infiniband", help="Use infiniband interface if available",
         action='store_true'
     )
+    ap.add_argument(
+        "-z", "--socket-type", help="ZeroMQ socket type",
+        choices=['PUB', 'PUSH', 'REP'], default='REP'
+    )
     args = ap.parse_args(argv)
 
     try:
@@ -168,7 +167,7 @@ def main(argv=None):
             args.path, args.port, source_glob=args.source, key_glob=args.key,
             append_detector_modules=args.append_detector_modules,
             dummy_timestamps=args.dummy_timestamps,
-            use_infiniband=args.use_infiniband
+            use_infiniband=args.use_infiniband, sock=args.socket_type
         )
     except KeyboardInterrupt:
         pass
