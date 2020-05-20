@@ -51,13 +51,14 @@ def test_serve_files(mock_fxe_raw_run):
                env=dict(os.environ, PYTHONUNBUFFERED='1')) as p:
         for line in p.stdout:
             line = line.decode('utf-8')
+            print('line:', line)
             if line.startswith('Streamer started on:'):
-                print('line:', line)
                 interface = line.partition(':')[2].strip()
                 break
 
         print('Interface:', interface)
-        with Client(interface, sock='PULL', timeout=5) as c:
+        # with Client(interface, sock='PULL', timeout=5) as c:
+        with Client('tcp://127.0.0.1:44444', sock='PULL', timeout=5) as c:
             data, meta = c.next()
 
         tid = next(m['timestamp.tid'] for m in meta.values())
