@@ -52,9 +52,11 @@ def test_serve_files(mock_fxe_raw_run):
         for line in p.stdout:
             line = line.decode('utf-8')
             if line.startswith('Streamer started on:'):
+                print('line:', line)
                 interface = line.partition(':')[2].strip()
                 break
 
+        print('Interface:', interface)
         with Client(interface, sock='PULL', timeout=5) as c:
             data, meta = c.next()
 
