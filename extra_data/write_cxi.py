@@ -217,21 +217,21 @@ class VirtualCXIWriter:
 
             data = dgrp.create_virtual_dataset(
                 'data', layouts['data'],
-                fillvalue=layout['data'].dtype.type(_fillvalues['data'])
+                fillvalue=layouts['data'].dtype.type(_fillvalues['data'])
             )
             data.attrs['axes'] = axes_s
 
             if 'gain' in layouts:
                 gain = dgrp.create_virtual_dataset(
                     'gain', layouts['gain'],
-                    fillvalue=layout['gain'].dtype.type(_fillvalues['gain'])
+                    fillvalue=layouts['gain'].dtype.type(_fillvalues['gain'])
                 )
                 gain.attrs['axes'] = axes_s
 
             if 'mask' in layouts:
                 mask = dgrp.create_virtual_dataset(
                     'mask', layouts['mask'],
-                    fillvalue=layout['mask'].dtype.type(_fillvalues['mask'])
+                    fillvalue=layouts['mask'].dtype.type(_fillvalues['mask'])
                 )
                 mask.attrs['axes'] = axes_s
 
