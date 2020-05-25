@@ -4,7 +4,7 @@ import os
 
 import pytest
 import signal
-from subprocess import PIPE, Popen
+from subprocess import PIPE, Popen, STDOUT
 
 from extra_data import by_id, H5File, RunDirectory
 from extra_data.export import _iter_trains, ZMQStreamer, serve_files
@@ -47,7 +47,7 @@ def test_serve_files(mock_fxe_raw_run):
             str(44444)]
     interface = None
 
-    with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE,
+    with Popen(args, stdin=PIPE, stdout=PIPE, stderr=STDOUT,
                env=dict(os.environ, PYTHONUNBUFFERED='1')) as p:
         for line in p.stdout:
             line = line.decode('utf-8')
