@@ -163,13 +163,6 @@ class VirtualCXIWriter:
 
         return layouts
 
-    @staticmethod
-    def _fill_value(path, layout, fillvalues):
-        array_type = layout[path].dtype.type(0).item()
-        fallback = np.nan if isinstance(array_type, float) else 0
-        value = fillvalues.get(path, fallback)
-        return layout[path].dtype.type(value)
-
     def write(self, filename, fillvalues=None):
         """Write the file on disc to filename
 
@@ -179,10 +172,14 @@ class VirtualCXIWriter:
             Path of the file to be written.
         fillvalues: dict, optional
             keys are datasets names (one of: data, gain, mask) and associated
-            fill value for missing data (default is np.nan for float arrays and
-            zero for integer arrays)
+            fill value for missing data. defaults are:
+            - data: nan         (float32)
+            - gain: 0           (uint8)
+            - mask: 0xffffffff  (uint32)
         """
-        fillvalues = fillvalues or {}
+        _fillvalues = {'data': np.nan, 'gain': 0, 'mask': 0xffffffff}
+        if fillvalues:
+            _fillvalues.update(fillvalues)
         pulse_ids = self.collect_pulse_ids()
         experiment_ids = np.core.defchararray.add(np.core.defchararray.add(
             self.train_ids_perframe.astype(str), ':'), pulse_ids.astype(str))
@@ -220,21 +217,21 @@ class VirtualCXIWriter:
 
             data = dgrp.create_virtual_dataset(
                 'data', layouts['data'],
-                fillvalue=self._fill_value('data', layouts, fillvalues)
+                fillvalue=layout['data'].dtype.type(_fillvalues['data'])
             )
             data.attrs['axes'] = axes_s
 
             if 'gain' in layouts:
                 gain = dgrp.create_virtual_dataset(
                     'gain', layouts['gain'],
-                    fillvalue=self._fill_value('gain', layouts, fillvalues)
+                    fillvalue=layout['gain'].dtype.type(_fillvalues['gain'])
                 )
                 gain.attrs['axes'] = axes_s
 
             if 'mask' in layouts:
                 mask = dgrp.create_virtual_dataset(
                     'mask', layouts['mask'],
-                    fillvalue=self._fill_value('mask', layouts, fillvalues)
+                    fillvalue=layout['mask'].dtype.type(_fillvalues['mask'])
                 )
                 mask.attrs['axes'] = axes_s
 
