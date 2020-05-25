@@ -31,12 +31,13 @@ def main(argv=None):
     example = dedent("""
         Example:
 
-          extra-data-make-virtual-cxi -o ./out_file.h5 --min-modules 15
-          --fill-value data 0 --fill-value gain 1 /path/to/source/run
+          extra-data-make-virtual-cxi -o ./out_file.h5 --min-modules 15 \\
+            --fill-value data 0 --fill-value gain 1 /path/to/source/run
     """)
     ap = argparse.ArgumentParser(
         'extra-data-make-virtual-cxi', epilog=example,
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description='Write a virtual CXI file to access the detector data.'
     )
     ap.add_argument('run_dir', help="Path to an EuXFEL run directory")
     # Specifying a proposal directory & a run number is the older interface.
@@ -52,10 +53,10 @@ def main(argv=None):
         help="Include trains where at least N modules have data (default 9)"
     )
     ap.add_argument(
-        '-v', '--fill-value', action='append', nargs=2, metavar=('DS', 'V'),
+        '--fill-value', action='append', nargs=2, metavar=('DS', 'V'),
         help='define fill value (V) for individual dataset (DS). Datasets are'
-             ' "data", "gain" and "mask". (default nan for float arrays, 0 for'
-             ' int arrays)'
+             ' "data", "gain" and "mask". (defaults: data: nan; gain: 0; '
+             ' mask: 0xffffffff)'
     )
     args = ap.parse_args(argv)
     out_file = args.output
