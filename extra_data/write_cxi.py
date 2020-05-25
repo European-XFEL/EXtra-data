@@ -173,18 +173,22 @@ class VirtualCXIWriter:
         fillvalues: dict, optional
             keys are datasets names (one of: data, gain, mask) and associated
             fill value for missing data. defaults are:
-            - data: nan         (float32)
-            - gain: 0           (uint8)
-            - mask: 0xffffffff  (uint32)
+            - data: nan (float32) or 0 (uint16)
+            - gain: 0 (uint8)
+            - mask: 0xffffffff (uint32)
         """
-        _fillvalues = {'data': np.nan, 'gain': 0, 'mask': 0xffffffff}
-        if fillvalues:
-            _fillvalues.update(fillvalues)
         pulse_ids = self.collect_pulse_ids()
         experiment_ids = np.core.defchararray.add(np.core.defchararray.add(
             self.train_ids_perframe.astype(str), ':'), pulse_ids.astype(str))
 
         layouts = self.collect_data()
+
+        _fillvalues = {
+            # data can be uint16 (raw) or float32 (proc)
+            'data': np.nan if layouts['data'].dtype.kind == 'f' else 0,
+            'gain': 0, 'mask': 0xffffffff}
+        if fillvalues:
+            _fillvalues.update(fillvalues)
 
         log.info("Writing to %s", filename)
 
