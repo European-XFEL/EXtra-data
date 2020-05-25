@@ -48,7 +48,7 @@ def _iter_trains(data, merge_detector=False):
         for each detector tiles are merged in a single source. The new source
         name keep the original prefix, but replace the last 2 part with
         '/DET/APPEND'. Individual sources are removed from the train data
-    
+
     :yield: dict
         train data
     """

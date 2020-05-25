@@ -3,11 +3,10 @@
 import os
 
 import pytest
-import signal
 from subprocess import PIPE, Popen
 
 from extra_data import by_id, H5File, RunDirectory
-from extra_data.export import _iter_trains, ZMQStreamer, serve_files
+from extra_data.export import _iter_trains, ZMQStreamer
 from karabo_bridge import Client
 
 
@@ -19,7 +18,7 @@ def test_merge_detector(mock_fxe_raw_run, mock_fxe_control_data, mock_spb_proc_r
             shape = data['FXE_DET_LPD1M-1/DET/APPEND']['image.data'].shape
             assert shape == (128, 1, 16, 256, 256)
             break
-        
+
         for tid, data in _iter_trains(run):
             assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in data
             shape = data['FXE_DET_LPD1M-1/DET/0CH0:xtdf']['image.data'].shape
