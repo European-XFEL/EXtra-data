@@ -42,35 +42,33 @@ def test_merge_detector(mock_fxe_raw_run, mock_fxe_control_data, mock_spb_proc_r
             break
 
 
-# @pytest.mark.skip
 def test_serve_files(mock_fxe_raw_run):
-    args = ['karabo-bridge-serve-files', '-z', 'PUSH', str(mock_fxe_raw_run), str(44444)]
-    interface = ''
+    args = ['karabo-bridge-serve-files', '-z', 'PUSH', str(mock_fxe_raw_run),
+            str(44444)]
+    interface = None
 
     with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE,
                env=dict(os.environ, PYTHONUNBUFFERED='1')) as p:
         for line in p.stdout:
             line = line.decode('utf-8')
-            print('line:', line)
             if line.startswith('Streamer started on:'):
                 interface = line.partition(':')[2].strip()
                 break
 
-        print('Interface:', interface)
-        # with Client(interface, sock='PULL', timeout=5) as c:
-        with Client('tcp://127.0.0.1:44444', sock='PULL', timeout=5) as c:
+        print('interface:', interface)
+        assert interface is not None, p.stderr.read().decode()
+
+        with Client(interface, sock='PULL', timeout=5) as c:
             data, meta = c.next()
 
         tid = next(m['timestamp.tid'] for m in meta.values())
-        sources = RunDirectory(mock_fxe_raw_run).select_trains(by_id[[tid]]).all_sources
+        sources = RunDirectory(
+            mock_fxe_raw_run).select_trains(by_id[[tid]]).all_sources
         assert frozenset(data) == sources
 
-        p.send_signal(signal.SIGINT)
-        p.communicate(timeout=2)
-
-        # p.kill()
-        # rc = p.wait(timeout=2)
-        # assert rc == -9  # process terminated by kill signal
+        p.kill()
+        rc = p.wait(timeout=2)
+        assert rc == -9  # process terminated by kill signal
 
 
 def test_deprecated_server():
