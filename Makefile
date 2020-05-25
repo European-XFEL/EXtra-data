@@ -7,7 +7,7 @@ dev-install:
 	python3 -m pip install -U -e .[test]
 
 test:
-	python3 -m pytest -v --nbval-lax --cov=extra_data -xs
+	python3 -m pytest -v --nbval-lax --cov=extra_data
 
 docker-build:
 	@# build docker image
