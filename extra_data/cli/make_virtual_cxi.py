@@ -55,8 +55,8 @@ def main(argv=None):
     ap.add_argument(
         '--fill-value', action='append', nargs=2, metavar=('DS', 'V'),
         help='define fill value (V) for individual dataset (DS). Datasets are'
-             ' "data", "gain" and "mask". (defaults: data: nan (float32) or 0'
-             ' (uint16); gain: 0; mask: 0xffffffff)'
+             ' "data", "gain" and "mask". (defaults: data: nan (proc, float32)'
+             ' or 0 (raw, uint16); gain: 0; mask: 0xffffffff)'
     )
     args = ap.parse_args(argv)
     out_file = args.output
