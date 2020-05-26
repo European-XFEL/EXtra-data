@@ -472,6 +472,9 @@ class FramesFileWriter(FileWriter):
         We do this as a separate step so the contents of the file are defined
         together before the main data.
         """
+        if source not in self.data.instrument_sources:
+            return super().prepare_source(source)
+
         for key in sorted(self.data.keys_for_source(source)):
             path = 'INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
             if key.startswith('image.'):
