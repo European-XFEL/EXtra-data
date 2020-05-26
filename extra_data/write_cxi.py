@@ -193,8 +193,10 @@ class VirtualCXIWriter:
             _fillvalues.update(fillvalues)
         # enforce that fill values are compatible with array dtype
         _fillvalues['data'] = layouts['data'].dtype.type(_fillvalues['data'])
-        _fillvalues['gain'] = layouts['gain'].dtype.type(_fillvalues['gain'])
-        _fillvalues['mask'] = layouts['mask'].dtype.type(_fillvalues['mask'])
+        if 'gain' in layouts:
+            _fillvalues['gain'] = layouts['gain'].dtype.type(_fillvalues['gain'])
+        if 'mask' in layouts:
+            _fillvalues['mask'] = layouts['mask'].dtype.type(_fillvalues['mask'])
 
         log.info("Writing to %s", filename)
 
