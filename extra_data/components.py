@@ -523,15 +523,18 @@ class FramesFileWriter(FileWriter):
             frame_tids_piecewise.append(file_tids[ixs])
 
         frame_tids = np.concatenate(frame_tids_piecewise)
-        self._make_instrument_index(source, 'image', frame_tids)
+        self._make_index(source, 'image', frame_tids)
 
-    def copy_instrument_source(self, source):
+    def copy_source(self, source):
         """Copy all the relevant data for one detector source"""
+        if source not in self.data.instrument_sources:
+            return super().copy_source(source)
+
         all_keys = self.data.keys_for_source(source)
         img_keys = {k for k in all_keys if k.startswith('image.')}
 
         for key in sorted(all_keys - img_keys):
-            self.copy_instrument_dataset(source, key)
+            self.copy_dataset(source, key)
 
         self.copy_image_data(source, sorted(img_keys))
 

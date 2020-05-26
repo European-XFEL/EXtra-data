@@ -1325,10 +1325,7 @@ class DataCollection:
 
         vfw.write_train_ids()
 
-        if source in self.control_sources:
-            ds_path = vfw.add_control_dataset(source, key)
-        else:
-            ds_path = vfw.add_instrument_dataset(source, key)
+        ds_path = vfw.add_dataset(source, key)
 
         vfw.write_indexes()
         vfw.write_metadata()
