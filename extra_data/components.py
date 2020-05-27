@@ -641,7 +641,7 @@ class LPD1M(MPxDetectorBase):
     module_shape = (256, 256)
 
 
-def identify_mpx_detectors(data, detector_name=None, kind=None, single=False):
+def identify_multimod_detectors(data, detector_name=None, kind=None, single=False):
     """Identify multi-module detectors in the data
 
     Various detectors record data in a similar format, and we often want to

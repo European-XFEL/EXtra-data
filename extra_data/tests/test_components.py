@@ -6,7 +6,7 @@ import pytest
 from testpath import assert_isfile
 
 from extra_data.reader import RunDirectory, by_id, by_index
-from extra_data.components import AGIPD1M, LPD1M, identify_mpx_detectors
+from extra_data.components import AGIPD1M, LPD1M, identify_multimod_detectors
 
 
 def test_get_array(mock_fxe_raw_run):
@@ -259,27 +259,27 @@ def test_write_virtual_cxi_reduced_data(mock_reduced_spb_proc_run, tmpdir):
         assert ds.shape[1:] == (16, 512, 128)
 
 
-def test_identify_mpx_detectors(mock_fxe_raw_run):
+def test_identify_multimod_detectors(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
-    name, cls = identify_mpx_detectors(run, single=True)
+    name, cls = identify_multimod_detectors(run, single=True)
     assert name == 'FXE_DET_LPD1M-1'
     assert cls is LPD1M
 
-    dets = identify_mpx_detectors(run, single=False)
+    dets = identify_multimod_detectors(run, single=False)
     assert dets == {(name, cls)}
 
 
-def test_identify_mpx_detectors_multi(mock_fxe_raw_run, mock_spb_raw_run):
+def test_identify_multimod_detectors_multi(mock_fxe_raw_run, mock_spb_raw_run):
     fxe_run = RunDirectory(mock_fxe_raw_run)
     spb_run = RunDirectory(mock_spb_raw_run)
     combined = fxe_run.select('*LPD1M*').union(spb_run)
 
-    dets = identify_mpx_detectors(combined, single=False)
+    dets = identify_multimod_detectors(combined, single=False)
     assert dets == {('FXE_DET_LPD1M-1', LPD1M), ('SPB_DET_AGIPD1M-1', AGIPD1M)}
 
     with pytest.raises(ValueError):
-        identify_mpx_detectors(combined, single=True)
+        identify_multimod_detectors(combined, single=True)
 
-    name, cls = identify_mpx_detectors(combined, kind='AGIPD1M', single=True)
+    name, cls = identify_multimod_detectors(combined, kind='AGIPD1M', single=True)
     assert name == 'SPB_DET_AGIPD1M-1'
     assert cls is AGIPD1M
