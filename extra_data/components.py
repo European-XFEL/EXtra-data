@@ -410,7 +410,7 @@ class MPxDetectorBase:
         pulses = _check_pulse_selection(pulses)
         return MPxDetectorTrainIterator(self, pulses)
 
-    def write_virtual_cxi(self, filename):
+    def write_virtual_cxi(self, filename, fillvalues=None):
         """Write a virtual CXI file to access the detector data.
 
         The virtual datasets in the file provide a view of the detector
@@ -421,9 +421,13 @@ class MPxDetectorBase:
         ----------
         filename: str
           The file to be written. Will be overwritten if it already exists.
+        fillvalues: dict, optional
+            keys are datasets names (one of: data, gain, mask) and associated
+            fill value for missing data  (default is np.nan for float arrays and
+            zero for integer arrays)
         """
         from .write_cxi import VirtualCXIWriter
-        VirtualCXIWriter(self).write(filename)
+        VirtualCXIWriter(self).write(filename, fillvalues=fillvalues)
 
 
 class MPxDetectorTrainIterator:
