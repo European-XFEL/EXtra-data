@@ -643,3 +643,25 @@ class LPD1M(MPxDetectorBase):
     """
     _source_re = re.compile(r'(?P<detname>(.+)_LPD1M(.*))/DET/(\d+)CH')
     module_shape = (256, 256)
+
+
+
+class JUNGFRAU(MPxDetectorBase):
+    """An interface to JUNGFRAU data.
+
+    Parameters
+    ----------
+
+    data: DataCollection
+      A data collection, e.g. from RunDirectory.
+    modules: set of ints, optional
+      Detector module numbers to use. By default, all available modules
+      are used.
+    detector_name: str, optional
+      Name of a detector, e.g. 'SPB_IRDA_JNGFR'. This is only needed
+      if the dataset includes more than one JUNGFRAU detector.
+    min_modules: int
+      Include trains where at least n modules have data. Default is 1.
+    """
+    _source_re = re.compile(r'(?P<detname>(.+)_JNGFR(.*))/DET/MODULE_(\d+)')
+    module_shape = (1024, 512)
