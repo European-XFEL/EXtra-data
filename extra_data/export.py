@@ -137,6 +137,13 @@ def serve_files(path, port, source_glob='*', key_glob='*',
     for tid, data in _iter_trains(data, merge_detector=append_detector_modules):
         sender.send(data)
 
+    # The karabo-bridge code sets linger to 0 so that it doesn't get stuck if
+    # the client goes away. But this would also mean that we close the socket
+    # when the last messages have been queued but not sent. So if we've
+    # successfully queued all the messages, set linger -1 (i.e. infinite) to
+    # wait until ZMQ has finished transferring them before the socket is closed.
+    sender.server_socket.close(linger=-1)
+
 
 def main(argv=None):
     ap = ArgumentParser(prog="karabo-bridge-serve-files")
