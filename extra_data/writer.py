@@ -23,7 +23,7 @@ class FileWriter:
         """
         for key in sorted(self.data.keys_for_source(source)):
             path = f"{self._section(source)}/{source}/{key.replace('.', '/')}"
-            nentries = self.data.get_data_counts(source, key).sum()
+            nentries = self._guess_number_of_storing_entries(source, key)
             src_ds1 = self.data._source_index[source][0].file[path]
             self.file.create_dataset_like(
                 path, src_ds1, shape=(nentries,) + src_ds1.shape[1:],
@@ -33,6 +33,13 @@ class FileWriter:
 
         if source not in self.data.instrument_sources:
             self.data_sources.add(f"CONTROL/{source}")
+
+    def _guess_number_of_storing_entries(self, source, key):
+        """Provide the length for the initial dataset to create.
+
+        May be overridden in subclasses.
+        """
+        return self.data.get_data_counts(source, key).sum()
 
     def _section(self, source):
         if source in self.data.instrument_sources:

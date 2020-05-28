@@ -466,26 +466,13 @@ class FramesFileWriter(FileWriter):
         super().__init__(path, data)
         self.inc_tp_ids = inc_tp_ids
 
-    def prepare_source(self, source):
-        """Prepare all the datasets for one source.
 
-        We do this as a separate step so the contents of the file are defined
-        together before the main data.
-        """
-        if source not in self.data.instrument_sources:
-            return super().prepare_source(source)
-
-        for key in sorted(self.data.keys_for_source(source)):
-            path = 'INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
-            if key.startswith('image.'):
-                nentries = 0  # dataset grows later
-            else:
-                nentries = self.data.get_data_counts(source, key).sum()
-            src_ds1 = self.data._source_index[source][0].file[path]
-            self.file.create_dataset_like(
-                path, src_ds1, shape=(nentries,) + src_ds1.shape[1:],
-            )
-            self.data_sources.add(f"INSTRUMENT/{source}/{key.partition('.')[0]}")
+    def _guess_number_of_storing_entries(self, source, key):
+        if source in self.data.instrument_sources and key.startswith("image."):
+            # Start with an empty dataset, grow it as we add each file
+            return 0
+        else:
+            return super()._guess_number_of_storing_entries(source, key)
 
     def copy_image_data(self, source, keys):
         """Copy selected frames of the detector image data"""
