@@ -8,6 +8,7 @@ import xarray
 
 from .exceptions import SourceNameError
 from .reader import DataCollection, by_id, by_index
+from .writer import FileWriter
 
 log = logging.getLogger(__name__)
 
@@ -428,6 +429,105 @@ class MPxDetectorBase:
         """
         from .write_cxi import VirtualCXIWriter
         VirtualCXIWriter(self).write(filename, fillvalues=fillvalues)
+
+    def write_frames(self, filename, trains, pulses):
+        """Write selected detector frames to a new EuXFEL HDF5 file
+
+        trains and pulses should be 1D arrays of the same length, containing
+        train IDs and pulse IDs (corresponding to the pulse IDs recorded by
+        the detector). i.e. (trains[i], pulses[i]) identifies one frame.
+        """
+        if (trains.ndim != 1) or (pulses.ndim != 1):
+            raise ValueError("trains & pulses must be 1D arrays")
+        inc_tp_ids = zip_trains_pulses(trains, pulses)
+
+        writer = FramesFileWriter(filename, self.data, inc_tp_ids)
+        try:
+            writer.write()
+        finally:
+            writer.file.close()
+
+
+def zip_trains_pulses(trains, pulses):
+    """Combine two similar arrays of train & pulse IDs as one struct array
+    """
+    if trains.shape != pulses.shape:
+        raise ValueError(
+            f"Train & pulse arrays don't match ({trains.shape} != {pulses.shape})"
+        )
+
+    res = np.zeros(trains.shape, dtype=np.dtype([
+        ('trainId', np.uint64), ('pulseId', np.uint64)
+    ]))
+    res['trainId'] = trains
+    res['pulseId'] = pulses
+    return res
+
+
+class FramesFileWriter(FileWriter):
+    """Write selected detector frames in European XFEL HDF5 format"""
+    def __init__(self, path, data, inc_tp_ids):
+        super().__init__(path, data)
+        self.inc_tp_ids = inc_tp_ids
+
+
+    def _guess_number_of_storing_entries(self, source, key):
+        if source in self.data.instrument_sources and key.startswith("image."):
+            # Start with an empty dataset, grow it as we add each file
+            return 0
+        else:
+            return super()._guess_number_of_storing_entries(source, key)
+
+    def copy_image_data(self, source, keys):
+        """Copy selected frames of the detector image data"""
+        frame_tids_piecewise = []
+
+        src_files = sorted(
+            self.data._source_index[source],
+            key=lambda fa: fa.train_ids[0]
+        )
+
+        for fa in src_files:
+            _, counts = fa.get_index(source, 'image')
+            file_tids = np.repeat(fa.train_ids, counts.astype(np.intp))
+            file_pids = fa.file[f'/INSTRUMENT/{source}/image/pulseId'][:]
+            if file_pids.ndim == 2 and file_pids.shape[1] == 1:
+                # Raw data has a spurious extra dimension
+                file_pids = file_pids[:, 0]
+
+            # Data can have trailing 0s, seemingly
+            file_pids = file_pids[:len(file_tids)]
+            file_tp_ids = zip_trains_pulses(file_tids, file_pids)
+
+            # indexes of selected frames in datasets under .../image in this file
+            ixs = np.isin(file_tp_ids, self.inc_tp_ids).nonzero()[0]
+            nframes = ixs.shape[0]
+
+            for key in keys:
+                path = f"INSTRUMENT/{source}/{key.replace('.', '/')}"
+
+                dst_ds = self.file[path]
+                dst_cursor = dst_ds.shape[0]
+                dst_ds.resize(dst_cursor + nframes, axis=0)
+                dst_ds[dst_cursor: dst_cursor+nframes] = fa.file[path][ixs]
+
+            frame_tids_piecewise.append(file_tids[ixs])
+
+        frame_tids = np.concatenate(frame_tids_piecewise)
+        self._make_index(source, 'image', frame_tids)
+
+    def copy_source(self, source):
+        """Copy all the relevant data for one detector source"""
+        if source not in self.data.instrument_sources:
+            return super().copy_source(source)
+
+        all_keys = self.data.keys_for_source(source)
+        img_keys = {k for k in all_keys if k.startswith('image.')}
+
+        for key in sorted(all_keys - img_keys):
+            self.copy_dataset(source, key)
+
+        self.copy_image_data(source, sorted(img_keys))
 
 
 class MPxDetectorTrainIterator:

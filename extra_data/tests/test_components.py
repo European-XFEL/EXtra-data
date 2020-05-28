@@ -5,7 +5,7 @@ import os.path as osp
 import pytest
 from testpath import assert_isfile
 
-from extra_data.reader import RunDirectory, by_id, by_index
+from extra_data.reader import RunDirectory, H5File, by_id, by_index
 from extra_data.components import AGIPD1M, LPD1M
 
 
@@ -257,3 +257,23 @@ def test_write_virtual_cxi_reduced_data(mock_reduced_spb_proc_run, tmpdir):
         det_grp = f['entry_1/instrument_1/detector_1']
         ds = det_grp['data']
         assert ds.shape[1:] == (16, 512, 128)
+
+
+def test_write_selected_frames(mock_spb_raw_run, tmp_path):
+    run = RunDirectory(mock_spb_raw_run)
+    det = AGIPD1M(run)
+
+    trains = np.repeat(np.arange(10000, 10010), 3)
+    pulses = np.tile([0, 1, 5], 10)
+    test_file = str(tmp_path / 'sel_frames.h5')
+    det.write_frames(test_file, trains, pulses)
+    assert_isfile(test_file)
+
+    with H5File(test_file) as f:
+        np.testing.assert_array_equal(
+            f.get_array('SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.pulseId')[:, 0],
+            pulses
+        )
+        assert f.instrument_sources == {
+            f'SPB_DET_AGIPD1M-1/DET/{i}CH0:xtdf' for i in range(16)
+        }
