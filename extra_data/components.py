@@ -645,7 +645,6 @@ class LPD1M(MPxDetectorBase):
     module_shape = (256, 256)
 
 
-
 class JUNGFRAU(MPxDetectorBase):
     """An interface to JUNGFRAU data.
 
@@ -665,3 +664,21 @@ class JUNGFRAU(MPxDetectorBase):
     """
     _source_re = re.compile(r'(?P<detname>(.+)_JNGFR(.*))/DET/MODULE_(\d+)')
     module_shape = (1024, 512)
+
+    @staticmethod
+    def _identify_sources(data, detector_name=None, modules=None):
+        detector_re = re.compile(re.escape(detector_name) + r'/DET/MODULE_(\d+)')
+        source_to_modno = {}
+        for source in data.instrument_sources:
+            m = detector_re.match(source)
+            if m:
+                source_to_modno[source] = int(m.group(1))
+
+        if modules is not None:
+            source_to_modno = {s: n for (s, n) in source_to_modno.items()
+                               if n in modules}
+
+        if not source_to_modno:
+            raise SourceNameError(detector_re.pattern)
+
+        return source_to_modno
