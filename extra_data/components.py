@@ -90,6 +90,7 @@ class MPxDetectorBase:
                  *, min_modules=1):
         if detector_name is None:
             detector_name = self._find_detector_name(data)
+        print(' ### DET ', detector_name)
         if min_modules <= 0:
             raise ValueError("min_modules must be a positive integer, not "
                              f"{min_modules!r}")
@@ -99,11 +100,13 @@ class MPxDetectorBase:
         data = data.select([(src, '*') for src in source_to_modno])
         self.detector_name = detector_name
         self.source_to_modno = source_to_modno
+        print(' ### SRC', self.source_to_modno)
 
         # pandas' missing-data handling converts the data to floats if there
         # are any gaps - so fill them with 0s and convert back to uint64.
+        data_name = 'data.adc' if 'JNGFR' in self.detector_name else 'image.data'
         mod_data_counts = pd.DataFrame({
-            src: data.get_data_counts(src, 'image.data')
+            src: data.get_data_counts(src, data_name)
             for src in source_to_modno
         }).fillna(0).astype(np.uint64)
 

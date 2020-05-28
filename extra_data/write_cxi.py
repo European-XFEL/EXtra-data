@@ -29,6 +29,12 @@ class VirtualCXIWriter:
 
         self.modulenos = sorted(detdata.modno_to_source)
 
+        # the following line could be tricky, but there is no pulseId in Jungfrau data
+        self.pulse_id_label = 'data.memoryCell' if 'JNGFR' in detdata.detector_name else 'image.pulseId'
+        self.group_label = 'data' if 'JNGFR' in detdata.detector_name else 'image'
+        self.image_label = 'adc' if 'JNGFR' in detdata.detector_name else 'data'
+        self.cell_id_label = 'memoryCell' if 'JNGFR' in detdata.detector_name else 'cellId'
+
         frame_counts = detdata.frame_counts
         self.nframes = frame_counts.sum()
         log.info("Up to %d frames per train, %d frames in total",
@@ -56,7 +62,7 @@ class VirtualCXIWriter:
                             dtype=np.uint64)
 
         for source, modno in self.detdata.source_to_modno.items():
-            for chunk in self.data._find_data_chunks(source, 'image.pulseId'):
+            for chunk in self.data._find_data_chunks(source, self.pulse_id_label):
                 # In some cases, there's an extra dimension of length 1
                 if chunk.dataset.ndim > 1:
                     chunk_data = chunk.dataset[:, 0]
@@ -119,7 +125,7 @@ class VirtualCXIWriter:
     def collect_data(self):
         src = next(iter(self.detdata.source_to_modno))
         h5file = self.data._source_index[src][0].file
-        image_grp = h5file['INSTRUMENT'][src]['image']
+        image_grp = h5file['INSTRUMENT'][src][self.group_label]
 
         VLayout = h5py.VirtualLayout
 
@@ -129,7 +135,7 @@ class VirtualCXIWriter:
             log.info("Virtual data shape: %r", shape)
 
             layouts = {
-                'data': VLayout(shape, dtype=image_grp['data'].dtype),
+                self.image_label: VLayout(shape, dtype=image_grp[self.image_label].dtype),
                 'gain': VLayout(shape, dtype=image_grp['gain'].dtype),
             }
 
@@ -145,14 +151,15 @@ class VirtualCXIWriter:
                 'data': VLayout(shape, dtype=image_grp['data'].dtype),
             }
 
-        layouts['cellId'] = VLayout((self.nframes, self.nmodules),
-                                    dtype=image_grp['cellId'].dtype)
+        layouts[self.cell_id_label] = VLayout((self.nframes, self.nmodules),
+                                              dtype=image_grp[self.cell_id_label].dtype)
 
         for name, layout in layouts.items():
-            key = 'image.{}'.format(name)
+            key = '{}.{}'.format(self.group_label, name)
             have_data = np.zeros((self.nframes, self.nmodules), dtype=bool)
 
             for source, modno in self.detdata.source_to_modno.items():
+                print(' ### Source: {}, ModNo: {}, Key: {}'.format(source, modno, key))
                 for chunk in self.data._find_data_chunks(source, key):
                     vsrc = h5py.VirtualSource(chunk.dataset)
                     self._map_chunk(chunk, vsrc, layout, modno, have_data)
@@ -185,14 +192,14 @@ class VirtualCXIWriter:
 
         _fillvalues = {
             # data can be uint16 (raw) or float32 (proc)
-            'data': np.nan if layouts['data'].dtype.kind == 'f' else 0,
+            self.image_label: np.nan if layouts[self.image_label].dtype.kind == 'f' else 0,
             'gain': 0,
             'mask': 0xffffffff
         }
         if fillvalues:
             _fillvalues.update(fillvalues)
         # enforce that fill values are compatible with array dtype
-        _fillvalues['data'] = layouts['data'].dtype.type(_fillvalues['data'])
+        _fillvalues[self.image_label] = layouts[self.image_label].dtype.type(_fillvalues[self.image_label])
         if 'gain' in layouts:
             _fillvalues['gain'] = layouts['gain'].dtype.type(_fillvalues['gain'])
         if 'mask' in layouts:
@@ -212,11 +219,11 @@ class VirtualCXIWriter:
             f.create_dataset('entry_1/pulseId', data=pulse_ids)
             f.create_dataset('entry_1/trainId', data=self.train_ids_perframe)
             cellids = f.create_virtual_dataset('entry_1/cellId',
-                                               layouts['cellId'])
+                                               layouts[self.cell_id_label])
             cellids.attrs['axes'] = 'experiment_identifier:module_identifier'
 
             dgrp = f.create_group('entry_1/instrument_1/detector_1')
-            if len(layouts['data'].shape) == 4:
+            if len(layouts[self.image_label].shape) == 4:
                 axes_s = 'experiment_identifier:module_identifier:y:x'
             else:
                 # 5D dataset, with extra axis for
@@ -228,7 +235,7 @@ class VirtualCXIWriter:
                 dgrp['data_gain'] = h5py.SoftLink('/entry_1/data_gain')
 
             data = dgrp.create_virtual_dataset(
-                'data', layouts['data'], fillvalue=_fillvalues['data']
+                'data', layouts[self.image_label], fillvalue=_fillvalues[self.image_label]
             )
             data.attrs['axes'] = axes_s
 
