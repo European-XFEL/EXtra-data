@@ -301,3 +301,32 @@ class FileAccess:
             self._known_keys[source].add(key)
             return True
         return False
+
+    def dset_proxy(self, ds_path: str):
+        return DatasetProxy(self, ds_path)
+
+
+class DatasetProxy:
+    """A picklable reference to an HDF5 dataset, suitable for dask.array
+
+    Dask tries to do this automatically for h5py Dataset objects, but with
+    some limitations:
+
+    - It only works with Dask distributed, not Dask's local schedulers.
+    - Dask storing references to h5py Datasets keeps the files open, breaking
+      our attempts to manage the number of open files.
+    """
+    def __init__(self, file_acc: FileAccess, ds_path: str):
+        # We could just store the file name and use h5py on demand, but storing
+        # our FileAccess object lets it use our cache of open files.
+        self.file_acc = file_acc
+        self.ds_path = ds_path
+        ds = file_acc.file[ds_path]
+
+        # dask.array expects these three array-like attributes:
+        self.shape = ds.shape
+        self.ndim = ds.ndim
+        self.dtype = ds.dtype
+
+    def __getitem__(self, item):
+        return self.file_acc.file[self.ds_path][item]
