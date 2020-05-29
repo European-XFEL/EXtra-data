@@ -674,7 +674,9 @@ class DataCollection:
                 chunk_shape = (chunk_dim0,) + chunk.dataset.shape[1:]
 
             chunks_darrs.append(
-                da.from_array(chunk.dataset, chunks=chunk_shape)[chunk.slice]
+                da.from_array(
+                    chunk.file.dset_proxy(chunk.dataset_path), chunks=chunk_shape
+                )[chunk.slice]
             )
             chunks_trainids.append(
                 self._expand_trainids(chunk.counts, chunk.train_ids)
