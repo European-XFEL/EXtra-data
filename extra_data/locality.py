@@ -108,12 +108,12 @@ def check_dir(basedir):
     
     if fp['UNAVAILABLE']:
         print("Unavailable:")
-        for file in sorted(fbl['UNAVAILABLE']):
+        for file in sorted(fp['UNAVAILABLE']):
             print(f"  {file}")
     
     unknown_locality = set(fp) - set(DC_LOC_RESP)
     if unknown_locality:
-        print("Unknown locality:", unknown_keys)
+        print("Unknown locality:", unknown_locality)
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
