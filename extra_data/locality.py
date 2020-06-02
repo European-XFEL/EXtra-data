@@ -82,11 +82,14 @@ def lc_any(files):
     return files
 
 def lc_ondisk(files):
-    """ Returns files on disk """
+    """Returns files on disk, excluding any which would be read from tape"""
     return lc_match(files, ONDISK)
 
 def lc_avail(files):
-    """ Returns files which are available """
+    """Returns files which are available on disk or tape
+
+    Excludes files which dCache reports are unavailable.
+    """
     return lc_match(files, ONTAPE | ONDISK)
 
 def check_dir(basedir):

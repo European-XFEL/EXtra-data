@@ -1306,6 +1306,9 @@ def RunDirectory(path, include='*', file_filter=locality.lc_any):
         Path to the run directory containing HDF5 files.
     include: str
         Wildcard string to filter data files.
+    file_filter: callable
+        Function to subset the list of filenames to open.
+        Meant to be used with functions in the extra_data.locality module.
     """
     files = [f for f in os.listdir(path) if f.endswith('.h5')]
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
@@ -1348,6 +1351,9 @@ def open_run(proposal, run, data='raw', include='*', file_filter=locality.lc_any
         The default is 'raw'.
     include: str
         Wildcard string to filter data files.
+    file_filter: callable
+        Function to subset the list of filenames to open.
+        Meant to be used with functions in the extra_data.locality module.
     """
     if isinstance(proposal, str):
         if ('/' not in proposal) and not proposal.startswith('p'):
