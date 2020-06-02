@@ -12,211 +12,91 @@ program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 
 from argparse import ArgumentParser
 import os.path as osp
-from queue import Queue
-from threading import Event, Thread
-from time import time
+from warnings import warn
 
-import msgpack
-import numpy as np
-import zmq
+from karabo_bridge import ServerInThread
+from karabo_bridge.server import Sender
 
+from .components import MPxDetectorBase
+from .exceptions import SourceNameError
 from .reader import RunDirectory, H5File
+from .stacking import stack_detector_data
+from .utils import find_infiniband_ip
+
 
 __all__ = ['ZMQStreamer', 'serve_files']
 
 
-class REPInterface(Thread):
-    def __init__(self, context, port, buffer):
-        super(REPInterface, self).__init__()
-        self.context = context
-        self.port = port
-        self.buffer = buffer
-        self._stop_event = Event()
+class ZMQStreamer(ServerInThread):
+    def __init__(self, port, sock='REP', maxlen=10, protocol_version='2.2',
+                 dummy_timestamps=False):
+        warn("Please use :ref:karabo_bridge.ServerInThread instead",
+             DeprecationWarning, stacklevel=2)
 
-    def run(self):
-        interface = self.context.socket(zmq.REP)
-        try:
-            interface.bind('tcp://*:{}'.format(self.port))
-
-            while not self.stopped():
-                req = interface.recv()
-                if req != b'next':
-                    raise RuntimeError('Unknown request:', req)
-                interface.send_multipart(self.buffer.get())
-        finally:
-            interface.setsockopt(zmq.LINGER, 0)
-            interface.close()
-
-    def stop(self):
-        self._stop_event.set()
-
-    def stopped(self):
-        return self._stop_event.is_set()
+        endpoint = f'tcp://*:{port}'
+        super().__init__(endpoint, sock=sock, maxlen=maxlen,
+                         protocol_version=protocol_version,
+                         dummy_timestamps=dummy_timestamps)
 
 
-class ZMQStreamer:
-    """ZeroMQ inteface sending data over a TCP socket.
+def _iter_trains(data, merge_detector=False):
+    """Iterate over trains in data and merge detector tiles in a single source
 
-    ::
+    :data: DataCollection
+    :merge_detector: bool
+        if True and data contains detector data (e.g. AGIPD) idividual sources
+        for each detector tiles are merged in a single source. The new source
+        name keep the original prefix, but replace the last 2 part with
+        '/DET/APPEND'. Individual sources are removed from the train data
 
-        # Server:
-        serve = ZMQStreamer(1234)
-        serve.start()
-
-        for tid, data in run.trains():
-            result = important_processing(data)
-            serve.feed(result)
-
-        # Client:
-        from karabo_bridge import Client
-        client = Client('tcp://server.hostname:1234')
-        data = client.next()
-
-    Parameters
-    ----------
-    port: int
-        Local TCP port to bind socket to
-    maxlen: int, optional
-        How many trains to cache before sending (default: 10)
-    protocol_version: ('1.0' | '2.1')
-        Which version of the bridge protocol to use. Defaults to the latest
-        version implemented.
-    dummy_timestamps: bool
-        Some tools (such as OnDA) expect the timestamp information to be in the
-        messages. We can't give accurate timestamps where these are not in the
-        file, so this option generates fake timestamps from the time the data
-        is fed in.
+    :yield: dict
+        train data
     """
-    def __init__(self, port, maxlen=10, protocol_version='2.2', dummy_timestamps=False):
-        self._context = zmq.Context()
-        self.port = port
-        if protocol_version not in {'1.0', '2.2'}:
-            raise ValueError("Unknown protocol version %r" % protocol_version)
-        elif protocol_version == '1.0':
-            import msgpack_numpy
+    det, source_name = None, ''
+    if merge_detector:
+        for detector in MPxDetectorBase.__subclasses__():
+            try:
+                det = detector(data)
+                source_name = f'{det.detector_name}/DET/APPEND'
+            except SourceNameError:
+                continue
+            else:
+                break
 
-            self.pack = msgpack.Packer(
-                use_bin_type=True, default=msgpack_numpy.encode
-            ).pack
-        else:
-            self.pack = msgpack.Packer(use_bin_type=True).pack
-        self.protocol_version = protocol_version
-        self.dummy_timestamps = dummy_timestamps
-        self._buffer = Queue(maxsize=maxlen)
-        self._interface = None
+    for tid, train_data in data.trains():
+        if not train_data:
+            continue
 
-    def start(self):
-        """Start a zmq.REP socket.
-        """
-        self._interface = REPInterface(self._context, self.port, self._buffer)
-        self._interface.daemon = True
-        self._interface.start()
-
-    def stop(self):
-        if self._interface:
-            self._interface.stop()
-            self._interface.join()
-            self._interface = None
-
-    def _serialize(self, data, metadata=None):
-        if not metadata:
-            metadata = {src: v.get('metadata', {}) for src, v in data.items()}
-
-        if self.dummy_timestamps:
-            ts = time()
-            sec, frac = str(ts).split('.')
-            frac = frac.ljust(18, '0')
-            update_dummy = {
-                'timestamp': ts,
-                'timestamp.sec': sec,
-                'timestamp.frac': frac,
+        if det is not None:
+            det_data = {
+                k: v for k, v in train_data.items()
+                if k in det.data.detector_sources
             }
-            for src in data.keys():
-                if 'timestamp' not in metadata[src]:
-                    metadata[src].update(update_dummy)
 
-        if self.protocol_version == '1.0':
-            return [self.pack(data)]
+            # get one of the module to reference other datasets
+            train_data[source_name] = mod_data = next(iter(det_data.values()))
 
-        msg = []
-        for src, props in sorted(data.items()):
-            main_data = {}
-            arrays = []
-            for key, value in props.items():
-                if isinstance(value, np.ndarray):
-                    arrays.append((key, value))
-                elif isinstance(value, np.number):
-                    # Convert numpy type to native Python type
-                    main_data[key] = value.item()
-                else:
-                    main_data[key] = value
+            stacked = stack_detector_data(det_data, 'image.data')
+            mod_data['image.data'] = stacked
+            mod_data['metadata']['source'] = source_name
 
-            msg.extend([
-                self.pack({
-                    'source': src, 'content': 'msgpack',
-                    'metadata': metadata[src]
-                }),
-                self.pack(main_data)
-            ])
+            if 'image.gain' in mod_data:
+                stacked = stack_detector_data(det_data, 'image.gain')
+                mod_data['image.gain'] = stacked
+            if 'image.mask' in mod_data:
+                stacked = stack_detector_data(det_data, 'image.mask')
+                mod_data['image.mask'] = stacked
 
-            for key, array in arrays:
-                if not array.flags['C_CONTIGUOUS']:
-                    array = np.ascontiguousarray(array)
-                msg.extend([
-                    self.pack({
-                        'source': src, 'content': 'array', 'path': key,
-                        'dtype': str(array.dtype), 'shape': array.shape
-                    }),
-                    array.data,
-                ])
+            # remove individual module sources
+            for src in det.data.detector_sources:
+                del train_data[src]
 
-        return msg
-
-    def feed(self, data, metadata=None):
-        """Push data to the sending queue.
-
-        This blocks if the queue already has *maxlen* items waiting to be sent.
-
-        Parameters
-        ----------
-        data : dict
-            Contains train data. The dictionary has to follow the karabo_bridge
-            protocol structure:
-
-            - keys are source names
-            - values are dict, where the keys are the parameter names and
-              values must be python built-in types or numpy.ndarray.
-
-        metadata : dict, optional
-            Contains train metadata. The dictionary has to follow the
-            karabo_bridge protocol structure:
-
-            - keys are (str) source names
-            - values (dict) should contain the following items:
-
-              - 'timestamp' Unix time with subsecond resolution
-              - 'timestamp.sec' Unix time with second resolution
-              - 'timestamp.frac' fractional part with attosecond resolution
-              - 'timestamp.tid' is European XFEL train unique ID
-
-            ::
-
-              {
-                  'source': 'sourceName'  # str
-                  'timestamp': 1234.567890  # float
-                  'timestamp.sec': '1234'  # str
-                  'timestamp.frac': '567890000000000000'  # str
-                  'timestamp.tid': 1234567890  # int
-              }
-
-            If the metadata dict is not provided it will be extracted from
-            'data' or an empty dict if 'metadata' key is missing from a data
-            source.
-        """
-        self._buffer.put(self._serialize(data, metadata))
+        yield tid, train_data
 
 
-def serve_files(path, port, source_glob='*', key_glob='*', **kwargs):
+def serve_files(path, port, source_glob='*', key_glob='*',
+                append_detector_modules=False, dummy_timestamps=False,
+                use_infiniband=False, sock='REP'):
     """Stream data from files through a TCP socket.
 
     Parameters
@@ -230,6 +110,19 @@ def serve_files(path, port, source_glob='*', key_glob='*', **kwargs):
         Streaming data selectively is more efficient than streaming everything.
     key_glob: str
         Only stream keys matching this glob pattern in the selected sources.
+    append_detector_modules: bool
+        Combine multi-module detector data in a single data source (sources for
+        individual modules are removed). The last section of the source name is
+        replaces with 'APPEND', example:
+            'SPB_DET_AGIPD1M-1/DET/#CH0:xtdf' -> 'SPB_DET_AGIPD1M-1/DET/APPEND'
+
+        Supported detectors: AGIPD, DSSC, LPD
+    dummy_timestamps: bool
+        Whether to add mock timestamps if the metadata lacks them.
+    use_infiniband: bool
+        Use infiniband interface if available
+    sock: str
+        socket type - supported: REP, PUB, PUSH (default REP).
     """
     if osp.isdir(path):
         data = RunDirectory(path)
@@ -238,12 +131,18 @@ def serve_files(path, port, source_glob='*', key_glob='*', **kwargs):
 
     data = data.select(source_glob, key_glob)
 
-    streamer = ZMQStreamer(port, **kwargs)
-    streamer.start()
-    for tid, train_data in data.trains():
-        if train_data:
-            streamer.feed(train_data)
-    streamer.stop()
+    endpoint = f'tcp://{find_infiniband_ip() if use_infiniband else "*"}:{port}'
+    sender = Sender(endpoint, sock=sock, dummy_timestamps=dummy_timestamps)
+    print(f'Streamer started on: {sender.endpoint}')
+    for tid, data in _iter_trains(data, merge_detector=append_detector_modules):
+        sender.send(data)
+
+    # The karabo-bridge code sets linger to 0 so that it doesn't get stuck if
+    # the client goes away. But this would also mean that we close the socket
+    # when the last messages have been queued but not sent. So if we've
+    # successfully queued all the messages, set linger -1 (i.e. infinite) to
+    # wait until ZMQ has finished transferring them before the socket is closed.
+    sender.server_socket.close(linger=-1)
 
 
 def main(argv=None):
@@ -258,6 +157,33 @@ def main(argv=None):
         "--key", help="Stream only matching keys ('*' is a wildcard)",
         default='*',
     )
+    ap.add_argument(
+        "--append-detector-modules", help="combine multiple module sources"
+        " into one (will only work for AGIPD data currently).",
+        action='store_true'
+    )
+    ap.add_argument(
+        "--dummy-timestamps", help="create dummy timestamps if the meta-data"
+        " lacks proper timestamps",
+        action='store_true'
+    )
+    ap.add_argument(
+        "--use-infiniband", help="Use infiniband interface if available",
+        action='store_true'
+    )
+    ap.add_argument(
+        "-z", "--socket-type", help="ZeroMQ socket type",
+        choices=['PUB', 'PUSH', 'REP'], default='REP'
+    )
     args = ap.parse_args(argv)
 
-    serve_files(args.path, args.port)
+    try:
+        serve_files(
+            args.path, args.port, source_glob=args.source, key_glob=args.key,
+            append_detector_modules=args.append_detector_modules,
+            dummy_timestamps=args.dummy_timestamps,
+            use_infiniband=args.use_infiniband, sock=args.socket_type
+        )
+    except KeyboardInterrupt:
+        pass
+    print('\nStopped.')

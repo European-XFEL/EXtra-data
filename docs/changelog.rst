@@ -1,6 +1,19 @@
 Release Notes
 =============
 
+1.1
+---
+
+- Opening and validating run directories now handles files in parallel, which
+  should make it substantially faster (:ghpull:`30`).
+- Various data access operations no longer require finding all the keys for
+  a given data source, which saves time in certain situations (:ghpull:`24`).
+- :func:`~.open_run` now accepts numpy integers for proposal and run numbers,
+  as well as standard Python integers (:ghpull:`34`).
+- :ref:`Run map cache files <run-map-caching>` can be saved on the EuXFEL online
+  cluster, which speeds up reopening runs there (:ghpull:`36`).
+- Added tests with simulated bad files for the validation code (:ghpull:`23`).
+
 1.0
 ---
 

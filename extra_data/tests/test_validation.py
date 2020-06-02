@@ -139,3 +139,7 @@ def test_gaps(agipd_file):
     assert problem['msg'] == 'Gaps (1) in index, e.g. at 1 (0 + 64 < 128)'
     assert problem['dataset'] == 'INDEX/SPB_DET_AGIPD1M-1/DET/0CH0:xtdf/image'
     assert 'RAW-R0239-AGIPD00-S00000.h5' in problem['file']
+
+
+def test_file_without_data(mock_empty_file):
+    FileValidator(FileAccess(mock_empty_file)).validate()

@@ -1,5 +1,10 @@
+from datetime import datetime, timedelta
+import os.path as osp
+import re
+
 import h5py
 import numpy as np
+
 
 class DeviceBase:
     # Override these in subclasses
@@ -59,7 +64,9 @@ class DeviceBase:
         if self.nsamples is None:
             self.nsamples = self.ntrains
 
-        if self.nsamples == 0:
+        if self.ntrains == 0:
+            first, count, trainids = [], [], []
+        elif self.nsamples == 0:
             first = count = 0
             trainids = []
         elif self.nsamples < self.ntrains:
@@ -99,7 +106,8 @@ class DeviceBase:
             # INSTRUMENT
             tid = f.create_dataset('INSTRUMENT/%s/trainId' % dev_chan,
                                    (Npad,), 'u8', maxshape=(None,))
-            tid[:self.nsamples] = trainids
+            if len(trainids) > 0:
+                tid[:self.nsamples] = trainids
             for (topic, datatype, dims) in self.instrument_keys:
                 f.create_dataset('INSTRUMENT/%s/%s' % (dev_chan, topic),
                                  (Npad,) + dims, datatype, maxshape=((None,) + dims))
@@ -139,9 +147,33 @@ def write_metadata(h5file, data_sources, chunksize=16, format_version='0.5'):
 
     if format_version != '0.5':
         h5file['METADATA/dataFormatVersion'] = [format_version.encode('ascii')]
+        now = datetime.utcnow().replace(microsecond=0)
+        updated_time = now + timedelta(minutes=5)
+        h5file['METADATA/creationDate'] = [
+            now.strftime('%Y%m%dT%H%M%SZ').encode('ascii')
+        ]
+        h5file['METADATA/daqLibrary'] = [b'1.9.0']
+        h5file['METADATA/karaboFramework'] = [b'2.7.0']
+        h5file.create_dataset('METADATA/proposalNumber', dtype=np.uint32,
+                              data=[700000])
+        h5file.create_dataset('METADATA/runNumber', dtype=np.uint32, data=[1])
+        h5file['METADATA/runType'] = [b'Test DAQ']
+        h5file['METADATA/sample'] = [b'No Sample']
+        # get sequence number
+        fname_pattern = r'^(RAW|CORR)\-R\d+\-.*\-S(\d+).h5$'
+        match = re.match(fname_pattern, osp.basename(h5file.filename))
+        sequence = int(match[2]) if match is not None else 0
+        h5file.create_dataset('METADATA/sequenceNumber', dtype=np.uint32,
+                              data=[sequence])
+        h5file['METADATA/updateDate'] = [
+            updated_time.strftime('%Y%m%dT%H%M%SZ').encode('ascii')
+        ]
 
-def write_train_ids(f, path, N, first=10000, chunksize=16):
-    """Make a dataset of fake train IDs at the given path
+
+def write_base_index(f, N, first=10000, chunksize=16, format_version='0.5'):
+    """Make base datasets in the files index
+
+    3 dataset are created: flag, timestamp, trainId
 
     Real train IDs are much larger (~10^9), so hopefully these won't be mistaken
     for real ones.
@@ -150,5 +182,18 @@ def write_train_ids(f, path, N, first=10000, chunksize=16):
         Npad = N + chunksize - (N % chunksize)
     else:
         Npad = N
-    ds = f.create_dataset(path, (Npad,), 'u8', maxshape=(None,))
+
+    if format_version != '0.5':
+        # flag
+        ds = f.create_dataset('INDEX/flag', (Npad,), 'i4', maxshape=(None,))
+        ds[:N] = np.ones(N)
+
+        # timestamps
+        ds = f.create_dataset('INDEX/timestamp', (Npad,), 'u8', maxshape=(None,))
+        # timestamps are stored as a single uint64 with nanoseconds resolution
+        ts = datetime.utcnow().timestamp() * 10**9
+        ds[:N] = [ts + i * 10**8 for i in range(N)]
+
+    # trainIds
+    ds = f.create_dataset('INDEX/trainId', (Npad,), 'u8', maxshape=(None,))
     ds[:N] = np.arange(first, first + N)

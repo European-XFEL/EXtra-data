@@ -1,9 +1,11 @@
 from argparse import ArgumentParser
+from multiprocessing import Pool
 from functools import partial
 import numpy as np
 import os
 import os.path as osp
 from shutil import get_terminal_size
+from signal import signal, SIGINT, SIG_IGN
 import sys
 
 from .reader import H5File, FileAccess
@@ -134,7 +136,8 @@ class FileValidator:
 
 
 def check_index_contiguous(firsts, counts, record):
-    probs = []
+    if firsts.size == 0:
+        return  # no data in this dataset
 
     if firsts[0] != 0:
         record("Index doesn't start at 0")
@@ -155,7 +158,30 @@ def check_index_contiguous(firsts, counts, record):
             overlap_ixs.size, pos, firsts[pos], counts[pos], firsts[pos + 1]
         ))
 
-    return probs
+
+def progress_bar(done, total, suffix=' '):
+    line = f'Progress: {done}/{total}{suffix}[{{}}]'
+    length = min(get_terminal_size().columns - len(line), 50)
+    filled = int(length * done // total)
+    bar = '#' * filled + ' ' * (length - filled)
+    return line.format(bar)
+
+
+def _check_file(args):
+    runpath, filename = args
+    problems = []
+    try:
+        fa = FileAccess(osp.join(runpath, filename))
+    except Exception as e:
+        problems.append(
+            dict(msg="Could not open file", file=path, error=e)
+        )
+        return filename, None, problems
+    else:
+        fv = FileValidator(fa)
+        problems.extend(fv.run_checks())
+        fa.close()
+    return filename, fa, problems
 
 
 class RunValidator:
@@ -177,39 +203,43 @@ class RunValidator:
         self.check_files_map()
         return self.problems
 
-    def progress(self, line):
-        """Show a line of progress information"""
+    def progress(self, done, total, nproblems, badfiles):
+        """Show progress information"""
         if not self.term_progress:
             return
 
+        lines = progress_bar(done, total)
+        lines += f'\n{nproblems} problems'
+        if badfiles:
+            lines += f' in {len(badfiles)} files (last: {badfiles[-1]})'
         if sys.stderr.isatty():
-            termsize = get_terminal_size()
-            # Overwrite the previous line with spaces first
-            print(' ' * termsize.columns, end='\r', file=sys.stderr)
-            print(line, end='\r', file=sys.stderr)
+            # "\x1b[2K": delete whole line, "\x1b[1A": move up cursor
+            print('\x1b[2K\x1b[1A\x1b[2K', end='\r',file=sys.stderr)
+            print(lines, end='', file=sys.stderr)
         else:
-            print(line, file=sys.stderr)
+            print(lines, file=sys.stderr)
 
     def check_files(self):
         self.file_accesses = []
 
-        for i, filename in enumerate(self.filenames):
-            self.progress(f"{i}/{len(self.filenames)} files "
-                          f"({len(self.problems)} problems): {filename}")
-            path = osp.join(self.run_dir, filename)
-            try:
-                fa = FileAccess(path)
-            except Exception as e:
-                self.problems.append(
-                    dict(msg="Could not open file", file=path, error=e)
-                )
-            else:
-                self.file_accesses.append(fa)
-                fv = FileValidator(fa)
-                self.problems.extend(fv.run_checks())
-                fa.close()
+        def initializer():
+            # prevent child processes from receiving KeyboardInterrupt
+            signal(SIGINT, SIG_IGN)
 
-        self.progress("{0}/{0} files".format(len(self.filenames)))
+        filepaths = [(self.run_dir, fn) for fn in sorted(self.filenames)]
+        nfiles = len(self.filenames)
+        badfiles = []
+        self.progress(0, nfiles, 0, badfiles)
+
+        with Pool(initializer=initializer) as pool:
+            iterator = pool.imap_unordered(_check_file, filepaths)
+            for done, (fname, fa, problems) in enumerate(iterator, start=1):
+                if problems:
+                    self.problems.extend(problems)
+                    badfiles.append(fname)
+                if fa is not None:
+                    self.file_accesses.append(fa)
+                self.progress(done, nfiles, len(self.problems), badfiles)
 
         if not self.file_accesses:
             self.problems.append(
@@ -249,6 +279,7 @@ def main(argv=None):
     path = args.path
     if os.path.isdir(path):
         print("Checking run directory:", path)
+        print()
         validator = RunValidator(path, term_progress=True)
     else:
         print("Checking file:", path)

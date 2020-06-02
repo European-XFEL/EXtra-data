@@ -11,15 +11,20 @@ program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 """
 
 from collections import defaultdict
+from collections.abc import Iterable
 import datetime
 import fnmatch
 import h5py
+from itertools import groupby
 import logging
+from multiprocessing import Pool
 import numpy as np
 from operator import index
 import os
 import os.path as osp
+import psutil
 import re
+import signal
 import sys
 import tempfile
 import time
@@ -38,6 +43,7 @@ from .read_machinery import (
 )
 from .run_files_map import RunFilesMap
 from . import locality
+from .file_access import FileAccess
 
 __all__ = [
     'H5File',
@@ -64,190 +70,6 @@ class by_id(_SliceConstructable):
 
 class by_index(_SliceConstructable):
     pass
-
-
-class FileAccess:
-    """Accesses a single Karabo HDF5 file
-
-    Parameters
-    ----------
-    file: h5py.File
-        Open h5py file object
-    """
-    _file = None
-    _format_version = None
-    metadata_fstat = None
-
-    def __init__(self, filename, _cache_info=None):
-        self.filename = filename
-
-        if _cache_info:
-            self.train_ids = _cache_info['train_ids']
-            self.control_sources = _cache_info['control_sources']
-            self.instrument_sources = _cache_info['instrument_sources']
-        else:
-            tid_data = self.file['INDEX/trainId'][:]
-            self.train_ids = tid_data[tid_data != 0]
-
-            self.control_sources, self.instrument_sources = self._read_data_sources()
-
-            # Store the stat of the file as it was when we read the metadata.
-            # This is used by the run files map.
-            self.metadata_fstat = os.stat(self.file.id.get_vfd_handle())
-
-            # Close the file again - crude way to avoid hitting the limit of
-            # open files, which is only 1024 by default.
-            self.close()
-
-        # {(file, source, group): (firsts, counts)}
-        self._index_cache = {}
-        # {source: set(keys)}
-        self._keys_cache = {}
-        # {source: set(keys)} - including incomplete sets
-        self._known_keys = defaultdict(set)
-
-    @property
-    def file(self):
-        if self._file is None:
-            self._file = h5py.File(self.filename, 'r')
-        return self._file
-
-    def close(self):
-        if self._file:
-            self._file.close()
-            self._file = None
-
-    @property
-    def format_version(self):
-        if self._format_version is None:
-            version_ds = self.file.get('METADATA/dataFormatVersion')
-            if version_ds is not None:
-                self._format_version = version_ds[0].decode('ascii')
-            else:
-                # The first version of the file format had no version number.
-                # Numbering started at 1.0, so we call the first version 0.5.
-                self._format_version = '0.5'
-
-        return self._format_version
-
-    def _read_data_sources(self):
-        control_sources, instrument_sources = set(), set()
-
-        # The list of data sources moved in file format 1.0
-        if self.format_version == '0.5':
-            data_sources_path = 'METADATA/dataSourceId'
-        else:
-            data_sources_path = 'METADATA/dataSources/dataSourceId'
-
-        for source in self.file[data_sources_path][:]:
-            if not source:
-                continue
-            source = source.decode()
-            category, _, h5_source = source.partition('/')
-            if category == 'INSTRUMENT':
-                device, _, chan_grp = h5_source.partition(':')
-                chan, _, group = chan_grp.partition('/')
-                source = device + ':' + chan
-                instrument_sources.add(source)
-                # TODO: Do something with groups?
-            elif category == 'CONTROL':
-                control_sources.add(h5_source)
-            else:
-                raise ValueError("Unknown data category %r" % category)
-
-        return frozenset(control_sources), frozenset(instrument_sources)
-
-    def __hash__(self):
-        return hash(self.filename)
-
-    def __eq__(self, other):
-        return isinstance(other, FileAccess) and (other.filename == self.filename)
-
-    def __repr__(self):
-        return "{}({})".format(type(self).__name__, repr(self.filename))
-
-    @property
-    def all_sources(self):
-        return self.control_sources | self.instrument_sources
-
-    def get_index(self, source, group):
-        """Get first index & count for a source and for a specific train ID.
-
-        Indices are cached; this appears to provide some performance benefit.
-        """
-        try:
-            return self._index_cache[(source, group)]
-        except KeyError:
-            ix = self._read_index(source, group)
-            self._index_cache[(source, group)] = ix
-            return ix
-
-    def _read_index(self, source, group):
-        """Get first index & count for a source.
-
-        This is 'real' reading when the requested index is not in the cache.
-        """
-        ntrains = len(self.train_ids)
-        ix_group = self.file['/INDEX/{}/{}'.format(source, group)]
-        firsts = ix_group['first'][:ntrains]
-        if 'count' in ix_group:
-            counts = ix_group['count'][:ntrains]
-        else:
-            status = ix_group['status'][:ntrains]
-            counts = np.uint64((ix_group['last'][:ntrains] - firsts + 1) * status)
-        return firsts, counts
-
-    def get_keys(self, source):
-        """Get keys for a given source name
-
-        Keys are found by walking the HDF5 file, and cached for reuse.
-        """
-        try:
-            return self._keys_cache[source]
-        except KeyError:
-            pass
-
-        if source in self.control_sources:
-            group = '/CONTROL/' + source
-        elif source in self.instrument_sources:
-            group = '/INSTRUMENT/' + source
-        else:
-            raise SourceNameError(source)
-
-        res = set()
-
-        def add_key(key, value):
-            if isinstance(value, h5py.Dataset):
-                res.add(key.replace('/', '.'))
-
-        self.file[group].visititems(add_key)
-        self._keys_cache[source] = res
-        return res
-
-    def has_source_key(self, source, key):
-        """Check if the given source and key exist in this file
-
-        This doesn't scan for all the keys in the source, as .get_keys() does.
-        """
-        try:
-            return key in self._keys_cache[source]
-        except KeyError:
-            pass
-
-        if key in self._known_keys[source]:
-            return True
-
-        if source in self.control_sources:
-            path = '/CONTROL/{}/{}'.format(source, key.replace('.', '/'))
-        elif source in self.instrument_sources:
-            path = '/INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
-        else:
-            raise SourceNameError(source)
-
-        if path in self.file:
-            self._known_keys[source].add(key)
-            return True
-        return False
 
 
 class DataCollection:
@@ -291,18 +113,46 @@ class DataCollection:
             train_ids = sorted(set().union(*(f.train_ids for f in files)))
         self.train_ids = train_ids
 
+    @staticmethod
+    def _open_file(path, cache_info=None):
+        try:
+            fa = FileAccess(path, _cache_info=cache_info)
+        except Exception as e:
+            return osp.basename(path), str(e)
+        else:
+            return osp.basename(path), fa
+
     @classmethod
     def from_paths(cls, paths, _files_map=None):
         files = []
+        uncached = []
         for path in paths:
             cache_info = _files_map and _files_map.get(path)
-            try:
-                fa = FileAccess(path, _cache_info=cache_info)
-            except Exception as e:
-                print("Skipping file", path, file=sys.stderr)
-                print("  (error was: {})".format(e), file=sys.stderr)
+            if cache_info:
+                filename, fa = cls._open_file(path, cache_info=cache_info)
+                if isinstance(fa, FileAccess):
+                    files.append(fa)
+                else:
+                    print(f"Skipping file {filename}", file=sys.stderr)
+                    print(f"  (error was: {fa})", file=sys.stderr)
             else:
-                files.append(fa)
+                uncached.append(path)
+
+        if uncached:
+            def initializer():
+                # prevent child processes from receiving KeyboardInterrupt
+                signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+            # cpu_affinity give a list of cpu cores we can use, can be all or a
+            # subset of the cores the machine has.
+            nproc = min(len(psutil.Process().cpu_affinity()), len(uncached))
+            with Pool(processes=nproc, initializer=initializer) as pool:
+                for fname, fa in pool.imap_unordered(cls._open_file, uncached):
+                    if isinstance(fa, FileAccess):
+                        files.append(fa)
+                    else:
+                        print(f"Skipping file {fname}", file=sys.stderr)
+                        print(f"  (error was: {fa})", file=sys.stderr)
 
         if not files:
             raise Exception("All HDF5 files specified are unusable")
@@ -375,6 +225,20 @@ class DataCollection:
 
     # Leave old name in case anything external was using it:
     _keys_for_source = keys_for_source
+
+    def get_entry_shape(self, source, key):
+        """Get the shape of a single data entry for the given source & key"""
+        self._check_field(source, key)
+
+        for chunk in self._find_data_chunks(source, key):
+            # First dimension is number of entries
+            return chunk.dataset.shape[1:]
+
+    def get_dtype(self, source, key):
+        """Get the numpy data type for the given source & key"""
+        self._check_field(source, key)
+        for chunk in self._find_data_chunks(source, key):
+            return chunk.dataset.dtype
 
     def _check_data_missing(self, tid) -> bool:
         """Return True if a train does not have data for all sources"""
@@ -545,7 +409,7 @@ class DataCollection:
 
         for f in self._source_index[source]:
             if source in self.control_sources:
-                counts = np.ones(f.train_ids, dtype=np.uint64)
+                counts = np.ones(len(f.train_ids), dtype=np.uint64)
             else:
                 group = key.partition('.')[0]
                 _, counts = f.get_index(source, group)
@@ -811,7 +675,9 @@ class DataCollection:
                 chunk_shape = (chunk_dim0,) + chunk.dataset.shape[1:]
 
             chunks_darrs.append(
-                da.from_array(chunk.dataset, chunks=chunk_shape)[chunk.slice]
+                da.from_array(
+                    chunk.file.dset_proxy(chunk.dataset_path), chunks=chunk_shape
+                )[chunk.slice]
             )
             chunks_trainids.append(
                 self._expand_trainids(chunk.counts, chunk.train_ids)
@@ -864,14 +730,14 @@ class DataCollection:
 
                 res[source].update(keys or None)
 
-        elif isinstance(selection, list):
+        elif isinstance(selection, Iterable):
             # selection = [('src_glob', 'key_glob'), ...]
             res = union_selections(
                 self._select_glob(src_glob, key_glob)
                 for (src_glob, key_glob) in selection
             )
         else:
-            TypeError("Unknown selection type: {}".format(type(selection)))
+            raise TypeError("Unknown selection type: {}".format(type(selection)))
 
         return dict(res)
 
@@ -912,12 +778,12 @@ class DataCollection:
         1. With two glob patterns (see below) for source and key names::
 
             # Select data in the image group for any detector sources
-            sel = run.select('*/DET/*, 'image.*')
+            sel = run.select('*/DET/*', 'image.*')
 
-        2. With a list of (source, key) glob patterns::
+        2. With an iterable of (source, key) glob patterns::
 
             # Select image.data and image.mask for any detector sources
-            sel = run.select([('*/DET/*, 'image.data'), ('*/DET/*, 'image.mask')])
+            sel = run.select([('*/DET/*', 'image.data'), ('*/DET/*', 'image.mask')])
 
            Data is included if it matches any of the pattern pairs.
 
@@ -1107,16 +973,23 @@ class DataCollection:
 
         return None, None
 
-    def info(self):
+    def info(self, details_for_sources=()):
         """Show information about the selected data.
         """
+        details_sources_re = [re.compile(fnmatch.translate(p))
+                              for p in details_for_sources]
+
         # time info
-        first_train = self.train_ids[0]
-        last_train = self.train_ids[-1]
         train_count = len(self.train_ids)
-        seconds, deciseconds = divmod((last_train - first_train + 1), 10)
-        span_txt = '{}.{}'.format(datetime.timedelta(seconds=seconds),
-                                  int(deciseconds))
+        if train_count == 0:
+            first_train = last_train = '-'
+            span_txt = '0.0'
+        else:
+            first_train = self.train_ids[0]
+            last_train = self.train_ids[-1]
+            seconds, deciseconds = divmod((last_train - first_train + 1), 10)
+            span_txt = '{}.{}'.format(datetime.timedelta(seconds=seconds),
+                                      int(deciseconds))
 
         detector_modules = {}
         for source in self.detector_sources:
@@ -1150,14 +1023,53 @@ class DataCollection:
             ))
         print()
 
+        def src_data_detail(s, keys, prefix=''):
+            """Detail for how much data is present for an instrument group"""
+            if not keys:
+                return
+            counts = self.get_data_counts(s, list(keys)[0])
+            ntrains_data = (counts > 0).sum()
+            print(
+                f'{prefix}data for {ntrains_data} trains '
+                f'({ntrains_data / train_count:.2%}), '
+                f'up to {counts.max()} entries per train'
+            )
+
+        def keys_detail(s, keys, prefix=''):
+            """Detail for a group of keys"""
+            for k in keys:
+                entry_shape = self.get_entry_shape(s, k)
+                if entry_shape:
+                    entry_info = f", entry shape {entry_shape}"
+                else:
+                    entry_info = ""
+                dt = self.get_dtype(s, k)
+                print(f"{prefix}{k}\t[{dt.name}{entry_info}]")
+
         non_detector_inst_srcs = self.instrument_sources - self.detector_sources
         print(len(non_detector_inst_srcs), 'instrument sources (excluding detectors):')
-        for d in sorted(non_detector_inst_srcs):
-            print('  -', d)
+        for s in sorted(non_detector_inst_srcs):
+            print('  -', s)
+            if not any(p.match(s) for p in details_sources_re):
+                continue
+
+            # Detail for instrument sources:
+            for group, keys in groupby(sorted(self.keys_for_source(s)),
+                                       key=lambda k: k.split('.')[0]):
+                print(f'    - {group}:')
+                keys = list(keys)
+                src_data_detail(s, keys, prefix='      ')
+                keys_detail(s, keys, prefix='      - ')
+
+
         print()
-        print(len(self.control_sources), 'control sources:')
-        for d in sorted(self.control_sources):
-            print('  -', d)
+        print(len(self.control_sources), 'control sources: (1 entry per train)')
+        for s in sorted(self.control_sources):
+            print('  -', s)
+            if any(p.match(s) for p in details_sources_re):
+                # Detail for control sources: list keys
+                keys_detail(s, sorted(self.keys_for_source(s)), prefix='    - ')
+
         print()
 
     def detector_info(self, source):
@@ -1281,10 +1193,7 @@ class DataCollection:
 
         vfw.write_train_ids()
 
-        if source in self.control_sources:
-            ds_path = vfw.add_control_dataset(source, key)
-        else:
-            ds_path = vfw.add_instrument_dataset(source, key)
+        ds_path = vfw.add_dataset(source, key)
 
         vfw.write_indexes()
         vfw.write_metadata()
@@ -1307,11 +1216,8 @@ class TrainIterator:
         self._datasets_cache = {}
 
     def _find_data(self, source, key, tid):
-        try:
-            file, ds = self._datasets_cache[(source, key)]
-        except KeyError:
-            pass
-        else:
+        file, ds = self._datasets_cache.get((source, key), (None, None))
+        if ds:
             ixs = (file.train_ids == tid).nonzero()[0]
             if ixs.size > 0:
                 return file, ixs[0], ds

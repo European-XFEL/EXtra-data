@@ -8,6 +8,7 @@ import xarray
 
 from .exceptions import SourceNameError
 from .reader import DataCollection, by_id, by_index
+from .writer import FileWriter
 
 log = logging.getLogger(__name__)
 
@@ -90,6 +91,9 @@ class MPxDetectorBase:
                  *, min_modules=1):
         if detector_name is None:
             detector_name = self._find_detector_name(data)
+        if min_modules <= 0:
+            raise ValueError("min_modules must be a positive integer, not "
+                             f"{min_modules!r}")
 
         source_to_modno = self._identify_sources(data, detector_name, modules)
 
@@ -104,15 +108,17 @@ class MPxDetectorBase:
             for src in source_to_modno
         }).fillna(0).astype(np.uint64)
 
-        # Sanity check: all non-zero counts should be equal
-        data_count_values = set(mod_data_counts.values.flatten()) - {0}
-        if len(data_count_values) > 1:
-            raise ValueError("Inconsistent frame counts: {}"
-                             .format(data_count_values))
-        elif not data_count_values:
-            raise ValueError("No data found for selected sources")
+        # Within any train, all modules should have same count or zero
+        frame_counts = pd.Series(0, index=mod_data_counts.index, dtype=np.uint64)
+        for tid, data_counts in mod_data_counts.iterrows():
+            count_vals = set(data_counts) - {0}
+            if len(count_vals) > 1:
+                raise ValueError(
+                    f"Inconsistent frame counts for train {tid}: {count_vals}"
+                )
+            elif count_vals:
+                frame_counts[tid] = count_vals.pop()
 
-        self.frames_per_train = data_count_values.pop()
         self.data = self._select_trains(data, mod_data_counts, min_modules)
 
         # This should be a reversible 1-to-1 mapping
@@ -122,6 +128,7 @@ class MPxDetectorBase:
         train_id_arr = np.asarray(self.data.train_ids)
         split_indices = np.where(np.diff(train_id_arr) != 1)[0] + 1
         self.train_id_chunks = np.split(train_id_arr, split_indices)
+        self.frame_counts = frame_counts[train_id_arr]
 
     @classmethod
     def _find_detector_name(cls, data):
@@ -175,6 +182,13 @@ class MPxDetectorBase:
     @property
     def train_ids(self):
         return self.data.train_ids
+
+    @property
+    def frames_per_train(self):
+        counts = set(self.frame_counts.unique()) - {0}
+        if len(counts) > 1:
+            raise ValueError(f"Varying number of frames per train: {counts}")
+        return counts.pop()
 
     def __repr__(self):
         return "<{}: Data interface for detector {!r} with {} modules>".format(
@@ -397,7 +411,7 @@ class MPxDetectorBase:
         pulses = _check_pulse_selection(pulses)
         return MPxDetectorTrainIterator(self, pulses)
 
-    def write_virtual_cxi(self, filename):
+    def write_virtual_cxi(self, filename, fillvalues=None):
         """Write a virtual CXI file to access the detector data.
 
         The virtual datasets in the file provide a view of the detector
@@ -408,9 +422,112 @@ class MPxDetectorBase:
         ----------
         filename: str
           The file to be written. Will be overwritten if it already exists.
+        fillvalues: dict, optional
+            keys are datasets names (one of: data, gain, mask) and associated
+            fill value for missing data  (default is np.nan for float arrays and
+            zero for integer arrays)
         """
         from .write_cxi import VirtualCXIWriter
-        VirtualCXIWriter(self).write(filename)
+        VirtualCXIWriter(self).write(filename, fillvalues=fillvalues)
+
+    def write_frames(self, filename, trains, pulses):
+        """Write selected detector frames to a new EuXFEL HDF5 file
+
+        trains and pulses should be 1D arrays of the same length, containing
+        train IDs and pulse IDs (corresponding to the pulse IDs recorded by
+        the detector). i.e. (trains[i], pulses[i]) identifies one frame.
+        """
+        if (trains.ndim != 1) or (pulses.ndim != 1):
+            raise ValueError("trains & pulses must be 1D arrays")
+        inc_tp_ids = zip_trains_pulses(trains, pulses)
+
+        writer = FramesFileWriter(filename, self.data, inc_tp_ids)
+        try:
+            writer.write()
+        finally:
+            writer.file.close()
+
+
+def zip_trains_pulses(trains, pulses):
+    """Combine two similar arrays of train & pulse IDs as one struct array
+    """
+    if trains.shape != pulses.shape:
+        raise ValueError(
+            f"Train & pulse arrays don't match ({trains.shape} != {pulses.shape})"
+        )
+
+    res = np.zeros(trains.shape, dtype=np.dtype([
+        ('trainId', np.uint64), ('pulseId', np.uint64)
+    ]))
+    res['trainId'] = trains
+    res['pulseId'] = pulses
+    return res
+
+
+class FramesFileWriter(FileWriter):
+    """Write selected detector frames in European XFEL HDF5 format"""
+    def __init__(self, path, data, inc_tp_ids):
+        super().__init__(path, data)
+        self.inc_tp_ids = inc_tp_ids
+
+
+    def _guess_number_of_storing_entries(self, source, key):
+        if source in self.data.instrument_sources and key.startswith("image."):
+            # Start with an empty dataset, grow it as we add each file
+            return 0
+        else:
+            return super()._guess_number_of_storing_entries(source, key)
+
+    def copy_image_data(self, source, keys):
+        """Copy selected frames of the detector image data"""
+        frame_tids_piecewise = []
+
+        src_files = sorted(
+            self.data._source_index[source],
+            key=lambda fa: fa.train_ids[0]
+        )
+
+        for fa in src_files:
+            _, counts = fa.get_index(source, 'image')
+            file_tids = np.repeat(fa.train_ids, counts.astype(np.intp))
+            file_pids = fa.file[f'/INSTRUMENT/{source}/image/pulseId'][:]
+            if file_pids.ndim == 2 and file_pids.shape[1] == 1:
+                # Raw data has a spurious extra dimension
+                file_pids = file_pids[:, 0]
+
+            # Data can have trailing 0s, seemingly
+            file_pids = file_pids[:len(file_tids)]
+            file_tp_ids = zip_trains_pulses(file_tids, file_pids)
+
+            # indexes of selected frames in datasets under .../image in this file
+            ixs = np.isin(file_tp_ids, self.inc_tp_ids).nonzero()[0]
+            nframes = ixs.shape[0]
+
+            for key in keys:
+                path = f"INSTRUMENT/{source}/{key.replace('.', '/')}"
+
+                dst_ds = self.file[path]
+                dst_cursor = dst_ds.shape[0]
+                dst_ds.resize(dst_cursor + nframes, axis=0)
+                dst_ds[dst_cursor: dst_cursor+nframes] = fa.file[path][ixs]
+
+            frame_tids_piecewise.append(file_tids[ixs])
+
+        frame_tids = np.concatenate(frame_tids_piecewise)
+        self._make_index(source, 'image', frame_tids)
+
+    def copy_source(self, source):
+        """Copy all the relevant data for one detector source"""
+        if source not in self.data.instrument_sources:
+            return super().copy_source(source)
+
+        all_keys = self.data.keys_for_source(source)
+        img_keys = {k for k in all_keys if k.startswith('image.')}
+
+        for key in sorted(all_keys - img_keys):
+            self.copy_dataset(source, key)
+
+        self.copy_image_data(source, sorted(img_keys))
 
 
 class MPxDetectorTrainIterator:
@@ -426,11 +543,8 @@ class MPxDetectorTrainIterator:
         self._datasets_cache = {}
 
     def _find_data(self, source, key, tid):
-        try:
-            file, ds = self._datasets_cache[(source, key)]
-        except KeyError:
-            pass
-        else:
+        file, ds = self._datasets_cache.get((source, key), (None, None))
+        if ds:
             ixs = (file.train_ids == tid).nonzero()[0]
             if ixs.size > 0:
                 return file, ixs[0], ds

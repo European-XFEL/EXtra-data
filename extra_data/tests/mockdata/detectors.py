@@ -19,7 +19,7 @@ class DetectorModule:
 
     def __init__(self, device_id, frames_per_train=64, raw=True):
         self.device_id = device_id
-        self.frames_per_train = frames_per_train
+        self._frames_per_train = frames_per_train
         if not raw:
             # Raw data has an extra dimension, used in AGIPD to separate data
             # and gain. This dimension is removed by the calibration process.
@@ -66,6 +66,12 @@ class DetectorModule:
             ('trailer/status', 'u8', ()),
         ]
 
+    @property
+    def frames_per_train(self):
+        if np.ndim(self._frames_per_train) == 0:
+            return np.full(self.ntrains, self._frames_per_train, np.uint64)
+        return self._frames_per_train
+
     def write_instrument(self, f):
         """Write the INSTRUMENT data, and the relevants parts of INDEX"""
         trainids = np.arange(self.firsttrain, self.firsttrain + self.ntrains)
@@ -83,7 +89,8 @@ class DetectorModule:
             i_count = f.create_dataset('INDEX/%s/count' % dev_chan,
                                        (self.ntrains,), 'u8', maxshape=(None,))
             if part == 'image':
-                i_first[:] = np.arange(self.ntrains) * self.frames_per_train
+                # First first is always 0
+                i_first[1:] = np.cumsum(self.frames_per_train)[:-1]
                 i_count[:] = self.frames_per_train
             else:
                 i_first[:] = np.arange(self.ntrains)
@@ -91,15 +98,16 @@ class DetectorModule:
 
 
         # INSTRUMENT (image)
-        nframes = self.ntrains * self.frames_per_train
+        nframes = self.frames_per_train.sum()
         ds = f.create_dataset('INSTRUMENT/%s:xtdf/image/trainId' % self.device_id,
                               (nframes, 1), 'u8', maxshape=(None, 1))
-        ds[:, 0] = np.repeat(trainids, self.frames_per_train)
+        ds[:, 0] = np.repeat(trainids, self.frames_per_train.astype(np.intp))
 
         pid = f.create_dataset('INSTRUMENT/%s:xtdf/image/pulseId' % self.device_id,
                                (nframes, 1), 'u8', maxshape=(None, 1))
-        pid[:, 0] = np.tile(np.arange(0, self.frames_per_train, dtype='u8'),
-                                self.ntrains)
+        pid[:, 0] = np.concatenate([
+            np.arange(0, n, dtype='u8') for n in self.frames_per_train
+        ])
 
         for (key, datatype, dims) in self.image_keys:
             f.create_dataset('INSTRUMENT/%s:xtdf/image/%s' % (self.device_id, key),

@@ -29,17 +29,17 @@ class VirtualCXIWriter:
 
         self.modulenos = sorted(detdata.modno_to_source)
 
-        train_ids = detdata.train_ids
-        frames_per_train = detdata.frames_per_train
-        ntrains = np.uint64(len(train_ids))
-        self.nframes = ntrains * frames_per_train
-        log.info("%d frames per train, %d frames in total",
-                     frames_per_train, self.nframes)
+        frame_counts = detdata.frame_counts
+        self.nframes = frame_counts.sum()
+        log.info("Up to %d frames per train, %d frames in total",
+                 frame_counts.max(), self.nframes)
 
-        self.train_ids_perframe = np.repeat(train_ids, frames_per_train)
+        self.train_ids_perframe = np.repeat(
+            frame_counts.index.values, frame_counts.values.astype(np.intp)
+        )
 
-        positions = np.arange(0, ntrains, dtype=np.uint64) * frames_per_train
-        self.train_id_to_ix = dict(zip(train_ids, positions))
+        # cumulative sum gives the end of each train, subtract to get start
+        self.train_id_to_ix = frame_counts.cumsum() - frame_counts
 
     @property
     def nmodules(self):
@@ -163,12 +163,40 @@ class VirtualCXIWriter:
 
         return layouts
 
-    def write(self, filename):
+    def write(self, filename, fillvalues=None):
+        """Write the file on disc to filename
+
+        Parameters
+        ----------
+        filename: str
+            Path of the file to be written.
+        fillvalues: dict, optional
+            keys are datasets names (one of: data, gain, mask) and associated
+            fill value for missing data. defaults are:
+            - data: nan (proc, float32) or 0 (raw, uint16)
+            - gain: 0 (uint8)
+            - mask: 0xffffffff (uint32)
+        """
         pulse_ids = self.collect_pulse_ids()
         experiment_ids = np.core.defchararray.add(np.core.defchararray.add(
             self.train_ids_perframe.astype(str), ':'), pulse_ids.astype(str))
 
         layouts = self.collect_data()
+
+        _fillvalues = {
+            # data can be uint16 (raw) or float32 (proc)
+            'data': np.nan if layouts['data'].dtype.kind == 'f' else 0,
+            'gain': 0,
+            'mask': 0xffffffff
+        }
+        if fillvalues:
+            _fillvalues.update(fillvalues)
+        # enforce that fill values are compatible with array dtype
+        _fillvalues['data'] = layouts['data'].dtype.type(_fillvalues['data'])
+        if 'gain' in layouts:
+            _fillvalues['gain'] = layouts['gain'].dtype.type(_fillvalues['gain'])
+        if 'mask' in layouts:
+            _fillvalues['mask'] = layouts['mask'].dtype.type(_fillvalues['mask'])
 
         log.info("Writing to %s", filename)
 
@@ -200,19 +228,19 @@ class VirtualCXIWriter:
                 dgrp['data_gain'] = h5py.SoftLink('/entry_1/data_gain')
 
             data = dgrp.create_virtual_dataset(
-                'data', layouts['data'], fillvalue=np.nan
+                'data', layouts['data'], fillvalue=_fillvalues['data']
             )
             data.attrs['axes'] = axes_s
 
             if 'gain' in layouts:
                 gain = dgrp.create_virtual_dataset(
-                    'gain', layouts['gain'], fillvalue=np.nan
+                    'gain', layouts['gain'], fillvalue=_fillvalues['gain']
                 )
                 gain.attrs['axes'] = axes_s
 
             if 'mask' in layouts:
                 mask = dgrp.create_virtual_dataset(
-                    'mask', layouts['mask'], fillvalue=np.nan
+                    'mask', layouts['mask'], fillvalue=_fillvalues['mask']
                 )
                 mask.attrs['axes'] = axes_s
 

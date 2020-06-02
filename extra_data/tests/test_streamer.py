@@ -1,145 +1,79 @@
 """Test streaming data with ZMQ interface."""
 
-import msgpack
-import msgpack_numpy as numpack
-import numpy as np
-import pytest
-from queue import Full
+import os
 
+import pytest
+from subprocess import PIPE, Popen
+
+from extra_data import by_id, H5File, RunDirectory
+from extra_data.export import _iter_trains, ZMQStreamer
 from karabo_bridge import Client
 
-from extra_data.export import ZMQStreamer
 
-DATA = {
-    'source1': {
-        'parameter.1.value': 123,
-        'list.of.int': [1, 2, 3],
-        'string.param': 'True',
-        'boolean': False,
-        'metadata': {'timestamp.tid': 9876543210},
-    },
-    'XMPL/DET/MOD0': {
-        'image.data': np.random.randint(255, size=(2, 3, 4), dtype=np.uint8),
-        'something.else': ['a', 'bc', 'd'],
-    },
-}
+def test_merge_detector(mock_fxe_raw_run, mock_fxe_control_data, mock_spb_proc_run):
+    with RunDirectory(mock_fxe_raw_run) as run:
+        for tid, data in _iter_trains(run, merge_detector=True):
+            assert 'FXE_DET_LPD1M-1/DET/APPEND' in data
+            assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' not in data
+            shape = data['FXE_DET_LPD1M-1/DET/APPEND']['image.data'].shape
+            assert shape == (128, 1, 16, 256, 256)
+            break
 
+        for tid, data in _iter_trains(run):
+            assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in data
+            shape = data['FXE_DET_LPD1M-1/DET/0CH0:xtdf']['image.data'].shape
+            assert shape == (128, 1, 256, 256)
+            break
 
-def compare_nested_dict(d1, d2, path=''):
-    for key in d1.keys():
-        if key not in d2:
-            print(d1.keys())
-            print(d2.keys())
-            raise KeyError('key is missing in d2: {}{}'.format(path, key))
+    with H5File(mock_fxe_control_data) as run:
+        for tid, data in _iter_trains(run, merge_detector=True):
+            assert frozenset(data) == run.select_trains(by_id[[tid]]).all_sources
+            break
 
-        if isinstance(d1[key], dict):
-            path += key + '.'
-            compare_nested_dict(d1[key], d2[key], path)
-        else:
-            v1 = d1[key]
-            v2 = d2[key]
-
-            try:
-                if isinstance(v1, np.ndarray):
-                    assert (v1 == v2).all()
-                elif isinstance(v1, tuple) or isinstance(v2, tuple):
-                    # msgpack doesn't know about complex types, everything is
-                    # an array. So tuples are packed as array and then
-                    # unpacked as list by default.
-                    assert list(v1) == list(v2)
-                else:
-                    assert v1 == v2
-            except AssertionError:
-                raise ValueError('diff: {}{}'.format(path, key), v1, v2)
+    with RunDirectory(mock_spb_proc_run) as run:
+        for tid, data in _iter_trains(run, merge_detector=True):
+            shape = data['SPB_DET_AGIPD1M-1/DET/APPEND']['image.data'].shape
+            assert shape == (64, 16, 512, 128)
+            shape = data['SPB_DET_AGIPD1M-1/DET/APPEND']['image.gain'].shape
+            assert shape == (64, 16, 512, 128)
+            shape = data['SPB_DET_AGIPD1M-1/DET/APPEND']['image.mask'].shape
+            assert shape == (64, 16, 512, 128)
+            break
 
 
-@pytest.fixture(scope="session")
-def server_1():
-    server = ZMQStreamer(4444, maxlen=10, protocol_version='1.0')
-    yield server
+def test_serve_files(mock_fxe_raw_run):
+    args = ['karabo-bridge-serve-files', '-z', 'PUSH', str(mock_fxe_raw_run),
+            str(44444)]
+    interface = None
+
+    with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE,
+               env=dict(os.environ, PYTHONUNBUFFERED='1')) as p:
+        for line in p.stdout:
+            line = line.decode('utf-8')
+            if line.startswith('Streamer started on:'):
+                interface = line.partition(':')[2].strip()
+                break
+
+        print('interface:', interface)
+        assert interface is not None, p.stderr.read().decode()
+
+        with Client(interface, sock='PULL', timeout=5) as c:
+            data, meta = c.next()
+
+        tid = next(m['timestamp.tid'] for m in meta.values())
+        sources = RunDirectory(
+            mock_fxe_raw_run).select_trains(by_id[[tid]]).all_sources
+        assert frozenset(data) == sources
+
+        p.kill()
+        rc = p.wait(timeout=2)
+        assert rc == -9  # process terminated by kill signal
 
 
-@pytest.fixture(scope="session")
-def server_2_2():
-    server = ZMQStreamer(5555, maxlen=10, protocol_version='2.2')
-    yield server
-
-
-@pytest.fixture(scope="session")
-def client():
-    client = Client('tcp://localhost:5555')
-    yield client
-
-
-class DummyFrame:
-    """Client._deserialize() now expects the message in ZMQ Frame objects.
-
-    TODO: avoid using a private method from extra_data for tests.
-    """
-
-    def __init__(self, data):
-        self.bytes = data
-        self.buffer = data
-
-
-def test_serialize_1(server_1, client):
-    msg = server_1._serialize(DATA)
-
-    assert isinstance(msg, list)
-    assert len(msg) == 1
-    assert msg[-1] == msgpack.dumps(DATA, use_bin_type=True, default=numpack.encode)
-
-    msg_framed = [DummyFrame(b) for b in msg]
-    data, meta = client._deserialize(msg_framed)
-    compare_nested_dict(data, DATA)
-
-
-def test_serialize_2_2(server_2_2, client):
-    msg = server_2_2._serialize(DATA)
-    assert isinstance(msg, list)
-    assert len(msg) == 6
-
-    m0 = msgpack.loads(msg[0], raw=False)
-    assert m0['source'] == 'XMPL/DET/MOD0'
-    assert m0['content'] == 'msgpack'
-    m2 = msgpack.loads(msg[2], raw=False)
-    assert m2['source'] == 'XMPL/DET/MOD0'
-    assert m2['path'] == 'image.data'
-    assert m2['content'] == 'array'
-
-    m2 = msgpack.loads(msg[4], raw=False)
-    print(m2)
-    assert m2['source'] == 'source1'
-    assert m2['content'] == 'msgpack'
-
-    msg_framed = [DummyFrame(b) for b in msg]
-    data, meta = client._deserialize(msg_framed)
-    compare_nested_dict(data, DATA)
-
-    assert meta['source1']['timestamp.tid'] == 9876543210
-
-
-def test_fill_queue(server_2_2):
-    for i in range(10):
-        server_2_2.feed({str(i): {str(i): i}})
-
-    assert server_2_2._buffer.full()
-    with pytest.raises(Full):
-        server_2_2._buffer.put_nowait({'too much': {'prop': 0}})
-
-    for i in range(10):
-        assert server_2_2._buffer.get()[1] == msgpack.dumps({str(i): i})
-
-
-def test_req_rep(server_2_2, client):
-    server_2_2.start()
-
-    for i in range(3):
-        server_2_2.feed(DATA)
-
-    for i in range(3):
-        data, metadata = client.next()
-        compare_nested_dict(data, DATA)
+def test_deprecated_server():
+    with pytest.deprecated_call():
+        with ZMQStreamer(2222):
+            pass
 
 
 if __name__ == '__main__':
