@@ -78,6 +78,9 @@ format. See :doc:`streaming` for more information.
 
    Add mock timestamps if missing in the original meta-data.
 
+These two options above - appended module sources and dummy timestamps - are
+required if streamed data shall be provided to OnDA.
+
 .. option:: -z <type>, --socket-type <type>
 
    The ZMQ socket type to use, one of ``PUB``, ``PUSH`` or ``REP``.
@@ -86,15 +89,6 @@ format. See :doc:`streaming` for more information.
 .. option:: --use-infiniband
 
    Use the infiniband network interface (``ib0``) if it's present.
-
-Both of the last options, appended module sources and (dummy) timestamps are
-required if streamed data shall be provided to OnDA.
-
-Module appending has only been tested for AGIPD-1M data (so far). One should
-restrict its usage to data runs that actually contain HDF5 files from AGIPD
-sources, **and** make a selection like ``--source "*/DET/*"``, because a
-global selection of all sources will cause an error if additional
-non-detector sources are found in that run.
 
 .. _cmd-make-virtual-cxi:
 
