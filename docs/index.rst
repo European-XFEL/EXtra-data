@@ -9,6 +9,12 @@ produced at `European XFEL <https://www.xfel.eu/>`_.
    The code to work with detector geometry has been separated as
    `EXtra-geom <https://github.com/European-XFEL/EXtra-geom>`__.
 
+Licensing
+---------
+
+This software is licensed under the BSD-3-Clause license. See the LICENSE
+file for details.
+
 
 Documentation contents
 ----------------------
