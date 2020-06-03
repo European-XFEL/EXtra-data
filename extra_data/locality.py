@@ -94,30 +94,53 @@ def lc_avail(files):
 
 def check_dir(basedir):
     """ Check basedir and prints results """
-    ls = ( os.path.join(basedir, f) for f in os.listdir(basedir) )
-    files = [ f for f in ls if os.path.isfile(f) ]
+    if os.path.isdir(basedir):
+        ls = ( os.path.join(basedir, f) for f in os.listdir(basedir) )
+        files = [ f for f in ls if os.path.isfile(f) ]
+    elif os.path.isfile(basedir):
+        files = [ basedir ]
+    else:
+        files = []
     
     print(f"Checking {len(files)} files in {basedir}")
     fp = partition(files, print_counts)
     print("")
     
+    retcode = 0
     if fp['NEARLINE']:
+        retcode |= 1
         print("Only on tape:")
         for file in sorted(fp['NEARLINE']):
             print(f"  {file}")
     
     if fp['UNAVAILABLE']:
+        retcode |= 2
         print("Unavailable:")
         for file in sorted(fp['UNAVAILABLE']):
             print(f"  {file}")
     
     unknown_locality = set(fp) - set(DC_LOC_RESP)
     if unknown_locality:
+        retcode |= 4
         print("Unknown locality:", unknown_locality)
+        
+    return retcode
+    
+from argparse import ArgumentParser
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
+
+    ap = ArgumentParser(prog='extra-data-locality', description="Checks locality of files in the directory")
+    ap.add_argument('path', help="run directory of HDF5 files.")
+    args = ap.parse_args(argv)
+    
+    if not os.path.exists(args.path):
+        print(f"Path '{args.path}' is not found")
+        return -1
+
+    return check_dir(args.path)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print(f'Usage: {sys.argv[0]} <directory>')
-        exit(1)
-        
-    check_dir(sys.argv[1])
+    sys.exit(main())
