@@ -42,6 +42,7 @@ from .read_machinery import (
     find_proposal,
 )
 from .run_files_map import RunFilesMap
+from . import locality
 from .file_access import FileAccess
 
 __all__ = [
@@ -1287,7 +1288,7 @@ def H5File(path):
     return DataCollection.from_path(path)
 
 
-def RunDirectory(path, include='*'):
+def RunDirectory(path, include='*', file_filter=locality.lc_any):
     """Open data files from a 'run' at European XFEL.
 
     ::
@@ -1305,9 +1306,13 @@ def RunDirectory(path, include='*'):
         Path to the run directory containing HDF5 files.
     include: str
         Wildcard string to filter data files.
+    file_filter: callable
+        Function to subset the list of filenames to open.
+        Meant to be used with functions in the extra_data.locality module.
     """
     files = [f for f in os.listdir(path) if f.endswith('.h5')]
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
+    files = file_filter(files)
     if not files:
         raise Exception("No HDF5 files found in {} with glob pattern {}".format(path, include))
 
@@ -1325,7 +1330,7 @@ def RunDirectory(path, include='*'):
 RunHandler = RunDirectory
 
 
-def open_run(proposal, run, data='raw', include='*'):
+def open_run(proposal, run, data='raw', include='*', file_filter=locality.lc_any):
     """Access EuXFEL data on the Maxwell cluster by proposal and run number.
 
     ::
@@ -1346,6 +1351,9 @@ def open_run(proposal, run, data='raw', include='*'):
         The default is 'raw'.
     include: str
         Wildcard string to filter data files.
+    file_filter: callable
+        Function to subset the list of filenames to open.
+        Meant to be used with functions in the extra_data.locality module.
     """
     if isinstance(proposal, str):
         if ('/' not in proposal) and not proposal.startswith('p'):
@@ -1363,4 +1371,6 @@ def open_run(proposal, run, data='raw', include='*'):
         run = index(run)  # Allow integers, including numpy integers
     run = 'r' + str(run).zfill(4)
 
-    return RunDirectory(osp.join(prop_dir, data, run), include=include)
+    return RunDirectory(
+        osp.join(prop_dir, data, run), include=include, file_filter=file_filter
+    )

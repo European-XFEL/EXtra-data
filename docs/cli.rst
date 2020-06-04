@@ -96,3 +96,18 @@ Make a virtual CXI file to access AGIPD/LPD detector data from a specified run:
 .. option:: --min-modules <number>
 
    Include trains where at least N modules have data (default 9).
+
+``extra-data-locality``
+------------------------
+
+Check how the files are stored:
+
+.. code-block:: shell
+
+   extra-data-locality /gpfs/exfel/exp/XMPL/201750/p700000/raw/r0002
+
+The file reading may hang for a long time if files are unavailable or require staging
+in dCache from the tape. The program helps finding problem files.
+
+If it finds problems with the data locality, the program will produce a list of files
+located on tape, lost or at unknown locality and exit with the non-zero status.
