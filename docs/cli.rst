@@ -122,6 +122,8 @@ Make a virtual CXI file to access AGIPD/LPD detector data from a specified run:
    - gain: 0
    - mask: 0xffffffff
 
+.. _cmd-locality:
+
 ``extra-data-locality``
 ------------------------
 

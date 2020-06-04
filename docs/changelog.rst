@@ -13,6 +13,9 @@ New features:
 - :ref:`cmd-serve-files` has new options to control the ZMQ socket and the use
   of an infiniband network interface (:ghpull:`50`). It also works with
   newer versions of the ``karabo_bridge`` Python package.
+- New options to filter files from dCache which are unavailable or need to be
+  read from tape when opening a run (:ghpull:`35`). This also comes with a new
+  command :ref:`cmd-locality` to inspect this information.
 - New :option:`lsxfel --detail` option to show more detail on selected sources
   (:ghpull:`38`).
 - New :option:`extra-data-make-virtual-cxi --fill-value` option to control the
