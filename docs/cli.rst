@@ -100,7 +100,7 @@ Make a virtual CXI file to access AGIPD/LPD detector data from a specified run:
 ``extra-data-locality``
 ------------------------
 
-Check the files localitly:
+Check how the files are stored:
 
 .. code-block:: shell
 
@@ -109,5 +109,5 @@ Check the files localitly:
 The file reading may hang for a long time if files are unavailable or require staging
 in dCache from the tape. The program helps finding problem files.
 
-If it finds problems with the data locality, the program will produce a lists of files
+If it finds problems with the data locality, the program will produce a list of files
 located on tape, lost or at unknown locality and exit with the non-zero status.

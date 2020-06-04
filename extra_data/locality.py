@@ -138,7 +138,7 @@ def main(argv=None):
     
     if not os.path.exists(args.path):
         print(f"Path '{args.path}' is not found")
-        return -1
+        return 255
 
     return check_dir(args.path)
 
