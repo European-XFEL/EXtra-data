@@ -75,6 +75,7 @@ Where data will fit into memory, it's usually quickest and most convenient
 to load it like this.
 
 .. class:: DataCollection
+   :noindex:
 
    .. automethod:: get_array
 
@@ -126,6 +127,7 @@ interested in, either using :meth:`~.DataCollection.select`, or the ``devices=``
 parameter. This avoids reading all the other data.
 
 .. class:: DataCollection
+   :noindex:
 
    .. automethod:: trains
 
@@ -144,6 +146,7 @@ data, so you use them like this::
     # run still includes all the data
 
 .. class:: DataCollection
+   :noindex:
 
    .. automethod:: select
 
@@ -157,6 +160,7 @@ Writing selected data
 ---------------------
 
 .. class:: DataCollection
+   :noindex:
 
    .. automethod:: write
 

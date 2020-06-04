@@ -23,6 +23,8 @@ pulling together the separate modules into a single array.
 
    .. automethod:: trains
 
+   .. automethod:: write_frames
+
    .. automethod:: write_virtual_cxi
 
 .. seealso::
