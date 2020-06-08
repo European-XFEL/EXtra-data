@@ -615,6 +615,11 @@ def test_open_file(mock_sa3_control_data):
 
 
 def test_permission():
+    #  If users is root then `PermissionError` won't be raised, so set the euid
+    #  to standard user so the tests work correctly
+    if os.geteuid() == 0:
+        os.seteuid(1000)
+
     d = mkdtemp()
     os.chmod(d, not stat.S_IRUSR)
     with pytest.raises(PermissionError) as excinfo:
