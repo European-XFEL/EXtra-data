@@ -615,9 +615,10 @@ def test_open_file(mock_sa3_control_data):
 
 
 def test_permission():
-    #  If users is root then `PermissionError` won't be raised, so set the euid
-    #  to standard user so the tests work correctly
-    if os.geteuid() == 0:
+    #  If users is root then `PermissionError` won't be raised, set the euid to
+    #  standard user so the tests work correctly
+    original_euid = os.geteuid()
+    if original_euid == 0:
         os.seteuid(1000)
 
     d = mkdtemp()
@@ -626,6 +627,9 @@ def test_permission():
         run = RunDirectory(d)
     assert "Permission denied" in str(excinfo.value)
     assert d in str(excinfo.value)
+
+    if original_euid != os.geteuid():
+        os.seteuid(original_euid)
 
 
 def test_empty_file_info(mock_empty_file, capsys):
