@@ -97,12 +97,14 @@ def test_get_array_pulse_indexes_reduced_data(mock_reduced_spb_proc_run):
     arr = det.get_array('image.data', pulses=by_index[:0])
     assert arr.shape == (16, 0, 0, 512, 128)
 
-    arr = det.get_array('image.data', pulses=by_index[5:])
+    arr = det.get_array('image.data', pulses=np.s_[5:])
     assert (arr.coords['pulse'] >= 5).all()
 
     arr = det.get_array('image.data', pulses=by_index[[1, 7, 15, 23]])
     assert np.isin(arr.coords['pulse'], [1, 7, 15, 23]).all()
 
+    arr = det.get_array('image.data', pulses=[1, 7, 15, 23])
+    assert np.isin(arr.coords['pulse'], [1, 7, 15, 23]).all()
 
 def test_get_dask_array(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
