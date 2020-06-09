@@ -614,6 +614,8 @@ def test_open_file(mock_sa3_control_data):
         assert 'METADATA/dataSources/dataSourceId' in file_access.file
 
 
+@pytest.mark.skipif(hasattr(os, 'geteuid') and os.geteuid() == 0,
+                    reason="cannot run permission tests as root")
 def test_permission():
     d = mkdtemp()
     os.chmod(d, not stat.S_IRUSR)

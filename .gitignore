@@ -11,3 +11,4 @@ data
 /dist/
 /docs/_build/
 .ipynb_checkpoints/
+.venv/
