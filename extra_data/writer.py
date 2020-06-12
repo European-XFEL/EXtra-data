@@ -192,9 +192,17 @@ class VirtualFileWriter(FileWriter):
         ])
         return layout, train_ids
 
+    # In big detector data, these fields are like extra indexes.
+    # So we'll copy them to the output file for fast access, rather than
+    # making virtual datasets.
+    copy_keys = {'image.pulseId', 'image.cellId'}
+
     def prepare_source(self, source):
         for key in self.data.keys_for_source(source):
-            self.add_dataset(source, key)
+            if key in self.copy_keys:
+                self.copy_dataset(source, key)
+            else:
+                self.add_dataset(source, key)
 
     def add_dataset(self, source, key):
         layout, train_ids = self._assemble_data(source, key)
