@@ -204,6 +204,13 @@ class VirtualFileWriter(FileWriter):
             else:
                 self.add_dataset(source, key)
 
+    def copy_dataset(self, source, key):
+        """Copy data as a new dataset"""
+        a = self.data.get_array(source, key)
+        path = f"{self._section(source)}/{source}/{key.replace('.', '/')}"
+        self.file[path] = a.values
+        self._make_index(source, key, a.coords['trainId'].values)
+
     def add_dataset(self, source, key):
         layout, train_ids = self._assemble_data(source, key)
         if not layout:
