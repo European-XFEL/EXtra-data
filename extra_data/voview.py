@@ -23,7 +23,7 @@ class VirtualOverviewFileWriter(VirtualFileWriter):
         grp.create_dataset(
             'names', data=names, dtype=h5py.string_dtype(encoding='ascii')
         )
-        grp.create_dataset('mtimes', data=mtimes, dtype='f4')
+        grp.create_dataset('mtimes', data=mtimes, dtype='f8')
         grp.create_dataset('sizes', data=sizes, dtype='u8')
 
     def write(self):
