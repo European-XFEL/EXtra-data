@@ -37,12 +37,12 @@ def check_sources(overview_file: h5py.File, run_dir):
         return False  # Basic check that things make sense
 
     files_now = {f for f in os.listdir(run_dir) if f.endswith('.h5')}
-    files_stored = g['names'][:]
+    files_stored = [p.decode('ascii') for p in g['names'][:]]
     if files_now != set(files_stored):
         return False
 
-    for path, mtime, size in zip(files_stored, g['mtimes'][:], g['sizes']):
-        st = os.stat(path)
+    for name, mtime, size in zip(files_stored, g['mtimes'][:], g['sizes']):
+        st = os.stat(os.path.join(run_dir, name))
         if (st.st_size != size) or (st.st_mtime != mtime):
             return False
 
