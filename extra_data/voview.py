@@ -16,13 +16,11 @@ class VirtualOverviewFileWriter(VirtualFileWriter):
         names, mtimes, sizes = [], [], []
         for fa in self.data.files:
             st = fa.metadata_fstat or os.stat(fa.filename)
-            names.append(fa.filename)
+            names.append(fa.filename.encode('utf-8'))
             mtimes.append(st.st_mtime)
             sizes.append(st.st_size)
 
-        grp.create_dataset(
-            'names', data=names, dtype=h5py.string_dtype(encoding='ascii')
-        )
+        grp.create_dataset('names', data=names, dtype=h5py.string_dtype())
         grp.create_dataset('mtimes', data=mtimes, dtype='f4')
         grp.create_dataset('sizes', data=sizes, dtype='u8')
 
