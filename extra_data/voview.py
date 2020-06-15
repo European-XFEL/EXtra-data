@@ -4,11 +4,16 @@ These use virtual datasets to present the data from a run as a single file.
 """
 
 import os
+import os.path as osp
+import re
 import sys
 
 import h5py
 
 from .writer import VirtualFileWriter
+
+SCRATCH_ROOT_DIR = "/gpfs/exfel/exp/"
+
 
 class VirtualOverviewFileWriter(VirtualFileWriter):
     def record_source_files(self):
@@ -16,7 +21,7 @@ class VirtualOverviewFileWriter(VirtualFileWriter):
         names, mtimes, sizes = [], [], []
         for fa in self.data.files:
             st = fa.metadata_fstat or os.stat(fa.filename)
-            names.append(os.path.basename(fa.filename).encode('ascii'))
+            names.append(osp.basename(fa.filename).encode('ascii'))
             mtimes.append(st.st_mtime)
             sizes.append(st.st_size)
 
@@ -42,11 +47,68 @@ def check_sources(overview_file: h5py.File, run_dir):
         return False
 
     for name, mtime, size in zip(files_stored, g['mtimes'][:], g['sizes']):
-        st = os.stat(os.path.join(run_dir, name))
+        st = os.stat(osp.join(run_dir, name))
         if (st.st_size != size) or (st.st_mtime != mtime):
             return False
 
     return True
+
+
+def voview_paths_for_run(directory):
+    paths = [osp.join(directory, 'overview.h5')]
+    # After resolving symlinks, data on Maxwell is stored in either
+    # GPFS, e.g. /gpfs/exfel/d/proc/SCS/201901/p002212  or
+    # dCache, e.g. /pnfs/xfel.eu/exfel/archive/XFEL/raw/SCS/201901/p002212
+    # On the online cluster the resolved path stay:
+    #   /gpfs/exfel/exp/inst/cycle/prop/(raw|proc)/run
+    maxwell_match = re.match(
+        #     raw/proc  instr  cycle prop   run
+        r'.+/(raw|proc)/(\w+)/(\w+)/(p\d+)/(r\d+)/?$',
+        osp.realpath(directory)
+    )
+    online_match = re.match(
+        #     instr cycle prop   raw/proc   run
+        r'^.+/(\w+)/(\w+)/(p\d+)/(raw|proc)/(r\d+)/?$',
+        osp.realpath(directory)
+    )
+
+    if maxwell_match:
+        raw_proc, instr, cycle, prop, run_nr = maxwell_match.groups()
+    elif online_match:
+        instr, cycle, prop, raw_proc, run_nr = online_match.groups()
+    else:
+        run_nr = None
+
+    if run_nr is not None:
+        fname = '%s_%s.h5' % (raw_proc, run_nr)
+        prop_scratch = osp.join(
+            SCRATCH_ROOT_DIR, instr, cycle, prop, 'scratch'
+        )
+        if osp.isdir(prop_scratch):
+            paths.append(
+                osp.join(prop_scratch, '.karabo_data_maps', fname)
+            )
+    return paths
+
+def find_file_read(run_dir):
+    for candidate in voview_paths_for_run(run_dir):
+        if osp.isfile(candidate):
+            return candidate
+
+def find_file_write(run_dir):
+    for candidate in voview_paths_for_run(run_dir):
+        try:
+            os.makedirs(osp.dirname(candidate), exist_ok=True)
+            candidate_tmp = candidate + '.check'
+            with open(candidate_tmp, 'wb'):
+                pass
+            os.unlink(candidate_tmp)
+            return candidate
+        except PermissionError:
+            pass
+
+    raise PermissionError
+
 
 def main(argv=None):
     import argparse
@@ -54,11 +116,13 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('--check', action='store_true')
     ap.add_argument('run_dir')
-    ap.add_argument('overview_file')
+    ap.add_argument('--overview-file')
     args = ap.parse_args(argv)
 
     if args.check:
-        with h5py.File(args.overview_file, 'r') as f:
+        file_path = args.overview_file or find_file_read(args.run_dir)
+        print(f"Checking {file_path} ...")
+        with h5py.File(file_path, 'r') as f:
             ok = check_sources(f, args.run_dir)
         if ok:
             print("Source files match, overview file can be used")
@@ -67,8 +131,10 @@ def main(argv=None):
             return 1
     else:
         from . import RunDirectory
+        file_path = args.overview_file or find_file_write(args.run_dir)
+        print(f"Creating {file_path} ...")
         run = RunDirectory(args.run_dir)
-        vofw = VirtualOverviewFileWriter(args.overview_file, run)
+        vofw = VirtualOverviewFileWriter(file_path, run)
         vofw.write()
 
 if __name__ == '__main__':
