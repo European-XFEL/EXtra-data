@@ -139,10 +139,14 @@ def main(argv=None):
             print("Source files don't match, overview file outdated")
             return 1
     else:
-        from . import RunDirectory
+        from . import DataCollection
         file_path = args.overview_file or find_file_write(args.run_dir)
-        print(f"Creating {file_path} ...")
-        run = RunDirectory(args.run_dir)
+        source_files = [
+            osp.join(args.run_dir, f) for f in os.listdir(args.run_dir)
+            if f.endswith('.h5') and f != 'overview.h5'
+        ]
+        print(f"Creating {file_path} from {len(source_files)} files...")
+        run = DataCollection.from_paths(source_files)
         vofw = VirtualOverviewFileWriter(file_path, run)
         vofw.write()
 
