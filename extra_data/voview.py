@@ -10,6 +10,7 @@ import sys
 
 import h5py
 
+from .file_access import FileAccess
 from .writer import VirtualFileWriter
 
 SCRATCH_ROOT_DIR = "/gpfs/exfel/exp/"
@@ -41,7 +42,8 @@ def check_sources(overview_file: h5py.File, run_dir):
     if not (g['names'].shape == g['mtimes'].shape == g['sizes'].shape):
         return False  # Basic check that things make sense
 
-    files_now = {f for f in os.listdir(run_dir) if f.endswith('.h5')}
+    files_now = {f for f in os.listdir(run_dir)
+                 if f.endswith('.h5') and f != 'overview.h5'}
     files_stored = [p.decode('ascii') for p in g['names'][:]]
     if files_now != set(files_stored):
         return False
@@ -94,6 +96,13 @@ def find_file_read(run_dir):
     for candidate in voview_paths_for_run(run_dir):
         if osp.isfile(candidate):
             return candidate
+
+def find_file_valid(run_dir):
+    for candidate in voview_paths_for_run(run_dir):
+        if osp.isfile(candidate):
+            file_acc = FileAccess(candidate)
+            if check_sources(file_acc.file, run_dir):
+                return file_acc
 
 def find_file_write(run_dir):
     for candidate in voview_paths_for_run(run_dir):
