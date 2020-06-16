@@ -300,4 +300,3 @@ Use it only as a last resort.**
 If you find any files which are located only on tape or unavailable, please let know to
 `ITDM <mailto:it-support@xfel.eu>`_. If you need these files for analysis mentioned
 that explicitly.
-and ask for help with recovering data. 
