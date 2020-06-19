@@ -208,7 +208,7 @@ class VirtualFileWriter(FileWriter):
         """Copy data as a new dataset"""
         a = self.data.get_array(source, key)
         path = f"{self._section(source)}/{source}/{key.replace('.', '/')}"
-        self.file[path] = a.values
+        self.file.create_dataset(path, data=a.values, compression='gzip')
         self._make_index(source, key, a.coords['trainId'].values)
 
     def add_dataset(self, source, key):
