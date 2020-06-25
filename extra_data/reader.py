@@ -233,6 +233,12 @@ class DataCollection:
         section = 'INSTRUMENT' if source in self.instrument_sources else 'CONTROL'
         return KeyData(source, key, data_chunks=chunks, section=section)
 
+    def __getitem__(self, item):
+        if isinstance(item, tuple) and len(item) == 2:
+            return self._get_key_data(*item)
+
+        raise TypeError("Expected data[source, key]")
+
     def get_entry_shape(self, source, key):
         """Get the shape of a single data entry for the given source & key"""
         self._check_field(source, key)
