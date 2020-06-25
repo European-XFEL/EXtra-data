@@ -103,6 +103,10 @@ class DataChunk:
         return slice(self.first, self.first + np.sum(self.counts))
 
     @property
+    def total_count(self):
+        return int(np.sum(self.counts, dtype=np.uint64))
+
+    @property
     def dataset_path(self):
         if self.source in self.file.instrument_sources:
             group = 'INSTRUMENT'
