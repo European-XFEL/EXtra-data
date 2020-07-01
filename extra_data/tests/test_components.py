@@ -107,7 +107,7 @@ def test_get_array_pulse_indexes_reduced_data(mock_reduced_spb_proc_run):
 def test_get_array_as_xarray(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run.select_trains(by_index[:3]))
-    arr = det.get_array('image.data', pulses=by_index[0], unstack=False)
+    arr = det.get_array('image.data', pulses=by_index[0], unstack_pulses=False)
     assert arr.shape == (16, 3, 1, 256, 256)
     assert (arr.coords['pulse'] == 0).all()
 
