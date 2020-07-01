@@ -332,7 +332,7 @@ class MPxDetectorBase:
           ID, by_index by index within the data being read. The default includes
           all pulses. Only used for per-train data.
         unstack: bool
-          Wheter or not to separate train and pulse dimensions 
+          Wheter to separate train and pulse dimensions.
         """
         pulses = _check_pulse_selection(pulses)
 
