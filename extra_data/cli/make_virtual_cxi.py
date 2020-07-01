@@ -27,7 +27,7 @@ def _detectors():
     return [d.__name__ for d in MPxDetectorBase.__subclasses__()]
 
 
-def cast(number:str):
+def parse_number(number:str):
     try:
         return float(number)
     except ValueError:
@@ -69,7 +69,7 @@ def main(argv=None):
     out_file = args.output
     fill_values = None
     if args.fill_value:
-        fill_values = {ds: cast(value) for ds, value in args.fill_value}
+        fill_values = {ds: parse_number(value) for ds, value in args.fill_value}
 
     logging.basicConfig(level=logging.INFO)
 
