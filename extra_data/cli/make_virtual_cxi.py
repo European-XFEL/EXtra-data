@@ -27,6 +27,18 @@ def _detectors():
     return [d.__name__ for d in MPxDetectorBase.__subclasses__()]
 
 
+def parse_number(arg):
+    arg = arg.strip()
+    if arg.startswith('0x'):
+        return int(arg, 16)
+    elif arg.startswith('0o'):
+        return int(arg, 8)
+    elif arg.startswith('0b'):
+        return int(arg, 2)
+    else:
+        return arg
+
+
 def main(argv=None):
     example = dedent("""
         Example:
@@ -54,6 +66,7 @@ def main(argv=None):
     )
     ap.add_argument(
         '--fill-value', action='append', nargs=2, metavar=('DS', 'V'),
+        type=parse_number,
         help='define fill value (V) for individual dataset (DS). Datasets are'
              ' "data", "gain" and "mask". (defaults: data: nan (proc, float32)'
              ' or 0 (raw, uint16); gain: 0; mask: 0xffffffff)'
