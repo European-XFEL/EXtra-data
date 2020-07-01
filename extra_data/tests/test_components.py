@@ -18,7 +18,7 @@ def test_get_array(mock_fxe_raw_run):
     assert arr.shape == (16, 3, 128, 256, 256)
     assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
 
-    arr = det.get_array('image.data', pulses=by_index[0], unstack=False)
+    arr = det.get_array('image.data', pulses=by_index[0], unstack_pulse=False)
     assert arr.shape == (16, 384, 256, 256)
 
 
