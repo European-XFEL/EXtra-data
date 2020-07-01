@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 MAX_PULSES = 2700
 
 
-def _guess_axes(data, train_pulse_ids, unstack):
+def _guess_axes(data, train_pulse_ids, unstack_pulses):
     # Raw files have a spurious extra dimension
     if data.ndim >= 2 and data.shape[1] == 1:
         data = data[:, 0]
@@ -35,7 +35,7 @@ def _guess_axes(data, train_pulse_ids, unstack):
 
     arr = xarray.DataArray(data, {'train_pulse': train_pulse_ids}, dims=dims)
 
-    if unstack:
+    if unstack_pulses:
         # Separate train & pulse dimensions, and arrange dimensions
         # so that the data is contiguous in memory.
         dim_order = ['train', 'pulse'] + dims[1:]
@@ -239,7 +239,7 @@ class MPxDetectorBase:
 
         return np.concatenate(positions)
 
-    def _get_module_pulse_data(self, source, key, pulses, unstack):
+    def _get_module_pulse_data(self, source, key, pulses, unstack_pulses):
         seq_arrays = []
         data_path = "/INSTRUMENT/{}/{}".format(source, key.replace('.', '/'))
         for f in self.data._source_index[source]:
@@ -299,7 +299,7 @@ class MPxDetectorBase:
 
                 data = f.file[data_path][data_positions]
 
-                arr = _guess_axes(data, index, unstack)
+                arr = _guess_axes(data, index, unstack_pulses)
 
                 seq_arrays.append(arr)
 
@@ -319,7 +319,7 @@ class MPxDetectorBase:
             sorted(non_empty, key=lambda a: a.coords['train'][0]), dim='train'
         )
 
-    def get_array(self, key, pulses=by_index[:], unstack=True):
+    def get_array(self, key, pulses=by_index[:], unstack_pulses=True):
         """Get a labelled array of detector data
 
         Parameters
@@ -331,7 +331,7 @@ class MPxDetectorBase:
           Select the pulses to include from each train. by_id selects by pulse
           ID, by_index by index within the data being read. The default includes
           all pulses. Only used for per-train data.
-        unstack: bool
+        unstack_pulses: bool
           Wheter to separate train and pulse dimensions.
         """
         pulses = _check_pulse_selection(pulses)
@@ -343,7 +343,7 @@ class MPxDetectorBase:
             # If that changes, this check will need to change as well.
             if key.startswith('image.'):
                 arrays.append(self._get_module_pulse_data(
-                    source, key, pulses, unstack))
+                    source, key, pulses, unstack_pulses))
             else:
                 arrays.append(self.data.get_array(source, key))
             modnos.append(modno)
@@ -614,7 +614,7 @@ class MPxDetectorTrainIterator:
             # h5py fancy indexing needs a list, not an ndarray
             data_positions = list(first + positions)
 
-        return _guess_axes(ds[data_positions], train_pulse_ids, unstack=unstack)
+        return _guess_axes(ds[data_positions], train_pulse_ids, unstack_pulses=True)
 
     def _select_pulse_ids(self, pulse_ids):
         """Select pulses by ID
