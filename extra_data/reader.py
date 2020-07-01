@@ -1258,7 +1258,7 @@ class TrainIterator:
                 first, count = firsts[pos], counts[pos]
                 if count == 1:
                     source_data[key] = ds[first]
-                else:
+                elif count > 0:
                     source_data[key] = ds[first : first + count]
 
         return res
