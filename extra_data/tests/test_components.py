@@ -20,7 +20,7 @@ def test_get_array(mock_fxe_raw_run):
 
     arr = det.get_array('image.data', pulses=by_index[0], unstack_pulses=False)
     assert arr.shape == (16, 384, 256, 256)
-
+    assert arr.dims == ('module', 'train_pulse', 'slow_scan', 'fast_scan')
 
 def test_get_array_pulse_id(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
