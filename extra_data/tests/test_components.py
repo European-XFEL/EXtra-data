@@ -18,6 +18,9 @@ def test_get_array(mock_fxe_raw_run):
     assert arr.shape == (16, 3, 128, 256, 256)
     assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
 
+    arr = det.get_array('image.data', pulses=by_index[0], unstack=False)
+    assert arr.shape == (16, 384, 256, 256)
+
 
 def test_get_array_pulse_id(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
@@ -102,14 +105,6 @@ def test_get_array_pulse_indexes_reduced_data(mock_reduced_spb_proc_run):
 
     arr = det.get_array('image.data', pulses=by_index[[1, 7, 15, 23]])
     assert np.isin(arr.coords['pulse'], [1, 7, 15, 23]).all()
-
-
-def test_get_array_as_xarray(mock_fxe_raw_run):
-    run = RunDirectory(mock_fxe_raw_run)
-    det = LPD1M(run.select_trains(by_index[:3]))
-    arr = det.get_array('image.data', pulses=by_index[0], unstack_pulses=False)
-    assert arr.shape == (16, 3, 1, 256, 256)
-    assert (arr.coords['pulse'] == 0).all()
 
 
 def test_get_dask_array(mock_fxe_raw_run):
