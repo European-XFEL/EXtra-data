@@ -27,16 +27,11 @@ def _detectors():
     return [d.__name__ for d in MPxDetectorBase.__subclasses__()]
 
 
-def parse_number(arg):
-    arg = arg.strip()
-    if arg.startswith('0x'):
-        return int(arg, 16)
-    elif arg.startswith('0o'):
-        return int(arg, 8)
-    elif arg.startswith('0b'):
-        return int(arg, 2)
-    else:
-        return arg
+def cast(number:str):
+    try:
+        return float(number)
+    except ValueError:
+        return int(number, 0)
 
 
 def main(argv=None):
@@ -66,14 +61,15 @@ def main(argv=None):
     )
     ap.add_argument(
         '--fill-value', action='append', nargs=2, metavar=('DS', 'V'),
-        type=parse_number,
         help='define fill value (V) for individual dataset (DS). Datasets are'
              ' "data", "gain" and "mask". (defaults: data: nan (proc, float32)'
              ' or 0 (raw, uint16); gain: 0; mask: 0xffffffff)'
     )
     args = ap.parse_args(argv)
     out_file = args.output
-    fill_values = dict(args.fill_value) if args.fill_value else None
+    fill_values = None
+    if args.fill_value:
+        fill_values = {ds: cast(value) for ds, value in args.fill_value}
 
     logging.basicConfig(level=logging.INFO)
 
