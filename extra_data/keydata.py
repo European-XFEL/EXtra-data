@@ -86,9 +86,6 @@ class KeyData:
             dest_chunk_end = dest_cursor + chunk.total_count
 
             slices = (chunk.slice,) + roi
-            print("source sel", slices)
-            print("dest sel", dest_cursor, dest_chunk_end)
-            print("dest shape", out.shape)
             chunk.dataset.read_direct(
                 out[dest_cursor:dest_chunk_end], source_sel=slices
             )
