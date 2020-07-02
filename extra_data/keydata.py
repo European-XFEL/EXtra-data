@@ -1,36 +1,54 @@
 import numpy as np
+from .read_machinery import contiguous_regions, DataChunk
 
 class KeyData:
-    def __init__(self, source, key, data_chunks, section):
+    def __init__(self, source, key, train_ids, files, section):
         self.source = source
         self.key = key
         self.section = section
+        self.train_ids = train_ids
+        self.files = files
 
-        dim0 = 0
-        entry_shapes, dtypes = set(), set()
-        for chunk in data_chunks:
-            dim0 += chunk.total_count
-            entry_shapes.add(chunk.dataset.shape[1:])
-            dtypes.add(chunk.dataset.dtype)
+        ds0 = files[0].file[self._data_path]
+        self.entry_shape = ds0.shape[1:]
+        self.dtype = ds0.dtype
+        self.ndim = ds0.ndim
 
-        if len(entry_shapes) > 1:
-            raise Exception("Mismatched data shapes: {}".format(entry_shapes))
-        if len(dtypes) > 1:
-            raise Exception("Mismatched dtypes: {}".format(dtypes))
+    def _unordered_chunks(self):
+        """Find contiguous chunks of data for the given source & key
 
-        self.dtype = dtypes.pop()
-        self.entry_shape = entry_shapes.pop()
-        self.shape = (dim0,) + self.entry_shape
-        self.ndim = len(self.shape)
-        # Sort chunks by train ID and discard any empty ones
-        self._data_chunks = sorted(
-            [c for c in data_chunks if c.total_count > 0],
+        Yields DataChunk objects.
+        """
+        for file in self.files:
+            file_has_data = False
+            firsts, counts = file.get_index(self.source, self._key_group)
+
+            # Of trains in this file, which are in selection
+            selected = np.isin(file.train_ids, self.train_ids)
+
+            # Assemble contiguous chunks of data from this file
+            for _from, _to in contiguous_regions(selected):
+                file_has_data = True
+                yield DataChunk(file, self.source, self.key,
+                                first=firsts[_from],
+                                train_ids=file.train_ids[_from:_to],
+                                counts=counts[_from:_to],
+                                )
+
+            if not file_has_data:
+                # Make an empty chunk to let e.g. get_array find the shape
+                yield DataChunk(file, self.source, self.key,
+                                first=np.uint64(0),
+                                train_ids=file.train_ids[:0],
+                                counts=counts[:0],
+                                )
+
+    @property
+    def _data_chunks(self):
+        return sorted(
+            [c for c in self._unordered_chunks() if c.total_count],
             key=lambda c: c.train_ids[0]
         )
-        if self._data_chunks:
-            self.train_ids = np.concatenate([c.train_ids for c in self._data_chunks])
-        else:
-            self.train_ids = np.zeros(shape=(0,), dtype=np.uint64)
 
     def __repr__(self):
         return f"<extra_data.KeyData source={self.source!r} key={self.key!r} " \
@@ -48,6 +66,10 @@ class KeyData:
     def _data_path(self):
         return f"/{self.section}/{self.source}/{self.key.replace('.', '/')}"
 
+    @property
+    def shape(self):
+        return (sum(c.total_count for c in self._data_chunks),) + self.entry_shape
+
     def ndarray(self, roi=()):
         if not isinstance(roi, tuple):
             roi = (roi,)
@@ -64,6 +86,9 @@ class KeyData:
             dest_chunk_end = dest_cursor + chunk.total_count
 
             slices = (chunk.slice,) + roi
+            print("source sel", slices)
+            print("dest sel", dest_cursor, dest_chunk_end)
+            print("dest shape", out.shape)
             chunk.dataset.read_direct(
                 out[dest_cursor:dest_chunk_end], source_sel=slices
             )
