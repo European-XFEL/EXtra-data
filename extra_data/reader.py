@@ -229,9 +229,9 @@ class DataCollection:
 
     def _get_key_data(self, source, key):
         self._check_field(source, key)
-        chunks = list(self._find_data_chunks(source, key))
         section = 'INSTRUMENT' if source in self.instrument_sources else 'CONTROL'
-        return KeyData(source, key, data_chunks=chunks, section=section)
+        return KeyData(source, key, train_ids=self.train_ids,
+                       files=self._source_index[source], section=section)
 
     def __getitem__(self, item):
         if isinstance(item, tuple) and len(item) == 2:
@@ -241,17 +241,11 @@ class DataCollection:
 
     def get_entry_shape(self, source, key):
         """Get the shape of a single data entry for the given source & key"""
-        self._check_field(source, key)
-
-        for chunk in self._find_data_chunks(source, key):
-            # First dimension is number of entries
-            return chunk.dataset.shape[1:]
+        return self._get_key_data(source, key).entry_shape
 
     def get_dtype(self, source, key):
         """Get the numpy data type for the given source & key"""
-        self._check_field(source, key)
-        for chunk in self._find_data_chunks(source, key):
-            return chunk.dataset.dtype
+        return self._get_key_data(source, key).dtype
 
     def _check_data_missing(self, tid) -> bool:
         """Return True if a train does not have data for all sources"""
@@ -845,34 +839,7 @@ class DataCollection:
 
         Yields DataChunk objects.
         """
-        if source in self.instrument_sources:
-            key_group = key.partition('.')[0]
-        else:
-            key_group = ''
-
-        for file in self._source_index[source]:
-            file_has_data = False
-            firsts, counts = file.get_index(source, key_group)
-
-            # Of trains in this file, which are in selection
-            selected = np.isin(file.train_ids, self.train_ids)
-
-            # Assemble contiguous chunks of data from this file
-            for _from, _to in contiguous_regions(selected):
-                file_has_data = True
-                yield DataChunk(file, source, key,
-                                first=firsts[_from],
-                                train_ids=file.train_ids[_from:_to],
-                                counts=counts[_from:_to],
-                                )
-
-            if not file_has_data:
-                # Make an empty chunk to let e.g. get_array find the shape
-                yield DataChunk(file, source, key,
-                                first=np.uint64(0),
-                                train_ids=file.train_ids[:0],
-                                counts=counts[:0],
-                                )
+        return self._get_key_data(source, key)._data_chunks
 
     def _find_data(self, source, train_id) -> (FileAccess, int):
         for f in self._source_index[source]:
