@@ -17,11 +17,8 @@ class KeyData:
         self.entry_shape = eshape
         self.ndim = len(eshape) + 1
 
-    def _unordered_chunks(self):
-        """Find contiguous chunks of data for the given source & key
-
-        Yields DataChunk objects.
-        """
+    def _find_chunks(self):
+        """Find contiguous chunks of data for this key, in any order."""
         for file in self.files:
             firsts, counts = file.get_index(self.source, self._key_group)
 
@@ -36,12 +33,17 @@ class KeyData:
                                 counts=counts[_from:_to],
                                 )
 
+    _cached_chunks = None
+
     @property
     def _data_chunks(self) -> List[DataChunk]:
-        return sorted(
-            [c for c in self._unordered_chunks() if c.total_count],
-            key=lambda c: c.train_ids[0]
-        )
+        """An ordered list of chunks containing data"""
+        if self._cached_chunks is None:
+            self._cached_chunks = sorted(
+                [c for c in self._find_chunks() if c.total_count],
+                key=lambda c: c.train_ids[0]
+            )
+        return self._cached_chunks
 
     def __repr__(self):
         return f"<extra_data.KeyData source={self.source!r} key={self.key!r} " \
