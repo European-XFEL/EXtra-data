@@ -36,6 +36,25 @@ def test_select_trains(mock_spb_raw_run):
     assert len(sel2.files) == 0
     assert sel2.xarray().shape == (0,)
 
+
+def test_nodata(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    cam_pix = run['FXE_XAD_GEC/CAM/CAMERA_NODATA:daqOutput', 'data.image.pixels']
+
+    assert cam_pix.train_ids == list(range(10000, 10480))
+    assert len(cam_pix.files) == 2
+    assert cam_pix.shape == (0, 255, 1024)
+
+    arr = cam_pix.xarray()
+    assert arr.shape == (0, 255, 1024)
+    assert arr.dtype == np.dtype('u2')
+
+    assert list(cam_pix.trains()) == []
+    tid, data = cam_pix.train_from_id(10010)
+    assert tid == 10010
+    assert data.shape == (0, 255, 1024)
+
+
 def test_iter_trains(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
     xgm_beam_x = run['SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value']
