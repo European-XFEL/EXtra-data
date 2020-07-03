@@ -20,7 +20,6 @@ class KeyData:
         Yields DataChunk objects.
         """
         for file in self.files:
-            file_has_data = False
             firsts, counts = file.get_index(self.source, self._key_group)
 
             # Of trains in this file, which are in selection
@@ -28,19 +27,10 @@ class KeyData:
 
             # Assemble contiguous chunks of data from this file
             for _from, _to in contiguous_regions(selected):
-                file_has_data = True
                 yield DataChunk(file, self.source, self.key,
                                 first=firsts[_from],
                                 train_ids=file.train_ids[_from:_to],
                                 counts=counts[_from:_to],
-                                )
-
-            if not file_has_data:
-                # Make an empty chunk to let e.g. get_array find the shape
-                yield DataChunk(file, self.source, self.key,
-                                first=np.uint64(0),
-                                train_ids=file.train_ids[:0],
-                                counts=counts[:0],
                                 )
 
     @property
