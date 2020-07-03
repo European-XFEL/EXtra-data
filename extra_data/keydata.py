@@ -27,11 +27,12 @@ class KeyData:
 
             # Assemble contiguous chunks of data from this file
             for _from, _to in contiguous_regions(selected):
-                yield DataChunk(file, self.source, self.key,
-                                first=firsts[_from],
-                                train_ids=file.train_ids[_from:_to],
-                                counts=counts[_from:_to],
-                                )
+                yield DataChunk(
+                    file, self._data_path,
+                    first=firsts[_from],
+                    train_ids=file.train_ids[_from:_to],
+                    counts=counts[_from:_to],
+                )
 
     _cached_chunks = None
 

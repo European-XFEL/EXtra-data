@@ -125,11 +125,9 @@ def select_train_ids(train_ids, sel):
 
 class DataChunk:
     """Reference to a contiguous chunk of data for one or more trains."""
-
-    def __init__(self, file, source, key, first, train_ids, counts):
+    def __init__(self, file, dataset_path, first, train_ids, counts):
         self.file = file
-        self.source = source
-        self.key = key
+        self.dataset_path = dataset_path
         self.first = first
         self.train_ids = train_ids
         self.counts = counts
@@ -141,17 +139,6 @@ class DataChunk:
     @property
     def total_count(self):
         return int(np.sum(self.counts, dtype=np.uint64))
-
-    @property
-    def dataset_path(self):
-        if self.source in self.file.instrument_sources:
-            group = 'INSTRUMENT'
-        elif self.source in self.file.control_sources:
-            group = 'CONTROL'
-        else:
-            raise SourceNameError(self.source)
-
-        return '/{}/{}/{}'.format(group, self.source, self.key.replace('.', '/'))
 
     @property
     def dataset(self):
