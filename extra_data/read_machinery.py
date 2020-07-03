@@ -55,6 +55,14 @@ class _SliceConstructable(metaclass=_SliceConstructor):
         return repr(value)
 
 
+class by_id(_SliceConstructable):
+    pass
+
+
+class by_index(_SliceConstructable):
+    pass
+
+
 def _tid_to_slice_ix(tid, train_ids, stop=False):
     """Convert a train ID to an integer index for slicing the dataset
 
@@ -85,6 +93,34 @@ def _tid_to_slice_ix(tid, train_ids, stop=False):
         # This train ID is within the run, but doesn't have an entry.
         # Find the first ID in the run greater than the one given.
         return (train_ids > tid).nonzero()[0][0]
+
+
+def select_train_ids(train_ids, sel):
+    if isinstance(sel, by_index):
+        sel = sel.value
+
+    if isinstance(sel, by_id) and isinstance(sel.value, slice):
+        # Slice by train IDs
+        start_ix = _tid_to_slice_ix(sel.value.start, train_ids, stop=False)
+        stop_ix = _tid_to_slice_ix(sel.value.stop, train_ids, stop=True)
+        return train_ids[start_ix: stop_ix: sel.value.step]
+    elif isinstance(sel, by_id) and isinstance(sel.value, (list, np.ndarray)):
+        # Select a list of trains by train ID
+        new_train_ids = sorted(set(train_ids).intersection(sel.value))
+        if not new_train_ids:
+            raise ValueError(
+                "Given train IDs not found among {} trains in "
+                "collection".format(len(train_ids))
+            )
+        return new_train_ids
+    elif isinstance(sel, slice):
+        # Slice by indexes in this collection
+        return train_ids[sel]
+    elif isinstance(sel, (list, np.ndarray)):
+        # Select a list of trains by index in this collection
+        return sorted(np.asarray(train_ids)[sel])
+    else:
+        raise TypeError(type(sel))
 
 
 class DataChunk:

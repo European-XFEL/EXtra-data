@@ -34,12 +34,11 @@ from .exceptions import SourceNameError, PropertyNameError, TrainIDError
 from .keydata import KeyData
 from .read_machinery import (
     DETECTOR_SOURCE_RE,
-    DataChunk,
     FilenameInfo,
-    _SliceConstructable,
-    _tid_to_slice_ix,
+    by_id,
+    by_index,
+    select_train_ids,
     union_selections,
-    contiguous_regions,
     find_proposal,
 )
 from .run_files_map import RunFilesMap
@@ -63,14 +62,6 @@ log = logging.getLogger(__name__)
 RUN_DATA = 'RUN'
 INDEX_DATA = 'INDEX'
 METADATA = 'METADATA'
-
-
-class by_id(_SliceConstructable):
-    pass
-
-
-class by_index(_SliceConstructable):
-    pass
 
 
 class DataCollection:
@@ -230,8 +221,17 @@ class DataCollection:
     def _get_key_data(self, source, key):
         self._check_field(source, key)
         section = 'INSTRUMENT' if source in self.instrument_sources else 'CONTROL'
-        return KeyData(source, key, train_ids=self.train_ids,
-                       files=self._source_index[source], section=section)
+        files = self._source_index[source]
+        ds0 = files[0].file[f"{section}/{source}/{key.replace('.', '/')}"]
+        return KeyData(
+            source,
+            key,
+            train_ids=self.train_ids,
+            files=self._source_index[source],
+            section=section,
+            dtype=ds0.dtype,
+            eshape=ds0.shape[1:],
+        )
 
     def __getitem__(self, item):
         if isinstance(item, tuple) and len(item) == 2:
@@ -776,36 +776,7 @@ class DataCollection:
         ValueError
             If given train IDs do not overlap with the trains in this data.
         """
-        tr = train_range
-        if isinstance(tr, by_id):
-            if isinstance(tr.value, slice):
-                # Slice by train IDs
-                start_ix = _tid_to_slice_ix(tr.value.start, self.train_ids, stop=False)
-                stop_ix = _tid_to_slice_ix(tr.value.stop, self.train_ids, stop=True)
-                new_train_ids = self.train_ids[start_ix : stop_ix : tr.value.step]
-            elif isinstance(tr.value, (list, np.ndarray)):
-                # Select a list of trains by train ID
-                new_train_ids = sorted(
-                    set(self.train_ids).intersection(tr.value))
-                if not new_train_ids:
-                    raise ValueError(
-                        "Given train IDs not found among {} trains in "
-                        "collection".format(len(self.train_ids))
-                    )
-            else:
-                raise TypeError(type(tr.value))
-        else:
-            if isinstance(tr, by_index):
-                tr = tr.value
-
-            if isinstance(tr, (slice, tuple)):
-                # Slice by indexes in this collection
-                new_train_ids = self.train_ids[tr]
-            elif isinstance(tr, (list, np.ndarray)):
-                # Select a list of trains by index in this collection
-                new_train_ids = sorted([self.train_ids[i] for i in tr])
-            else:
-                raise TypeError(type(tr))
+        new_train_ids = select_train_ids(self.train_ids, train_range)
 
         files = [f for f in self.files
                  if np.intersect1d(f.train_ids, new_train_ids).size > 0]

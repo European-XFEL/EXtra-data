@@ -1,18 +1,16 @@
 import numpy as np
-from .read_machinery import contiguous_regions, DataChunk
+from .read_machinery import contiguous_regions, DataChunk, select_train_ids
 
 class KeyData:
-    def __init__(self, source, key, train_ids, files, section):
+    def __init__(self, source, key, *, train_ids, files, section, dtype, eshape):
         self.source = source
         self.key = key
-        self.section = section
         self.train_ids = train_ids
         self.files = files
-
-        ds0 = files[0].file[self._data_path]
-        self.entry_shape = ds0.shape[1:]
-        self.dtype = ds0.dtype
-        self.ndim = ds0.ndim
+        self.section = section
+        self.dtype = dtype
+        self.entry_shape = eshape
+        self.ndim = len(eshape) + 1
 
     def _unordered_chunks(self):
         """Find contiguous chunks of data for the given source & key
@@ -59,6 +57,21 @@ class KeyData:
     @property
     def shape(self):
         return (sum(c.total_count for c in self._data_chunks),) + self.entry_shape
+
+    def select_trains(self, trains):
+        tids = select_train_ids(self.train_ids, trains)
+        files = [f for f in self.files
+                 if np.intersect1d(f.train_ids, tids).size > 0]
+
+        return KeyData(
+            self.source,
+            self.key,
+            train_ids=tids,
+            files=files,
+            section=self.section,
+            dtype=self.dtype,
+            eshape=self.entry_shape,
+        )
 
     def ndarray(self, roi=()):
         if not isinstance(roi, tuple):
