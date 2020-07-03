@@ -297,7 +297,7 @@ class FileAccess:
         else:
             raise SourceNameError(source)
 
-        if path in self.file:
+        if self.file.get(path, getclass=True) is h5py.Dataset:
             self._known_keys[source].add(key)
             return True
         return False
