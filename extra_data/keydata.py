@@ -28,7 +28,7 @@ class KeyData:
             # Assemble contiguous chunks of data from this file
             for _from, _to in contiguous_regions(selected):
                 yield DataChunk(
-                    file, self._data_path,
+                    file, self.hdf5_data_path,
                     first=firsts[_from],
                     train_ids=file.train_ids[_from:_to],
                     counts=counts[_from:_to],
@@ -59,7 +59,8 @@ class KeyData:
             return ''
 
     @property
-    def _data_path(self):
+    def hdf5_data_path(self):
+        """The path to the relevant dataset within each HDF5 file"""
         return f"/{self.section}/{self.source}/{self.key.replace('.', '/')}"
 
     @property
@@ -208,9 +209,9 @@ class KeyData:
         firsts, counts = fa.get_index(self.source, self._key_group)
         first, count = firsts[ix], counts[ix]
         if count == 1:
-            return tid, fa.file[self._data_path][first]
+            return tid, fa.file[self.hdf5_data_path][first]
         else:
-            return tid, fa.file[self._data_path][first: first+count]
+            return tid, fa.file[self.hdf5_data_path][first: first+count]
 
     def train_from_index(self, i):
         return self.train_from_id(self.train_ids[i])
