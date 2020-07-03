@@ -1,4 +1,9 @@
+from typing import List, Optional
+
 import numpy as np
+
+from .exceptions import TrainIDError
+from .file_access import FileAccess
 from .read_machinery import contiguous_regions, DataChunk, select_train_ids
 
 class KeyData:
@@ -6,7 +11,7 @@ class KeyData:
         self.source = source
         self.key = key
         self.train_ids = train_ids
-        self.files = files
+        self.files: List[FileAccess] = files
         self.section = section
         self.dtype = dtype
         self.entry_shape = eshape
@@ -32,7 +37,7 @@ class KeyData:
                                 )
 
     @property
-    def _data_chunks(self):
+    def _data_chunks(self) -> List[DataChunk]:
         return sorted(
             [c for c in self._unordered_chunks() if c.total_count],
             key=lambda c: c.train_ids[0]
@@ -72,6 +77,8 @@ class KeyData:
             dtype=self.dtype,
             eshape=self.entry_shape,
         )
+
+    # Getting data as different kinds of array: -------------------------------
 
     def ndarray(self, roi=()):
         if not isinstance(roi, tuple):
@@ -176,3 +183,43 @@ class KeyData:
             return xarray.DataArray(dask_arr, dims=dims, coords=coords)
         else:
             return dask_arr
+
+    # Getting data by train: --------------------------------------------------
+
+    def _find_tid(self, tid) -> (Optional[FileAccess], int):
+        for fa in self.files:
+            matches = (fa.train_ids == tid).nonzero()[0]
+            if matches.size > 0:
+                return fa, matches[0]
+
+        return None, 0
+
+    def train_from_id(self, tid):
+        if tid not in self.train_ids:
+            raise TrainIDError(tid)
+
+        fa, ix = self._find_tid(tid)
+        if fa is None:
+            return np.empty((0,) + self.entry_shape, dtype=self.dtype)
+
+        firsts, counts = fa.get_index(self.source, self._key_group)
+        first, count = firsts[ix], counts[ix]
+        if count == 1:
+            return tid, fa.file[self._data_path][first]
+        else:
+            return tid, fa.file[self._data_path][first: first+count]
+
+    def train_from_index(self, i):
+        return self.train_from_id(self.train_ids[i])
+
+    def trains(self):
+        for chunk in self._data_chunks:
+            start = chunk.first
+            ds = chunk.dataset
+            for tid, count in zip(chunk.train_ids, chunk.counts):
+                if count > 1:
+                    yield tid, ds[start: start+count]
+                elif count == 1:
+                    yield tid, ds[start]
+
+                start += count

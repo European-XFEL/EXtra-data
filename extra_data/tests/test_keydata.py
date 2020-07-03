@@ -1,6 +1,8 @@
 import numpy as np
+import pytest
 
 from extra_data import RunDirectory
+from extra_data.exceptions import TrainIDError
 
 def test_get_keydata(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
@@ -34,3 +36,28 @@ def test_select_trains(mock_spb_raw_run):
     assert len(sel2.files) == 0
     assert sel2.xarray().shape == (0,)
 
+def test_iter_trains(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    xgm_beam_x = run['SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value']
+
+    assert [t for (t, _) in xgm_beam_x.trains()] == list(range(10000, 10064))
+    for _, v in xgm_beam_x.trains():
+        assert isinstance(v, np.float32)
+        break
+
+def test_get_train(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    xgm_beam_x = run['SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value']
+
+    tid, val = xgm_beam_x.train_from_id(10005)
+    assert tid == 10005
+    assert isinstance(val, np.float32)
+
+    with pytest.raises(TrainIDError):
+        xgm_beam_x.train_from_id(11000)
+
+    tid, _ = xgm_beam_x.train_from_index(-10)
+    assert tid == 10054
+
+    with pytest.raises(IndexError):
+        xgm_beam_x.train_from_index(9999)
