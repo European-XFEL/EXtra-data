@@ -82,6 +82,9 @@ class KeyData:
             eshape=self.entry_shape,
         )
 
+    def __getitem__(self, item):
+        return self.select_trains(item)
+
     # Getting data as different kinds of array: -------------------------------
 
     def ndarray(self, roi=()):

@@ -26,12 +26,12 @@ def test_select_trains(mock_spb_raw_run):
     xgm_beam_x = run['SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value']
     assert xgm_beam_x.shape == (64,)
 
-    sel1 = xgm_beam_x.select_trains(np.s_[:20])
+    sel1 = xgm_beam_x[:20]  # Equivalent to .select_trains(np.s_[:20])
     assert sel1.shape == (20,)
     assert len(sel1.files) == 1
 
     # Empty selection
-    sel2 = xgm_beam_x.select_trains(np.s_[80:])
+    sel2 = xgm_beam_x[80:]
     assert sel2.shape == (0,)
     assert len(sel2.files) == 0
     assert sel2.xarray().shape == (0,)
