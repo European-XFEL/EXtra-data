@@ -47,7 +47,7 @@ def _guess_axes(data, train_pulse_ids, unstack_pulses):
 def _check_pulse_selection(pulses):
     """Check and normalise a pulse selection"""
     if not isinstance(pulses, (by_id, by_index)):
-        raise TypeError("pulses selection should be by_id or by_index object")
+        pulses = by_index[pulses]
 
     val = pulses.value
 
@@ -320,7 +320,7 @@ class MPxDetectorBase:
             dim=('train' if unstack_pulses else 'train_pulse'),
         )
 
-    def get_array(self, key, pulses=by_index[:], unstack_pulses=True):
+    def get_array(self, key, pulses=np.s_[:], unstack_pulses=True):
         """Get a labelled array of detector data
 
         Parameters
@@ -328,7 +328,7 @@ class MPxDetectorBase:
 
         key: str
           The data to get, e.g. 'image.data' for pixel values.
-        pulses: by_id or by_index
+        pulses: slice, array, by_id or by_index
           Select the pulses to include from each train. by_id selects by pulse
           ID, by_index by index within the data being read. The default includes
           all pulses. Only used for per-train data.
@@ -398,13 +398,13 @@ class MPxDetectorBase:
 
         return xarray.concat(arrays, pd.Index(modnos, name='module'))
 
-    def trains(self, pulses=by_index[:]):
+    def trains(self, pulses=np.s_[:]):
         """Iterate over trains for detector data.
 
         Parameters
         ----------
 
-        pulses: by_index or by_id
+        pulses: slice, array, by_index or by_id
           Select which pulses to include for each train.
           The default is to include all pulses.
 

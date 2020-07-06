@@ -394,9 +394,9 @@ def test_run_get_array_roi(mock_fxe_raw_run):
 
 def test_run_get_array_multiple_per_train(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
-    sel = run.select_trains(by_index[:2])
+    sel = run.select_trains(np.s_[:2])
     arr = sel.get_array(
-        'FXE_DET_LPD1M-1/DET/6CH0:xtdf', 'image.data', roi=by_index[:, 10:20, 20:40]
+        'FXE_DET_LPD1M-1/DET/6CH0:xtdf', 'image.data', roi=np.s_[:, 10:20, 20:40]
     )
     assert isinstance(arr, DataArray)
     assert arr.shape == (256, 1, 10, 20)

@@ -528,7 +528,7 @@ class DataCollection:
 
         return pd.concat(series, axis=1)
 
-    def get_array(self, source, key, extra_dims=None, roi=by_index[...]):
+    def get_array(self, source, key, extra_dims=None, roi=()):
         """Return a labelled array for a particular data field.
 
         ::
@@ -551,23 +551,21 @@ class DataCollection:
             Name extra dimensions in the array. The first dimension is
             automatically called 'train'. The default for extra dimensions
             is dim_0, dim_1, ...
-        roi: by_index
+        roi: slice, tuple of slices, or by_index
             The region of interest. This expression selects data in all
             dimensions apart from the first (trains) dimension. If the data
-            holds a 1D array for each entry, roi=by_index[:8] would get the
+            holds a 1D array for each entry, roi=np.s_[:8] would get the
             first 8 values from every train. If the data is 2D or more at
-            each entry, selection looks like roi=by_index[:8, 5:10] .
+            each entry, selection looks like roi=np.s_[:8, 5:10] .
         """
         import xarray
 
         self._check_field(source, key)
 
-        if not isinstance(roi, by_index):
-            raise TypeError("roi parameter must be instance of by_index")
-        else:
+        if isinstance(roi, by_index):
             roi = roi.value
-            if not isinstance(roi, tuple):
-                roi = (roi,)
+        if not isinstance(roi, tuple):
+            roi = (roi,)
 
         chunks = sorted(
             self._find_data_chunks(source, key),
@@ -871,8 +869,7 @@ class DataCollection:
 
         Or select trains by index within this collection::
 
-            from extra_data import by_index
-            sel = run.select_trains(by_index[:5])
+            sel = run.select_trains(np.s_[:5])
 
         Returns a new :class:`DataCollection` object for the selected trains.
 
@@ -882,27 +879,35 @@ class DataCollection:
             If given train IDs do not overlap with the trains in this data.
         """
         tr = train_range
-        if isinstance(tr, by_id) and isinstance(tr.value, slice):
-            # Slice by train IDs
-            start_ix = _tid_to_slice_ix(tr.value.start, self.train_ids, stop=False)
-            stop_ix = _tid_to_slice_ix(tr.value.stop, self.train_ids, stop=True)
-            new_train_ids = self.train_ids[start_ix : stop_ix : tr.value.step]
-        elif isinstance(tr, by_index) and isinstance(tr.value, slice):
-            # Slice by indexes in this collection
-            new_train_ids = self.train_ids[tr.value]
-        elif isinstance(tr, by_id) and isinstance(tr.value, (list, np.ndarray)):
-            # Select a list of trains by train ID
-            new_train_ids = sorted(set(self.train_ids).intersection(tr.value))
-            if not new_train_ids:
-                raise ValueError(
-                    "Given train IDs not found among {} trains in "
-                    "collection".format(len(self.train_ids))
-                )
-        elif isinstance(tr, by_index) and isinstance(tr.value, (list, np.ndarray)):
-            # Select a list of trains by index in this collection
-            new_train_ids = sorted([self.train_ids[i] for i in tr.value])
+        if isinstance(tr, by_id):
+            if isinstance(tr.value, slice):
+                # Slice by train IDs
+                start_ix = _tid_to_slice_ix(tr.value.start, self.train_ids, stop=False)
+                stop_ix = _tid_to_slice_ix(tr.value.stop, self.train_ids, stop=True)
+                new_train_ids = self.train_ids[start_ix : stop_ix : tr.value.step]
+            elif isinstance(tr.value, (list, np.ndarray)):
+                # Select a list of trains by train ID
+                new_train_ids = sorted(
+                    set(self.train_ids).intersection(tr.value))
+                if not new_train_ids:
+                    raise ValueError(
+                        "Given train IDs not found among {} trains in "
+                        "collection".format(len(self.train_ids))
+                    )
+            else:
+                raise TypeError(type(tr.value))
         else:
-            raise TypeError(type(train_range))
+            if isinstance(tr, by_index):
+                tr = tr.value
+
+            if isinstance(tr, (slice, tuple)):
+                # Slice by indexes in this collection
+                new_train_ids = self.train_ids[tr]
+            elif isinstance(tr, (list, np.ndarray)):
+                # Select a list of trains by index in this collection
+                new_train_ids = sorted([self.train_ids[i] for i in tr])
+            else:
+                raise TypeError(type(tr))
 
         files = [f for f in self.files
                  if np.intersect1d(f.train_ids, new_train_ids).size > 0]
