@@ -316,7 +316,8 @@ class MPxDetectorBase:
             )
 
         return xarray.concat(
-            sorted(non_empty, key=lambda a: a.coords['train'][0]), dim='train'
+            sorted(non_empty, key=lambda a: a.coords['train'][0]),
+            dim=('train' if unstack_pulses else 'train_pulse'),
         )
 
     def get_array(self, key, pulses=by_index[:], unstack_pulses=True):
