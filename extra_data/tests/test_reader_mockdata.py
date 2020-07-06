@@ -68,6 +68,8 @@ def test_iterate_trains_fxe(mock_fxe_control_data):
             assert train_id in range(10000, 10400)
             assert 'SA1_XTD2_XGM/DOOCS/MAIN' in data.keys()
             assert 'beamPosition.ixPos.value' in data['SA1_XTD2_XGM/DOOCS/MAIN']
+            assert 'data.image.pixels' in data['FXE_XAD_GEC/CAM/CAMERA:daqOutput']
+            assert 'data.image.pixels' not in data['FXE_XAD_GEC/CAM/CAMERA_NODATA:daqOutput']
 
 
 def test_iterate_file_select_trains(mock_fxe_control_data):

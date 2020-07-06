@@ -27,6 +27,13 @@ def _detectors():
     return [d.__name__ for d in MPxDetectorBase.__subclasses__()]
 
 
+def parse_number(number:str):
+    try:
+        return float(number)
+    except ValueError:
+        return int(number, 0)
+
+
 def main(argv=None):
     example = dedent("""
         Example:
@@ -60,7 +67,9 @@ def main(argv=None):
     )
     args = ap.parse_args(argv)
     out_file = args.output
-    fill_values = dict(args.fill_value) if args.fill_value else None
+    fill_values = None
+    if args.fill_value:
+        fill_values = {ds: parse_number(value) for ds, value in args.fill_value}
 
     logging.basicConfig(level=logging.INFO)
 
