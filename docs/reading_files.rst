@@ -75,6 +75,7 @@ Where data will fit into memory, it's usually quickest and most convenient
 to load it like this.
 
 .. class:: DataCollection
+   :noindex:
 
    .. automethod:: get_array
 
@@ -126,6 +127,7 @@ interested in, either using :meth:`~.DataCollection.select`, or the ``devices=``
 parameter. This avoids reading all the other data.
 
 .. class:: DataCollection
+   :noindex:
 
    .. automethod:: trains
 
@@ -144,6 +146,7 @@ data, so you use them like this::
     # run still includes all the data
 
 .. class:: DataCollection
+   :noindex:
 
    .. automethod:: select
 
@@ -157,6 +160,7 @@ Writing selected data
 ---------------------
 
 .. class:: DataCollection
+   :noindex:
 
    .. automethod:: write
 
@@ -264,3 +268,35 @@ You only need these details if you think caching may be causing problems.
 
 JSON was chosen as it can be easily inspected manually, and it's reasonably
 efficient to load the entire file.
+
+Issues reading archived data
+----------------------------
+
+Files at European XFEL storage migrate over time from GPFS (designed for fast access) to PNFS (designed for archiving). The data 
+on PNFS is usually always available for reading. But sometimes, this may require
+staging from the tape to disk. If there is a staging queue, the operation can take
+an indefinitely long time (days or even weeks) and any IO operations will be 
+blocked for this time.
+
+To determine the files which require staging or are lost, use the script::
+
+    extra-data-locality <run directory>
+
+It returns a list of files which are currently located only on slow media for some
+reasons and, separately, any which have been lost.
+
+If the files are not essential for analysis, then they can be filtered out using 
+filter :func:`lc_ondisk` from :mod:`extra_data.locality`::
+
+    from extra_data.locality import lc_ondisk
+    run = open_run(proposal=700000, run=1, file_filter=lc_ondisk)
+
+``file_filter`` must be a callable which takes a list as a single argument and
+returns filtered list.
+
+**Note: Reading the file locality on PNFS is an expensive operation.
+Use it only as a last resort.**
+
+If you find any files which are located only on tape or unavailable, please let know to
+`ITDM <mailto:it-support@xfel.eu>`_. If you need these files for analysis mentioned
+that explicitly.

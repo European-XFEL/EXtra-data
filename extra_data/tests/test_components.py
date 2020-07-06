@@ -5,7 +5,7 @@ import os.path as osp
 import pytest
 from testpath import assert_isfile
 
-from extra_data.reader import RunDirectory, by_id, by_index
+from extra_data.reader import RunDirectory, H5File, by_id, by_index
 from extra_data.components import AGIPD1M, LPD1M, identify_multimod_detectors
 
 
@@ -18,6 +18,9 @@ def test_get_array(mock_fxe_raw_run):
     assert arr.shape == (16, 3, 128, 256, 256)
     assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
 
+    arr = det.get_array('image.data', pulses=by_index[:10], unstack_pulses=False)
+    assert arr.shape == (16, 30, 256, 256)
+    assert arr.dims == ('module', 'train_pulse', 'slow_scan', 'fast_scan')
 
 def test_get_array_pulse_id(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
@@ -97,12 +100,14 @@ def test_get_array_pulse_indexes_reduced_data(mock_reduced_spb_proc_run):
     arr = det.get_array('image.data', pulses=by_index[:0])
     assert arr.shape == (16, 0, 0, 512, 128)
 
-    arr = det.get_array('image.data', pulses=by_index[5:])
+    arr = det.get_array('image.data', pulses=np.s_[5:])
     assert (arr.coords['pulse'] >= 5).all()
 
     arr = det.get_array('image.data', pulses=by_index[[1, 7, 15, 23]])
     assert np.isin(arr.coords['pulse'], [1, 7, 15, 23]).all()
 
+    arr = det.get_array('image.data', pulses=[1, 7, 15, 23])
+    assert np.isin(arr.coords['pulse'], [1, 7, 15, 23]).all()
 
 def test_get_dask_array(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
@@ -257,6 +262,26 @@ def test_write_virtual_cxi_reduced_data(mock_reduced_spb_proc_run, tmpdir):
         det_grp = f['entry_1/instrument_1/detector_1']
         ds = det_grp['data']
         assert ds.shape[1:] == (16, 512, 128)
+
+
+def test_write_selected_frames(mock_spb_raw_run, tmp_path):
+    run = RunDirectory(mock_spb_raw_run)
+    det = AGIPD1M(run)
+
+    trains = np.repeat(np.arange(10000, 10010), 3)
+    pulses = np.tile([0, 1, 5], 10)
+    test_file = str(tmp_path / 'sel_frames.h5')
+    det.write_frames(test_file, trains, pulses)
+    assert_isfile(test_file)
+
+    with H5File(test_file) as f:
+        np.testing.assert_array_equal(
+            f.get_array('SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.pulseId')[:, 0],
+            pulses
+        )
+        assert f.instrument_sources == {
+            f'SPB_DET_AGIPD1M-1/DET/{i}CH0:xtdf' for i in range(16)
+        }
 
 
 def test_identify_multimod_detectors(mock_fxe_raw_run):

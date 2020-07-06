@@ -20,6 +20,16 @@ file:
    # Single file
    lsxfel /gpfs/exfel/exp/XMPL/201750/p700000/proc/r0002/CORR-R0034-AGIPD00-S00000.h5
 
+.. program:: lsxfel
+
+.. option:: --detail <source-pattern>
+
+   Show more detail on the keys and data of the sources selected by a pattern
+   like ``*/XGM/*``. Only applies when inspecting a single run or file.
+   Can be used several times to select different patterns.
+
+   This option can make ``lsxfel`` considerably slower.
+
 
 ``extra-data-validate``
 ------------------------
@@ -68,14 +78,19 @@ format. See :doc:`streaming` for more information.
 
    Add mock timestamps if missing in the original meta-data.
 
-Both of the last options, appended module sources and (dummy) timestamps are
+These two options above - appended module sources and dummy timestamps - are
 required if streamed data shall be provided to OnDA.
 
-Module appending has only been tested for AGIPD-1M data (so far). One should
-restrict its usage to data runs that actually contain HDF5 files from AGIPD
-sources, **and** make a selection like ``--source "*/DET/*"``, because a
-global selection of all sources will cause an error if additional
-non-detector sources are found in that run.
+.. option:: -z <type>, --socket-type <type>
+
+   The ZMQ socket type to use, one of ``PUB``, ``PUSH`` or ``REP``.
+   Default: ``REP``.
+
+.. option:: --use-infiniband
+
+   Use the infiniband network interface (``ib0``) if it's present.
+
+.. _cmd-make-virtual-cxi:
 
 ``extra-data-make-virtual-cxi``
 --------------------------------
@@ -96,3 +111,30 @@ Make a virtual CXI file to access AGIPD/LPD detector data from a specified run:
 .. option:: --min-modules <number>
 
    Include trains where at least N modules have data (default 9).
+
+.. option:: --fill-value <dataset> <value>
+
+   Set the fill value for dataset (one of ``data``, ``gain`` or ``mask``).
+   The defaults are different in different cases:
+
+   - data (raw, uint16): 0
+   - data (proc, float32): NaN
+   - gain: 0
+   - mask: 0xffffffff
+
+.. _cmd-locality:
+
+``extra-data-locality``
+------------------------
+
+Check how the files are stored:
+
+.. code-block:: shell
+
+   extra-data-locality /gpfs/exfel/exp/XMPL/201750/p700000/raw/r0002
+
+The file reading may hang for a long time if files are unavailable or require staging
+in dCache from the tape. The program helps finding problem files.
+
+If it finds problems with the data locality, the program will produce a list of files
+located on tape, lost or at unknown locality and exit with the non-zero status.

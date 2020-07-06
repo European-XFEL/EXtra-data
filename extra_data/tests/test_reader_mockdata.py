@@ -68,6 +68,8 @@ def test_iterate_trains_fxe(mock_fxe_control_data):
             assert train_id in range(10000, 10400)
             assert 'SA1_XTD2_XGM/DOOCS/MAIN' in data.keys()
             assert 'beamPosition.ixPos.value' in data['SA1_XTD2_XGM/DOOCS/MAIN']
+            assert 'data.image.pixels' in data['FXE_XAD_GEC/CAM/CAMERA:daqOutput']
+            assert 'data.image.pixels' not in data['FXE_XAD_GEC/CAM/CAMERA_NODATA:daqOutput']
 
 
 def test_iterate_file_select_trains(mock_fxe_control_data):
@@ -392,9 +394,9 @@ def test_run_get_array_roi(mock_fxe_raw_run):
 
 def test_run_get_array_multiple_per_train(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
-    sel = run.select_trains(by_index[:2])
+    sel = run.select_trains(np.s_[:2])
     arr = sel.get_array(
-        'FXE_DET_LPD1M-1/DET/6CH0:xtdf', 'image.data', roi=by_index[:, 10:20, 20:40]
+        'FXE_DET_LPD1M-1/DET/6CH0:xtdf', 'image.data', roi=np.s_[:, 10:20, 20:40]
     )
     assert isinstance(arr, DataArray)
     assert arr.shape == (256, 1, 10, 20)
@@ -614,6 +616,8 @@ def test_open_file(mock_sa3_control_data):
         assert 'METADATA/dataSources/dataSourceId' in file_access.file
 
 
+@pytest.mark.skipif(hasattr(os, 'geteuid') and os.geteuid() == 0,
+                    reason="cannot run permission tests as root")
 def test_permission():
     d = mkdtemp()
     os.chmod(d, not stat.S_IRUSR)

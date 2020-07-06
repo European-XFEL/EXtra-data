@@ -42,6 +42,7 @@ from .read_machinery import (
     find_proposal,
 )
 from .run_files_map import RunFilesMap
+from . import locality
 from .file_access import FileAccess
 
 __all__ = [
@@ -408,7 +409,7 @@ class DataCollection:
 
         for f in self._source_index[source]:
             if source in self.control_sources:
-                counts = np.ones(f.train_ids, dtype=np.uint64)
+                counts = np.ones(len(f.train_ids), dtype=np.uint64)
             else:
                 group = key.partition('.')[0]
                 _, counts = f.get_index(source, group)
@@ -527,7 +528,7 @@ class DataCollection:
 
         return pd.concat(series, axis=1)
 
-    def get_array(self, source, key, extra_dims=None, roi=by_index[...]):
+    def get_array(self, source, key, extra_dims=None, roi=()):
         """Return a labelled array for a particular data field.
 
         ::
@@ -550,23 +551,21 @@ class DataCollection:
             Name extra dimensions in the array. The first dimension is
             automatically called 'train'. The default for extra dimensions
             is dim_0, dim_1, ...
-        roi: by_index
+        roi: slice, tuple of slices, or by_index
             The region of interest. This expression selects data in all
             dimensions apart from the first (trains) dimension. If the data
-            holds a 1D array for each entry, roi=by_index[:8] would get the
+            holds a 1D array for each entry, roi=np.s_[:8] would get the
             first 8 values from every train. If the data is 2D or more at
-            each entry, selection looks like roi=by_index[:8, 5:10] .
+            each entry, selection looks like roi=np.s_[:8, 5:10] .
         """
         import xarray
 
         self._check_field(source, key)
 
-        if not isinstance(roi, by_index):
-            raise TypeError("roi parameter must be instance of by_index")
-        else:
+        if isinstance(roi, by_index):
             roi = roi.value
-            if not isinstance(roi, tuple):
-                roi = (roi,)
+        if not isinstance(roi, tuple):
+            roi = (roi,)
 
         chunks = sorted(
             self._find_data_chunks(source, key),
@@ -674,7 +673,9 @@ class DataCollection:
                 chunk_shape = (chunk_dim0,) + chunk.dataset.shape[1:]
 
             chunks_darrs.append(
-                da.from_array(chunk.dataset, chunks=chunk_shape)[chunk.slice]
+                da.from_array(
+                    chunk.file.dset_proxy(chunk.dataset_path), chunks=chunk_shape
+                )[chunk.slice]
             )
             chunks_trainids.append(
                 self._expand_trainids(chunk.counts, chunk.train_ids)
@@ -868,8 +869,7 @@ class DataCollection:
 
         Or select trains by index within this collection::
 
-            from extra_data import by_index
-            sel = run.select_trains(by_index[:5])
+            sel = run.select_trains(np.s_[:5])
 
         Returns a new :class:`DataCollection` object for the selected trains.
 
@@ -879,27 +879,35 @@ class DataCollection:
             If given train IDs do not overlap with the trains in this data.
         """
         tr = train_range
-        if isinstance(tr, by_id) and isinstance(tr.value, slice):
-            # Slice by train IDs
-            start_ix = _tid_to_slice_ix(tr.value.start, self.train_ids, stop=False)
-            stop_ix = _tid_to_slice_ix(tr.value.stop, self.train_ids, stop=True)
-            new_train_ids = self.train_ids[start_ix : stop_ix : tr.value.step]
-        elif isinstance(tr, by_index) and isinstance(tr.value, slice):
-            # Slice by indexes in this collection
-            new_train_ids = self.train_ids[tr.value]
-        elif isinstance(tr, by_id) and isinstance(tr.value, (list, np.ndarray)):
-            # Select a list of trains by train ID
-            new_train_ids = sorted(set(self.train_ids).intersection(tr.value))
-            if not new_train_ids:
-                raise ValueError(
-                    "Given train IDs not found among {} trains in "
-                    "collection".format(len(self.train_ids))
-                )
-        elif isinstance(tr, by_index) and isinstance(tr.value, (list, np.ndarray)):
-            # Select a list of trains by index in this collection
-            new_train_ids = sorted([self.train_ids[i] for i in tr.value])
+        if isinstance(tr, by_id):
+            if isinstance(tr.value, slice):
+                # Slice by train IDs
+                start_ix = _tid_to_slice_ix(tr.value.start, self.train_ids, stop=False)
+                stop_ix = _tid_to_slice_ix(tr.value.stop, self.train_ids, stop=True)
+                new_train_ids = self.train_ids[start_ix : stop_ix : tr.value.step]
+            elif isinstance(tr.value, (list, np.ndarray)):
+                # Select a list of trains by train ID
+                new_train_ids = sorted(
+                    set(self.train_ids).intersection(tr.value))
+                if not new_train_ids:
+                    raise ValueError(
+                        "Given train IDs not found among {} trains in "
+                        "collection".format(len(self.train_ids))
+                    )
+            else:
+                raise TypeError(type(tr.value))
         else:
-            raise TypeError(type(train_range))
+            if isinstance(tr, by_index):
+                tr = tr.value
+
+            if isinstance(tr, (slice, tuple)):
+                # Slice by indexes in this collection
+                new_train_ids = self.train_ids[tr]
+            elif isinstance(tr, (list, np.ndarray)):
+                # Select a list of trains by index in this collection
+                new_train_ids = sorted([self.train_ids[i] for i in tr])
+            else:
+                raise TypeError(type(tr))
 
         files = [f for f in self.files
                  if np.intersect1d(f.train_ids, new_train_ids).size > 0]
@@ -1190,10 +1198,7 @@ class DataCollection:
 
         vfw.write_train_ids()
 
-        if source in self.control_sources:
-            ds_path = vfw.add_control_dataset(source, key)
-        else:
-            ds_path = vfw.add_instrument_dataset(source, key)
+        ds_path = vfw.add_dataset(source, key)
 
         vfw.write_indexes()
         vfw.write_metadata()
@@ -1258,7 +1263,7 @@ class TrainIterator:
                 first, count = firsts[pos], counts[pos]
                 if count == 1:
                     source_data[key] = ds[first]
-                else:
+                elif count > 0:
                     source_data[key] = ds[first : first + count]
 
         return res
@@ -1288,7 +1293,7 @@ def H5File(path):
     return DataCollection.from_path(path)
 
 
-def RunDirectory(path, include='*'):
+def RunDirectory(path, include='*', file_filter=locality.lc_any):
     """Open data files from a 'run' at European XFEL.
 
     ::
@@ -1306,9 +1311,13 @@ def RunDirectory(path, include='*'):
         Path to the run directory containing HDF5 files.
     include: str
         Wildcard string to filter data files.
+    file_filter: callable
+        Function to subset the list of filenames to open.
+        Meant to be used with functions in the extra_data.locality module.
     """
     files = [f for f in os.listdir(path) if f.endswith('.h5')]
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
+    files = file_filter(files)
     if not files:
         raise Exception("No HDF5 files found in {} with glob pattern {}".format(path, include))
 
@@ -1326,7 +1335,7 @@ def RunDirectory(path, include='*'):
 RunHandler = RunDirectory
 
 
-def open_run(proposal, run, data='raw', include='*'):
+def open_run(proposal, run, data='raw', include='*', file_filter=locality.lc_any):
     """Access EuXFEL data on the Maxwell cluster by proposal and run number.
 
     ::
@@ -1347,6 +1356,9 @@ def open_run(proposal, run, data='raw', include='*'):
         The default is 'raw'.
     include: str
         Wildcard string to filter data files.
+    file_filter: callable
+        Function to subset the list of filenames to open.
+        Meant to be used with functions in the extra_data.locality module.
     """
     if isinstance(proposal, str):
         if ('/' not in proposal) and not proposal.startswith('p'):
@@ -1364,4 +1376,6 @@ def open_run(proposal, run, data='raw', include='*'):
         run = index(run)  # Allow integers, including numpy integers
     run = 'r' + str(run).zfill(4)
 
-    return RunDirectory(osp.join(prop_dir, data, run), include=include)
+    return RunDirectory(
+        osp.join(prop_dir, data, run), include=include, file_filter=file_filter
+    )

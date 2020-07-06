@@ -1,6 +1,50 @@
 Release Notes
 =============
 
+1.2
+---
+
+New features:
+
+- New :option:`karabo-bridge-serve-files --append-detector-modules` option
+  to combine data from multiple detector modules. This makes streaming large
+  detector data more similar to the live data streams (:ghpull:`40` and
+  :ghpull:`51`).
+- :ref:`cmd-serve-files` has new options to control the ZMQ socket and the use
+  of an infiniband network interface (:ghpull:`50`). It also works with
+  newer versions of the ``karabo_bridge`` Python package.
+- New options to filter files from dCache which are unavailable or need to be
+  read from tape when opening a run (:ghpull:`35`). This also comes with a new
+  command :ref:`cmd-locality` to inspect this information.
+- New :option:`lsxfel --detail` option to show more detail on selected sources
+  (:ghpull:`38`).
+- New :option:`extra-data-make-virtual-cxi --fill-value` option to control the
+  fill value for missing data (:ghpull:`59`)
+- New method :meth:`~.LPD1M.write_frames` to save a subset of detector frames
+  to a new file in EuXFEL HDF5 format (:ghpull:`47`).
+- :meth:`DataCollection.select` can take arbitrary iterables of patterns,
+  rather than just lists (:ghpull:`43`).
+
+Fixes and improvements:
+
+- EXtra-data now tries to manage how many HDF5 files it has open at one time,
+  to avoid hitting a limit on the total number of open files in a process
+  (:ghpull:`25` and :ghpull:`48`).
+  Importing EXtra-data will now raise this limit as far as it can (to 4096
+  on Maxwell), and try to keep the files it handles to no more than half of
+  this. Files should be silently closed and reopened as needed, so this
+  shouldn't affect how you use it.
+- A better way of creating Dask arrays to avoid problems with Dask's local
+  schedulers, and with arrays comprising very large numbers of files
+  (:ghpull:`63`).
+- The classes for accessing multi-module detector data (see
+  :doc:`agipd_lpd_data`) and writing virtual CXI files no longer assume that
+  the same number of frames are recorded in every train (:ghpull:`44`).
+- Fix validation where a file has no trains at all (:ghpull:`42`).
+- More testing of EuXFEL file format version 1.0 (:ghpull:`56`).
+- Test coverage measurement fixed with multiprocessing (:ghpull:`37`).
+- Tests switched from ``mock`` module to ``unittest.mock`` (:ghpull:`52`).
+
 1.1
 ---
 

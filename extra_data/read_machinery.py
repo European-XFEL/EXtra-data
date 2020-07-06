@@ -103,7 +103,7 @@ class DataChunk:
         return slice(self.first, self.first + np.sum(self.counts))
 
     @property
-    def dataset(self):
+    def dataset_path(self):
         if self.source in self.file.instrument_sources:
             group = 'INSTRUMENT'
         elif self.source in self.file.control_sources:
@@ -111,9 +111,11 @@ class DataChunk:
         else:
             raise SourceNameError(self.source)
 
-        return self.file.file[
-            '/{}/{}/{}'.format(group, self.source, self.key.replace('.', '/'))
-        ]
+        return '/{}/{}/{}'.format(group, self.source, self.key.replace('.', '/'))
+
+    @property
+    def dataset(self):
+        return self.file.file[self.dataset_path]
 
 
 # contiguous_regions() by Joe Kington on Stackoverflow

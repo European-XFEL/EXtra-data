@@ -9,7 +9,8 @@ env:
     - MPLBACKEND=agg
 
 install:
-  - make dev-install
+  - make install
+  - pip install -U pytest  # pytest-cov needs a newer pytest
   - pip install codecov
 
 script:

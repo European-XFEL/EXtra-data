@@ -150,6 +150,7 @@ def make_fxe_da_file(path, format_version='0.5'):
         XGM('SA1_XTD2_XGM/DOOCS/MAIN'),
         XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
         GECCamera('FXE_XAD_GEC/CAM/CAMERA'),
+        GECCamera('FXE_XAD_GEC/CAM/CAMERA_NODATA', nsamples=0)
     ], ntrains=400, chunksize=200, format_version=format_version)
 
 def make_sa3_da_file(path, ntrains=500, format_version='0.5'):

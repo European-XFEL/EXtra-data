@@ -8,13 +8,14 @@ import xarray
 
 from .exceptions import SourceNameError
 from .reader import DataCollection, by_id, by_index
+from .writer import FileWriter
 
 log = logging.getLogger(__name__)
 
 MAX_PULSES = 2700
 
 
-def _guess_axes(data, train_pulse_ids):
+def _guess_axes(data, train_pulse_ids, unstack_pulses):
     # Raw files have a spurious extra dimension
     if data.ndim >= 2 and data.shape[1] == 1:
         data = data[:, 0]
@@ -34,16 +35,19 @@ def _guess_axes(data, train_pulse_ids):
 
     arr = xarray.DataArray(data, {'train_pulse': train_pulse_ids}, dims=dims)
 
-    # Separate train & pulse dimensions, and arrange dimensions
-    # so that the data is contiguous in memory.
-    dim_order = ['train', 'pulse'] + dims[1:]
-    return arr.unstack('train_pulse').transpose(*dim_order)
+    if unstack_pulses:
+        # Separate train & pulse dimensions, and arrange dimensions
+        # so that the data is contiguous in memory.
+        dim_order = ['train', 'pulse'] + dims[1:]
+        return arr.unstack('train_pulse').transpose(*dim_order)
+    else:
+        return arr
 
 
 def _check_pulse_selection(pulses):
     """Check and normalise a pulse selection"""
     if not isinstance(pulses, (by_id, by_index)):
-        raise TypeError("pulses selection should be by_id or by_index object")
+        pulses = by_index[pulses]
 
     val = pulses.value
 
@@ -235,7 +239,7 @@ class MPxDetectorBase:
 
         return np.concatenate(positions)
 
-    def _get_module_pulse_data(self, source, key, pulses):
+    def _get_module_pulse_data(self, source, key, pulses, unstack_pulses):
         seq_arrays = []
         data_path = "/INSTRUMENT/{}/{}".format(source, key.replace('.', '/'))
         for f in self.data._source_index[source]:
@@ -295,7 +299,7 @@ class MPxDetectorBase:
 
                 data = f.file[data_path][data_positions]
 
-                arr = _guess_axes(data, index)
+                arr = _guess_axes(data, index, unstack_pulses)
 
                 seq_arrays.append(arr)
 
@@ -312,10 +316,11 @@ class MPxDetectorBase:
             )
 
         return xarray.concat(
-            sorted(non_empty, key=lambda a: a.coords['train'][0]), dim='train'
+            sorted(non_empty, key=lambda a: a.coords['train'][0]),
+            dim=('train' if unstack_pulses else 'train_pulse'),
         )
 
-    def get_array(self, key, pulses=by_index[:]):
+    def get_array(self, key, pulses=np.s_[:], unstack_pulses=True):
         """Get a labelled array of detector data
 
         Parameters
@@ -323,10 +328,12 @@ class MPxDetectorBase:
 
         key: str
           The data to get, e.g. 'image.data' for pixel values.
-        pulses: by_id or by_index
+        pulses: slice, array, by_id or by_index
           Select the pulses to include from each train. by_id selects by pulse
           ID, by_index by index within the data being read. The default includes
           all pulses. Only used for per-train data.
+        unstack_pulses: bool
+          Whether to separate train and pulse dimensions.
         """
         pulses = _check_pulse_selection(pulses)
 
@@ -336,7 +343,8 @@ class MPxDetectorBase:
             # At present, all the per-pulse data is stored in the 'image' key.
             # If that changes, this check will need to change as well.
             if key.startswith('image.'):
-                arrays.append(self._get_module_pulse_data(source, key, pulses))
+                arrays.append(self._get_module_pulse_data(
+                    source, key, pulses, unstack_pulses))
             else:
                 arrays.append(self.data.get_array(source, key))
             modnos.append(modno)
@@ -390,13 +398,13 @@ class MPxDetectorBase:
 
         return xarray.concat(arrays, pd.Index(modnos, name='module'))
 
-    def trains(self, pulses=by_index[:]):
+    def trains(self, pulses=np.s_[:]):
         """Iterate over trains for detector data.
 
         Parameters
         ----------
 
-        pulses: by_index or by_id
+        pulses: slice, array, by_index or by_id
           Select which pulses to include for each train.
           The default is to include all pulses.
 
@@ -410,7 +418,7 @@ class MPxDetectorBase:
         pulses = _check_pulse_selection(pulses)
         return MPxDetectorTrainIterator(self, pulses)
 
-    def write_virtual_cxi(self, filename):
+    def write_virtual_cxi(self, filename, fillvalues=None):
         """Write a virtual CXI file to access the detector data.
 
         The virtual datasets in the file provide a view of the detector
@@ -421,9 +429,112 @@ class MPxDetectorBase:
         ----------
         filename: str
           The file to be written. Will be overwritten if it already exists.
+        fillvalues: dict, optional
+            keys are datasets names (one of: data, gain, mask) and associated
+            fill value for missing data  (default is np.nan for float arrays and
+            zero for integer arrays)
         """
         from .write_cxi import VirtualCXIWriter
-        VirtualCXIWriter(self).write(filename)
+        VirtualCXIWriter(self).write(filename, fillvalues=fillvalues)
+
+    def write_frames(self, filename, trains, pulses):
+        """Write selected detector frames to a new EuXFEL HDF5 file
+
+        trains and pulses should be 1D arrays of the same length, containing
+        train IDs and pulse IDs (corresponding to the pulse IDs recorded by
+        the detector). i.e. (trains[i], pulses[i]) identifies one frame.
+        """
+        if (trains.ndim != 1) or (pulses.ndim != 1):
+            raise ValueError("trains & pulses must be 1D arrays")
+        inc_tp_ids = zip_trains_pulses(trains, pulses)
+
+        writer = FramesFileWriter(filename, self.data, inc_tp_ids)
+        try:
+            writer.write()
+        finally:
+            writer.file.close()
+
+
+def zip_trains_pulses(trains, pulses):
+    """Combine two similar arrays of train & pulse IDs as one struct array
+    """
+    if trains.shape != pulses.shape:
+        raise ValueError(
+            f"Train & pulse arrays don't match ({trains.shape} != {pulses.shape})"
+        )
+
+    res = np.zeros(trains.shape, dtype=np.dtype([
+        ('trainId', np.uint64), ('pulseId', np.uint64)
+    ]))
+    res['trainId'] = trains
+    res['pulseId'] = pulses
+    return res
+
+
+class FramesFileWriter(FileWriter):
+    """Write selected detector frames in European XFEL HDF5 format"""
+    def __init__(self, path, data, inc_tp_ids):
+        super().__init__(path, data)
+        self.inc_tp_ids = inc_tp_ids
+
+
+    def _guess_number_of_storing_entries(self, source, key):
+        if source in self.data.instrument_sources and key.startswith("image."):
+            # Start with an empty dataset, grow it as we add each file
+            return 0
+        else:
+            return super()._guess_number_of_storing_entries(source, key)
+
+    def copy_image_data(self, source, keys):
+        """Copy selected frames of the detector image data"""
+        frame_tids_piecewise = []
+
+        src_files = sorted(
+            self.data._source_index[source],
+            key=lambda fa: fa.train_ids[0]
+        )
+
+        for fa in src_files:
+            _, counts = fa.get_index(source, 'image')
+            file_tids = np.repeat(fa.train_ids, counts.astype(np.intp))
+            file_pids = fa.file[f'/INSTRUMENT/{source}/image/pulseId'][:]
+            if file_pids.ndim == 2 and file_pids.shape[1] == 1:
+                # Raw data has a spurious extra dimension
+                file_pids = file_pids[:, 0]
+
+            # Data can have trailing 0s, seemingly
+            file_pids = file_pids[:len(file_tids)]
+            file_tp_ids = zip_trains_pulses(file_tids, file_pids)
+
+            # indexes of selected frames in datasets under .../image in this file
+            ixs = np.isin(file_tp_ids, self.inc_tp_ids).nonzero()[0]
+            nframes = ixs.shape[0]
+
+            for key in keys:
+                path = f"INSTRUMENT/{source}/{key.replace('.', '/')}"
+
+                dst_ds = self.file[path]
+                dst_cursor = dst_ds.shape[0]
+                dst_ds.resize(dst_cursor + nframes, axis=0)
+                dst_ds[dst_cursor: dst_cursor+nframes] = fa.file[path][ixs]
+
+            frame_tids_piecewise.append(file_tids[ixs])
+
+        frame_tids = np.concatenate(frame_tids_piecewise)
+        self._make_index(source, 'image', frame_tids)
+
+    def copy_source(self, source):
+        """Copy all the relevant data for one detector source"""
+        if source not in self.data.instrument_sources:
+            return super().copy_source(source)
+
+        all_keys = self.data.keys_for_source(source)
+        img_keys = {k for k in all_keys if k.startswith('image.')}
+
+        for key in sorted(all_keys - img_keys):
+            self.copy_dataset(source, key)
+
+        self.copy_image_data(source, sorted(img_keys))
 
 
 class MPxDetectorTrainIterator:
@@ -504,7 +615,7 @@ class MPxDetectorTrainIterator:
             # h5py fancy indexing needs a list, not an ndarray
             data_positions = list(first + positions)
 
-        return _guess_axes(ds[data_positions], train_pulse_ids)
+        return _guess_axes(ds[data_positions], train_pulse_ids, unstack_pulses=True)
 
     def _select_pulse_ids(self, pulse_ids):
         """Select pulses by ID
