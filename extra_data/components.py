@@ -752,7 +752,9 @@ class LPD1M(MPxDetectorBase):
     module_shape = (256, 256)
 
 
-def identify_multimod_detectors(data, detector_name=None, kind=None, single=False):
+def identify_multimod_detectors(
+        data, detector_name=None, *, single=False, clses=None
+):
     """Identify multi-module detectors in the data
 
     Various detectors record data in a similar format, and we often want to
@@ -763,11 +765,8 @@ def identify_multimod_detectors(data, detector_name=None, kind=None, single=Fals
     throwing ``ValueError`` if there isn't exactly 1 detector found.
     If ``single=False``, it returns a set of these tuples.
     """
-    clses = [AGIPD1M, DSSC1M, LPD1M]
-    if kind is not None:
-        cls = globals()[kind]
-        assert cls in clses, cls
-        clses = [cls]
+    if clses is None:
+        clses = [AGIPD1M, DSSC1M, LPD1M]
 
     res = set()
     for cls in clses:

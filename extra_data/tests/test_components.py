@@ -305,6 +305,6 @@ def test_identify_multimod_detectors_multi(mock_fxe_raw_run, mock_spb_raw_run):
     with pytest.raises(ValueError):
         identify_multimod_detectors(combined, single=True)
 
-    name, cls = identify_multimod_detectors(combined, kind='AGIPD1M', single=True)
+    name, cls = identify_multimod_detectors(combined, single=True, clses=[AGIPD1M])
     assert name == 'SPB_DET_AGIPD1M-1'
     assert cls is AGIPD1M
