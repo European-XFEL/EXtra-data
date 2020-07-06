@@ -565,6 +565,9 @@ class DataCollection:
             first 8 values from every train. If the data is 2D or more at
             each entry, selection looks like roi=np.s_[:8, 5:10] .
         """
+        if isinstance(roi, by_index):
+            roi = roi.value
+
         return self._get_key_data(source, key).xarray(extra_dims=extra_dims, roi=roi)
 
     def get_dask_array(self, source, key, labelled=False):
