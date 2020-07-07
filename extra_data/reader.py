@@ -31,14 +31,14 @@ import time
 from warnings import warn
 
 from .exceptions import SourceNameError, PropertyNameError, TrainIDError
+from .keydata import KeyData
 from .read_machinery import (
     DETECTOR_SOURCE_RE,
-    DataChunk,
     FilenameInfo,
-    _SliceConstructable,
-    _tid_to_slice_ix,
+    by_id,
+    by_index,
+    select_train_ids,
     union_selections,
-    contiguous_regions,
     find_proposal,
 )
 from .run_files_map import RunFilesMap
@@ -62,14 +62,6 @@ log = logging.getLogger(__name__)
 RUN_DATA = 'RUN'
 INDEX_DATA = 'INDEX'
 METADATA = 'METADATA'
-
-
-class by_id(_SliceConstructable):
-    pass
-
-
-class by_index(_SliceConstructable):
-    pass
 
 
 class DataCollection:
@@ -226,19 +218,34 @@ class DataCollection:
     # Leave old name in case anything external was using it:
     _keys_for_source = keys_for_source
 
+    def _get_key_data(self, source, key):
+        self._check_field(source, key)
+        section = 'INSTRUMENT' if source in self.instrument_sources else 'CONTROL'
+        files = self._source_index[source]
+        ds0 = files[0].file[f"{section}/{source}/{key.replace('.', '/')}"]
+        return KeyData(
+            source,
+            key,
+            train_ids=self.train_ids,
+            files=self._source_index[source],
+            section=section,
+            dtype=ds0.dtype,
+            eshape=ds0.shape[1:],
+        )
+
+    def __getitem__(self, item):
+        if isinstance(item, tuple) and len(item) == 2:
+            return self._get_key_data(*item)
+
+        raise TypeError("Expected data[source, key]")
+
     def get_entry_shape(self, source, key):
         """Get the shape of a single data entry for the given source & key"""
-        self._check_field(source, key)
-
-        for chunk in self._find_data_chunks(source, key):
-            # First dimension is number of entries
-            return chunk.dataset.shape[1:]
+        return self._get_key_data(source, key).entry_shape
 
     def get_dtype(self, source, key):
         """Get the numpy data type for the given source & key"""
-        self._check_field(source, key)
-        for chunk in self._find_data_chunks(source, key):
-            return chunk.dataset.dtype
+        return self._get_key_data(source, key).dtype
 
     def _check_data_missing(self, tid) -> bool:
         """Return True if a train does not have data for all sources"""
@@ -558,69 +565,10 @@ class DataCollection:
             first 8 values from every train. If the data is 2D or more at
             each entry, selection looks like roi=np.s_[:8, 5:10] .
         """
-        import xarray
-
-        self._check_field(source, key)
-
         if isinstance(roi, by_index):
             roi = roi.value
-        if not isinstance(roi, tuple):
-            roi = (roi,)
 
-        chunks = sorted(
-            self._find_data_chunks(source, key),
-            key=lambda x: x.train_ids[0] if x.train_ids.size else 0,
-        )
-
-        # Figure out the shape of the result array, and the slice for each chunk
-        dest_dim0 = 0
-        dest_slices = []
-        shapes = set()
-        dtypes = set()
-
-        for chunk in chunks:
-            n = int(np.sum(chunk.counts, dtype=np.uint64))
-            dest_slices.append(slice(dest_dim0, dest_dim0 + n))
-            dest_dim0 += n
-            shapes.add(chunk.dataset.shape[1:])
-            dtypes.add(chunk.dataset.dtype)
-
-        if len(shapes) > 1:
-            raise Exception("Mismatched data shapes: {}".format(shapes))
-
-        if len(dtypes) > 1:
-            raise Exception("Mismatched dtypes: {}".format(dtypes))
-
-        # Find the shape of the array with the ROI applied
-        roi_dummy = np.zeros((0,) + shapes.pop()) # extra 0 dim: use less memory
-        roi_shape = roi_dummy[np.index_exp[:] + roi].shape[1:]
-
-        chunks_trainids = []
-        res = np.empty((dest_dim0,) + roi_shape, dtype=dtypes.pop())
-
-        # Read the data from each chunk into the result array
-        for chunk, dest_slice in zip(chunks, dest_slices):
-            if dest_slice.start == dest_slice.stop:
-                continue
-
-            chunks_trainids.append(
-                self._expand_trainids(chunk.counts, chunk.train_ids)
-            )
-
-            slices = (chunk.slice,) + roi
-            chunk.dataset.read_direct(res[dest_slice], source_sel=slices)
-
-        # Dimension labels
-        if extra_dims is None:
-            extra_dims = ['dim_%d' % i for i in range(res.ndim - 1)]
-        dims = ['trainId'] + extra_dims
-
-        # Train ID index
-        coords = {}
-        if dest_dim0:
-            coords = {'trainId': np.concatenate(chunks_trainids)}
-
-        return xarray.DataArray(res, dims=dims, coords=coords)
+        return self._get_key_data(source, key).xarray(extra_dims=extra_dims, roi=roi)
 
     def get_dask_array(self, source, key, labelled=False):
         """Get a Dask array for the specified data field.
@@ -646,54 +594,7 @@ class DataCollection:
             If True, label the train IDs for the data, returning an
             xarray.DataArray object wrapping a Dask array.
         """
-        import dask.array as da
-        chunks = sorted(
-            self._find_data_chunks(source, key),
-            key=lambda x: x.train_ids[0] if x.train_ids.size else 0,
-        )
-
-        chunks_darrs = []
-        chunks_trainids = []
-
-        for chunk in chunks:
-            chunk_dim0 = int(np.sum(chunk.counts))
-            chunk_shape = (chunk_dim0,) + chunk.dataset.shape[1:]
-            itemsize = chunk.dataset.dtype.itemsize
-
-            # Find chunk size of maximum 2 GB. This is largely arbitrary:
-            # we want chunks small enough that each worker can have at least
-            # a couple in memory (Maxwell nodes have 256-768 GB in late 2019).
-            # But bigger chunks means less overhead.
-            # Empirically, making chunks 4 times bigger/smaller didn't seem to
-            # affect speed dramatically - but this could depend on many factors.
-            # TODO: optional user control of chunking
-            limit = 2 * 1024 ** 3
-            while np.product(chunk_shape) * itemsize > limit and chunk_dim0 > 1:
-                chunk_dim0 //= 2
-                chunk_shape = (chunk_dim0,) + chunk.dataset.shape[1:]
-
-            chunks_darrs.append(
-                da.from_array(
-                    chunk.file.dset_proxy(chunk.dataset_path), chunks=chunk_shape
-                )[chunk.slice]
-            )
-            chunks_trainids.append(
-                self._expand_trainids(chunk.counts, chunk.train_ids)
-            )
-
-        dask_arr = da.concatenate(chunks_darrs, axis=0)
-
-        if labelled:
-            # Dimension labels
-            dims = ['trainId'] + ['dim_%d' % i for i in range(dask_arr.ndim - 1)]
-
-            # Train ID index
-            coords = {'trainId': np.concatenate(chunks_trainids)}
-
-            import xarray
-            return xarray.DataArray(dask_arr, dims=dims, coords=coords)
-        else:
-            return dask_arr
+        return self._get_key_data(source, key).dask_array(labelled=labelled)
 
     def union(self, *others):
         """Join the data in this collection with one or more others.
@@ -878,36 +779,7 @@ class DataCollection:
         ValueError
             If given train IDs do not overlap with the trains in this data.
         """
-        tr = train_range
-        if isinstance(tr, by_id):
-            if isinstance(tr.value, slice):
-                # Slice by train IDs
-                start_ix = _tid_to_slice_ix(tr.value.start, self.train_ids, stop=False)
-                stop_ix = _tid_to_slice_ix(tr.value.stop, self.train_ids, stop=True)
-                new_train_ids = self.train_ids[start_ix : stop_ix : tr.value.step]
-            elif isinstance(tr.value, (list, np.ndarray)):
-                # Select a list of trains by train ID
-                new_train_ids = sorted(
-                    set(self.train_ids).intersection(tr.value))
-                if not new_train_ids:
-                    raise ValueError(
-                        "Given train IDs not found among {} trains in "
-                        "collection".format(len(self.train_ids))
-                    )
-            else:
-                raise TypeError(type(tr.value))
-        else:
-            if isinstance(tr, by_index):
-                tr = tr.value
-
-            if isinstance(tr, (slice, tuple)):
-                # Slice by indexes in this collection
-                new_train_ids = self.train_ids[tr]
-            elif isinstance(tr, (list, np.ndarray)):
-                # Select a list of trains by index in this collection
-                new_train_ids = sorted([self.train_ids[i] for i in tr])
-            else:
-                raise TypeError(type(tr))
+        new_train_ids = select_train_ids(self.train_ids, train_range)
 
         files = [f for f in self.files
                  if np.intersect1d(f.train_ids, new_train_ids).size > 0]
@@ -941,34 +813,7 @@ class DataCollection:
 
         Yields DataChunk objects.
         """
-        if source in self.instrument_sources:
-            key_group = key.partition('.')[0]
-        else:
-            key_group = ''
-
-        for file in self._source_index[source]:
-            file_has_data = False
-            firsts, counts = file.get_index(source, key_group)
-
-            # Of trains in this file, which are in selection
-            selected = np.isin(file.train_ids, self.train_ids)
-
-            # Assemble contiguous chunks of data from this file
-            for _from, _to in contiguous_regions(selected):
-                file_has_data = True
-                yield DataChunk(file, source, key,
-                                first=firsts[_from],
-                                train_ids=file.train_ids[_from:_to],
-                                counts=counts[_from:_to],
-                                )
-
-            if not file_has_data:
-                # Make an empty chunk to let e.g. get_array find the shape
-                yield DataChunk(file, source, key,
-                                first=np.uint64(0),
-                                train_ids=file.train_ids[:0],
-                                counts=counts[:0],
-                                )
+        return self._get_key_data(source, key)._data_chunks
 
     def _find_data(self, source, train_id) -> (FileAccess, int):
         for f in self._source_index[source]:
