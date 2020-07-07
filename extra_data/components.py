@@ -764,6 +764,8 @@ def identify_multimod_detectors(
     If ``single=True``, this returns a tuple of (detector_name, access_class),
     throwing ``ValueError`` if there isn't exactly 1 detector found.
     If ``single=False``, it returns a set of these tuples.
+
+    *clses* may be a list of acceptable detector classes to check.
     """
     if clses is None:
         clses = [AGIPD1M, DSSC1M, LPD1M]
