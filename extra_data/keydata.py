@@ -7,6 +7,10 @@ from .file_access import FileAccess
 from .read_machinery import contiguous_regions, DataChunk, select_train_ids
 
 class KeyData:
+    """Data for one key in one source
+
+    Don't create this directly; get it from ``run[source, key]``.
+    """
     def __init__(self, source, key, *, train_ids, files, section, dtype, eshape):
         self.source = source
         self.key = key
@@ -68,6 +72,12 @@ class KeyData:
         return (sum(c.total_count for c in self._data_chunks),) + self.entry_shape
 
     def select_trains(self, trains):
+        """Select a subset of the trains in this data
+
+        Also available by slicing and indexing the KeyData object::
+
+            run[source, key][:10]  # Select data for first 10 trains
+        """
         tids = select_train_ids(self.train_ids, trains)
         files = [f for f in self.files
                  if np.intersect1d(f.train_ids, tids).size > 0]
@@ -88,6 +98,11 @@ class KeyData:
     # Getting data as different kinds of array: -------------------------------
 
     def ndarray(self, roi=()):
+        """Load this data as a numpy array
+
+        *roi* may be a ``numpy.s_[]`` expression to load e.g. only part of each
+        image from a camera.
+        """
         if not isinstance(roi, tuple):
             roi = (roi,)
 
@@ -119,6 +134,14 @@ class KeyData:
         return np.concatenate(chunks_trainids)
 
     def xarray(self, extra_dims=None, roi=()):
+        """Load this data as a labelled xarray.DataArray.
+
+        The first dimension is labelled with train IDs. Other dimensions may be
+        named by passing a list of names to *extra_dims*.
+
+        *roi* may be a ``numpy.s_[]`` expression to load e.g. only part of each
+        image from a camera.
+        """
         import xarray
 
         ndarr = self.ndarray(roi=roi)
@@ -136,6 +159,7 @@ class KeyData:
         return xarray.DataArray(ndarr, dims=dims, coords=coords)
 
     def series(self):
+        """Load this data as a pandas Series. Only for 1D data."""
         import pandas as pd
 
         if self.ndim > 1:
@@ -150,6 +174,14 @@ class KeyData:
         return pd.Series(data, name=name, index=index)
 
     def dask_array(self, labelled=False):
+        """Make a Dask array for this data.
+
+        Dask does lazy computation, so the data is not actually loaded until
+        you call a ``.compute()`` method to get a result.
+
+        Passing ``labelled=True`` will wrap the Dask array in an xarray
+        DataArray with train IDs labelled.
+        """
         import dask.array as da
 
         chunks_darrs = []
@@ -202,6 +234,10 @@ class KeyData:
         return None, 0
 
     def train_from_id(self, tid):
+        """Get data for the given train ID as a numpy array.
+
+        Returns (train ID, array)
+        """
         if tid not in self.train_ids:
             raise TrainIDError(tid)
 
@@ -217,9 +253,17 @@ class KeyData:
             return tid, fa.file[self.hdf5_data_path][first: first+count]
 
     def train_from_index(self, i):
+        """Get data for a train by index (starting at 0) as a numpy array.
+
+        Returns (train ID, array)
+        """
         return self.train_from_id(self.train_ids[i])
 
     def trains(self):
+        """Iterate through trains containing data for this key
+
+        Yields pairs of (train ID, array). Skips trains where data is missing.
+        """
         for chunk in self._data_chunks:
             start = chunk.first
             ds = chunk.dataset
