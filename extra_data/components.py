@@ -750,3 +750,42 @@ class LPD1M(MPxDetectorBase):
     """
     _source_re = re.compile(r'(?P<detname>(.+)_LPD1M(.*))/DET/(\d+)CH')
     module_shape = (256, 256)
+
+
+def identify_multimod_detectors(
+        data, detector_name=None, *, single=False, clses=None
+):
+    """Identify multi-module detectors in the data
+
+    Various detectors record data in a similar format, and we often want to
+    process whichever detector was used in a run. This tries to identify the
+    detector, so a user doesn't have to specify it manually.
+
+    If ``single=True``, this returns a tuple of (detector_name, access_class),
+    throwing ``ValueError`` if there isn't exactly 1 detector found.
+    If ``single=False``, it returns a set of these tuples.
+
+    *clses* may be a list of acceptable detector classes to check.
+    """
+    if clses is None:
+        clses = [AGIPD1M, DSSC1M, LPD1M]
+
+    res = set()
+    for cls in clses:
+        for source in data.instrument_sources:
+            m = cls._source_re.match(source)
+            if m:
+                name = m.group('detname')
+                if (detector_name is None) or (name == detector_name):
+                    res.add((name, cls))
+
+    if single:
+        if len(res) < 1:
+            raise ValueError("No detector sources identified in the data")
+        elif len(res) > 1:
+            raise ValueError("Multiple detectors identified: {}".format(
+                ", ".join(name for (name, _) in res)
+            ))
+        return res.pop()
+
+    return res

@@ -6,7 +6,7 @@ import pytest
 from testpath import assert_isfile
 
 from extra_data.reader import RunDirectory, H5File, by_id, by_index
-from extra_data.components import AGIPD1M, LPD1M
+from extra_data.components import AGIPD1M, LPD1M, identify_multimod_detectors
 
 
 def test_get_array(mock_fxe_raw_run):
@@ -282,3 +282,29 @@ def test_write_selected_frames(mock_spb_raw_run, tmp_path):
         assert f.instrument_sources == {
             f'SPB_DET_AGIPD1M-1/DET/{i}CH0:xtdf' for i in range(16)
         }
+
+
+def test_identify_multimod_detectors(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    name, cls = identify_multimod_detectors(run, single=True)
+    assert name == 'FXE_DET_LPD1M-1'
+    assert cls is LPD1M
+
+    dets = identify_multimod_detectors(run, single=False)
+    assert dets == {(name, cls)}
+
+
+def test_identify_multimod_detectors_multi(mock_fxe_raw_run, mock_spb_raw_run):
+    fxe_run = RunDirectory(mock_fxe_raw_run)
+    spb_run = RunDirectory(mock_spb_raw_run)
+    combined = fxe_run.select('*LPD1M*').union(spb_run)
+
+    dets = identify_multimod_detectors(combined, single=False)
+    assert dets == {('FXE_DET_LPD1M-1', LPD1M), ('SPB_DET_AGIPD1M-1', AGIPD1M)}
+
+    with pytest.raises(ValueError):
+        identify_multimod_detectors(combined, single=True)
+
+    name, cls = identify_multimod_detectors(combined, single=True, clses=[AGIPD1M])
+    assert name == 'SPB_DET_AGIPD1M-1'
+    assert cls is AGIPD1M
