@@ -398,7 +398,7 @@ class MPxDetectorBase:
 
         return xarray.concat(arrays, pd.Index(modnos, name='module'))
 
-    def trains(self, pulses=np.s_[:]):
+    def trains(self, pulses=np.s_[:], require_all=True):
         """Iterate over trains for detector data.
 
         Parameters
@@ -416,7 +416,7 @@ class MPxDetectorBase:
           arrays.
         """
         pulses = _check_pulse_selection(pulses)
-        return MPxDetectorTrainIterator(self, pulses)
+        return MPxDetectorTrainIterator(self, pulses, require_all=require_all)
 
     def write_virtual_cxi(self, filename, fillvalues=None):
         """Write a virtual CXI file to access the detector data.
