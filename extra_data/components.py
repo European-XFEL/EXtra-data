@@ -407,6 +407,9 @@ class MPxDetectorBase:
         pulses: slice, array, by_index or by_id
           Select which pulses to include for each train.
           The default is to include all pulses.
+        require_all: bool
+          If True (default), skip trains where any of the selected detector
+          modules are missing data.
 
         Yields
         ------
