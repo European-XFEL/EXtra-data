@@ -1443,7 +1443,8 @@ def RunDirectory(
         files which don't have this flag, out-of-sequence train IDs are suspect.
         If True (default), it tries to include these trains.
     """
-    files = [f for f in os.listdir(path) if f.endswith('.h5') and f != 'overview.h5']
+    files = [f for f in os.listdir(path)
+             if f.endswith('.h5') and ('overview' not in f.lower())]
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
     sel_files = file_filter(files)
     if not sel_files:
