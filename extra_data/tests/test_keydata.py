@@ -36,6 +36,10 @@ def test_select_trains(mock_spb_raw_run):
     assert len(sel2.files) == 0
     assert sel2.xarray().shape == (0,)
 
+    # Single train
+    sel3 = xgm_beam_x[32]
+    assert sel3.shape == (1,)
+
 
 def test_nodata(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)

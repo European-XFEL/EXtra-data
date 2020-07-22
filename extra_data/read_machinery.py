@@ -98,6 +98,8 @@ def _tid_to_slice_ix(tid, train_ids, stop=False):
 def select_train_ids(train_ids, sel):
     if isinstance(sel, by_index):
         sel = sel.value
+    elif isinstance(sel, int):
+        sel = slice(sel, sel+1, None)
 
     if isinstance(sel, by_id) and isinstance(sel.value, slice):
         # Slice by train IDs
