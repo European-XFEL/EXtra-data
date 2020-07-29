@@ -10,7 +10,7 @@ env:
 
 install:
   - make install
-  - pip install -U pytest<6  # pytest-cov needs a newer pytest, but nbval currently fails with pytest 6
+  - pip install -U 'pytest<6'  # pytest-cov needs a newer pytest, but nbval currently fails with pytest 6
   - pip install codecov
 
 script:
