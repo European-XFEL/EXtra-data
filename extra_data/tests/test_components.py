@@ -284,6 +284,26 @@ def test_write_selected_frames(mock_spb_raw_run, tmp_path):
         }
 
 
+def test_write_selected_frames_proc(mock_spb_proc_run, tmp_path):
+    run = RunDirectory(mock_spb_proc_run)
+    det = AGIPD1M(run)
+
+    trains = np.repeat(np.arange(10000, 10010), 3)
+    pulses = np.tile([0, 1, 5], 10)
+    test_file = str(tmp_path / 'sel_frames.h5')
+    det.write_frames(test_file, trains, pulses)
+    assert_isfile(test_file)
+
+    with H5File(test_file) as f:
+        np.testing.assert_array_equal(
+            f.get_array('SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.pulseId'),
+            pulses
+        )
+        assert f.instrument_sources == {
+            f'SPB_DET_AGIPD1M-1/DET/{i}CH0:xtdf' for i in range(16)
+        }
+
+
 def test_identify_multimod_detectors(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     name, cls = identify_multimod_detectors(run, single=True)
