@@ -27,6 +27,10 @@ class FileWriter:
             src_ds1 = self.data._source_index[source][0].file[path]
             self.file.create_dataset_like(
                 path, src_ds1, shape=(nentries,) + src_ds1.shape[1:],
+                # Corrected detector data has maxshape==shape, but if any max
+                # dim is smaller than the chunk size, h5py complains. Making
+                # the first dimension unlimited avoids this.
+                maxshape=(None,) + src_ds1.shape[1:],
             )
             if source in self.data.instrument_sources:
                 self.data_sources.add(f"INSTRUMENT/{source}/{key.partition('.')[0]}")
