@@ -99,19 +99,37 @@ class DetectorModule:
 
         # INSTRUMENT (image)
         nframes = self.frames_per_train.sum()
-        ds = f.create_dataset('INSTRUMENT/%s:xtdf/image/trainId' % self.device_id,
-                              (nframes, 1), 'u8', maxshape=(None, 1))
-        ds[:, 0] = np.repeat(trainids, self.frames_per_train.astype(np.intp))
 
-        pid = f.create_dataset('INSTRUMENT/%s:xtdf/image/pulseId' % self.device_id,
-                               (nframes, 1), 'u8', maxshape=(None, 1))
-        pid[:, 0] = np.concatenate([
+        tid_index = np.repeat(trainids, self.frames_per_train.astype(np.intp))
+        pid_index = np.concatenate([
             np.arange(0, n, dtype='u8') for n in self.frames_per_train
         ])
+        if self.raw:
+            # Raw data have an extra dimension (length 1) and an unlimited max
+            # for the first dimension.
+            ds = f.create_dataset('INSTRUMENT/%s:xtdf/image/trainId' % self.device_id,
+                                  (nframes, 1), 'u8', maxshape=(None, 1))
+            ds[:, 0] = tid_index
 
+            pid = f.create_dataset('INSTRUMENT/%s:xtdf/image/pulseId' % self.device_id,
+                                   (nframes, 1), 'u8', maxshape=(None, 1))
+            pid[:, 0] = pid_index
+        else:
+            # Corrected data drops the extra dimension, and maxshape==shape.
+            f.create_dataset(
+                'INSTRUMENT/%s:xtdf/image/trainId' % self.device_id,
+                (nframes,), 'u8', chunks=True, data=tid_index
+            )
+
+            f.create_dataset(
+                'INSTRUMENT/%s:xtdf/image/pulseId' % self.device_id,
+                (nframes,), 'u8', chunks=True, data=pid_index
+            )
+
+        max_len = None if self.raw else nframes
         for (key, datatype, dims) in self.image_keys:
             f.create_dataset('INSTRUMENT/%s:xtdf/image/%s' % (self.device_id, key),
-                             (nframes,) + dims, datatype, maxshape=((None,) + dims))
+                             (nframes,) + dims, datatype, maxshape=((max_len,) + dims))
 
 
         # INSTRUMENT (other parts)
