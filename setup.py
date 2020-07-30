@@ -50,7 +50,7 @@ setup(name="EXtra-data",
           'karabo-bridge >=0.6',
           'matplotlib',
           'numpy',
-          'pandas <1.1',  # https://github.com/European-XFEL/EXtra-data/issues/81
+          'pandas',
           'psutil',
           'scipy',
           'xarray',
