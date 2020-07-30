@@ -390,7 +390,7 @@ class MPxDetectorBase:
                 mod_arr = mod_arr.rename({'trainId': 'train_pulse'})
 
                 mod_arr.coords['train_pulse'] = pd.MultiIndex.from_arrays(
-                    [mod_arr.coords['train_pulse'], inner_ix],
+                    [mod_arr.coords['train_pulse'].values, inner_ix.values],
                     names=['trainId', subtrain_index]
                 )
 
