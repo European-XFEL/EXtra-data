@@ -1,6 +1,42 @@
 Release Notes
 =============
 
+1.3
+---
+
+New features:
+
+.. This directive allows the :option: below to link correctly.
+.. program:: extra-data-make-virtual-cxi
+
+- A new interface for data from a single source & key: use ``run[source, key]``
+  to get a ``KeyData`` object, which can inspect and load the data from
+  several sequence files (:ghpull:`70`).
+- Methods which took a ``by_index`` object now accept slices (e.g.
+  ``numpy.s_[:10]``) or indices directly (:ghpull:`68`, :ghpull:`79`). This
+  includes :meth:`~.DataCollection.select_trains`,
+  :meth:`~.DataCollection.get_array` and various methods for multi-module
+  detectors, described in :doc:`agipd_lpd_data`.
+- ``extra-data-make-virtual-cxi`` :option:`--fill-value` now accepts numbers in
+  hexadecimal, octal & binary formats, e.g. ``0xfe`` (:ghpull:`73`).
+- Added an ``unstack`` parameter to the :meth:`~.LPD1M.get_array` method for
+  multi-module detectors, making it possible to retrieve an array as the data
+  is stored, without separating the train & pulse axes (:ghpull:`72`).
+- Added a ``require_all`` parameter to the :meth:`~.LPD1M.trains` method for
+  multi-module detectors, to allow iterating with incomplete frames included
+  (:ghpull:`77`).
+- New :func:`.identify_multimod_detectors` function to find multi-module
+  detectors in the data (:ghpull:`61`).
+
+Fixes and improvements:
+
+- Fix writing selected detector frames with :meth:`~.LPD1M.write_frames`
+  for corrected data (:ghpull:`82`).
+- Fix compatibility with pandas 1.1 (:ghpull:`83`).
+- The :meth:`~.DataCollection.trains` iterator no longer includes zero-length
+  arrays when a source has no data for that train (:ghpull:`75`).
+- Fix a test which failed when run as root (:ghpull:`67`).
+
 1.2
 ---
 
