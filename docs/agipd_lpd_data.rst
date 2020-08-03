@@ -31,6 +31,8 @@ pulling together the separate modules into a single array.
 
    :doc:`lpd_data`: An example using the class above.
 
+.. autofunction:: identify_multimod_detectors
+
 If you get data for a train from the main :class:`DataCollection` interface,
 there is also another way to combine detector modules from AGIPD or LPD:
 
