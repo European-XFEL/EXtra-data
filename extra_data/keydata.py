@@ -133,11 +133,14 @@ class KeyData:
         ]
         return np.concatenate(chunks_trainids)
 
-    def xarray(self, extra_dims=None, roi=()):
+    def xarray(self, extra_dims=None, name=None, roi=()):
         """Load this data as a labelled xarray.DataArray.
 
         The first dimension is labelled with train IDs. Other dimensions may be
         named by passing a list of names to *extra_dims*.
+
+        The array's name may be given by *name*, by default the source and key
+        is joined by a dot.
 
         *roi* may be a ``numpy.s_[]`` expression to load e.g. only part of each
         image from a camera.
@@ -156,7 +159,10 @@ class KeyData:
         if self.shape[0]:
             coords = {'trainId': self._trainid_index()}
 
-        return xarray.DataArray(ndarr, dims=dims, coords=coords)
+        if name is None:
+            name = f'{self.source}.{self.key}'
+
+        return xarray.DataArray(ndarr, dims=dims, coords=coords, name=name)
 
     def series(self):
         """Load this data as a pandas Series. Only for 1D data."""

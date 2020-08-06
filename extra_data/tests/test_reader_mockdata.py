@@ -337,16 +337,22 @@ def test_file_get_array_control_roi(mock_sa3_control_data):
     assert arr.coords['trainId'][0] == 10000
 
 
-def test_run_get_array(mock_fxe_raw_run):
+@pytest.mark.parametrize('name_in, name_out', [
+    (None, 'SA1_XTD2_XGM/DOOCS/MAIN:output.data.intensityTD'),
+    ('SA1_XGM', 'SA1_XGM')
+], ids=['defaultName', 'explicitName'])
+def test_run_get_array(mock_fxe_raw_run, name_in, name_out):
     run = RunDirectory(mock_fxe_raw_run)
     arr = run.get_array(
-        'SA1_XTD2_XGM/DOOCS/MAIN:output', 'data.intensityTD', extra_dims=['pulse']
+        'SA1_XTD2_XGM/DOOCS/MAIN:output', 'data.intensityTD',
+        extra_dims=['pulse'], name=name_in
     )
 
     assert isinstance(arr, DataArray)
     assert arr.dims == ('trainId', 'pulse')
     assert arr.shape == (480, 1000)
     assert arr.coords['trainId'][0] == 10000
+    assert arr.name == name_out
 
 
 def test_run_get_array_empty(mock_fxe_raw_run):

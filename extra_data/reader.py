@@ -535,7 +535,7 @@ class DataCollection:
 
         return pd.concat(series, axis=1)
 
-    def get_array(self, source, key, extra_dims=None, roi=()):
+    def get_array(self, source, key, extra_dims=None, name=None, roi=()):
         """Return a labelled array for a particular data field.
 
         ::
@@ -558,6 +558,9 @@ class DataCollection:
             Name extra dimensions in the array. The first dimension is
             automatically called 'train'. The default for extra dimensions
             is dim_0, dim_1, ...
+        name: str
+            Name the array itself. The default is the source and key joined
+            by a dot.
         roi: slice, tuple of slices, or by_index
             The region of interest. This expression selects data in all
             dimensions apart from the first (trains) dimension. If the data
@@ -568,7 +571,8 @@ class DataCollection:
         if isinstance(roi, by_index):
             roi = roi.value
 
-        return self._get_key_data(source, key).xarray(extra_dims=extra_dims, roi=roi)
+        return self._get_key_data(source, key).xarray(
+            extra_dims=extra_dims, name=name, roi=roi)
 
     def get_dask_array(self, source, key, labelled=False):
         """Get a Dask array for the specified data field.
