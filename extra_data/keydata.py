@@ -162,6 +162,9 @@ class KeyData:
         if name is None:
             name = f'{self.source}.{self.key}'
 
+            if name.endswith('.value') and self.section == 'CONTROL':
+                name = name[:-6]
+
         return xarray.DataArray(ndarr, dims=dims, coords=coords, name=name)
 
     def series(self):
