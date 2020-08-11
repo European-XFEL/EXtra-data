@@ -175,7 +175,7 @@ class KeyData:
             raise TypeError("pandas Series are only available for 1D data")
 
         name = self.source + '/' + self.key
-        if name.endswith('.value'):
+        if name.endswith('.value') and self.section == 'CONTROL':
             name = name[:-6]
 
         index = pd.Index(self._trainid_index(), name='trainId')
