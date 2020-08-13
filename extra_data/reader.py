@@ -535,7 +535,7 @@ class DataCollection:
 
         return pd.concat(series, axis=1)
 
-    def get_array(self, source, key, extra_dims=None, roi=()):
+    def get_array(self, source, key, extra_dims=None, roi=(), name=None):
         """Return a labelled array for a particular data field.
 
         ::
@@ -564,11 +564,15 @@ class DataCollection:
             holds a 1D array for each entry, roi=np.s_[:8] would get the
             first 8 values from every train. If the data is 2D or more at
             each entry, selection looks like roi=np.s_[:8, 5:10] .
+        name: str
+            Name the array itself. The default is the source and key joined
+            by a dot.
         """
         if isinstance(roi, by_index):
             roi = roi.value
 
-        return self._get_key_data(source, key).xarray(extra_dims=extra_dims, roi=roi)
+        return self._get_key_data(source, key).xarray(
+            extra_dims=extra_dims, roi=roi, name=name)
 
     def get_dask_array(self, source, key, labelled=False):
         """Get a Dask array for the specified data field.
