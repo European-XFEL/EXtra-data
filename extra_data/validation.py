@@ -272,7 +272,7 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
 
-    ap = ArgumentParser(prog='karabo-data-validate')
+    ap = ArgumentParser(prog='extra-data-validate')
     ap.add_argument('path', help="HDF5 file or run directory of HDF5 files.")
     args = ap.parse_args(argv)
 
