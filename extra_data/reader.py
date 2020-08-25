@@ -409,23 +409,7 @@ class DataCollection:
         key: str
             Key of parameter within that device, e.g. "image.data".
         """
-        import pandas as pd
-
-        self._check_field(source, key)
-        seq_series = []
-
-        for f in self._source_index[source]:
-            if source in self.control_sources:
-                counts = np.ones(len(f.train_ids), dtype=np.uint64)
-            else:
-                group = key.partition('.')[0]
-                _, counts = f.get_index(source, group)
-            seq_series.append(pd.Series(counts, index=f.train_ids))
-
-        ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
-        # Select out only the train IDs of interest
-        train_ids = ser.index.intersection(self.train_ids)
-        return ser.loc[train_ids]
+        return self._get_key_data(source, key).get_data_counts()
 
     def get_series(self, source, key):
         """Return a pandas Series for a particular data field.

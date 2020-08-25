@@ -636,3 +636,10 @@ def test_permission():
 def test_empty_file_info(mock_empty_file, capsys):
     f = H5File(mock_empty_file)
     f.info()  # smoke test
+
+
+def test_get_data_counts(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    count = run.get_data_counts('SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value')
+    assert count.index.tolist() == run.train_ids
+    assert (count.values == 1).all()
