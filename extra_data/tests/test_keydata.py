@@ -91,16 +91,16 @@ def test_get_data_count(mock_reduced_spb_proc_run):
 
     # control data
     xgm_beam_x = run['SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value']
-    count = xgm_beam_x.get_data_counts()
+    count = xgm_beam_x.data_counts()
     assert count.index.tolist() == xgm_beam_x.train_ids
     assert (count.values == 1).all()
 
     # intrument data
     camera = run['SPB_IRU_CAM/CAM/SIDEMIC:daqOutput', 'data.image.pixels']
-    count = camera.get_data_counts()
+    count = camera.data_counts()
     assert count.index.tolist() == camera.train_ids
 
     mod = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.data']
-    count = mod.get_data_counts()
+    count = mod.data_counts()
     assert count.index.tolist() == mod.train_ids
     assert count.values.sum() == mod.shape[0]

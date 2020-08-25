@@ -409,7 +409,7 @@ class DataCollection:
         key: str
             Key of parameter within that device, e.g. "image.data".
         """
-        return self._get_key_data(source, key).get_data_counts()
+        return self._get_key_data(source, key).data_counts()
 
     def get_series(self, source, key):
         """Return a pandas Series for a particular data field.

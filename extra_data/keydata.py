@@ -95,7 +95,7 @@ class KeyData:
     def __getitem__(self, item):
         return self.select_trains(item)
 
-    def get_data_counts(self):
+    def data_counts(self):
         """Get a count of data points in each train.
 
         Returns a pandas series with an index of train IDs.
