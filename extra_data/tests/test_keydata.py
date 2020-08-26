@@ -86,7 +86,7 @@ def test_get_train(mock_spb_raw_run):
         xgm_beam_x.train_from_index(9999)
 
 
-def test_get_data_count(mock_reduced_spb_proc_run):
+def test_data_counts(mock_reduced_spb_proc_run):
     run = RunDirectory(mock_reduced_spb_proc_run)
 
     # control data
