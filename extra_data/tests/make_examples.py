@@ -269,8 +269,7 @@ def make_reduced_spb_run(dir_path, raw=True, rng=None, format_version='0.5'):
             AGIPDModule('SPB_DET_AGIPD1M-1/DET/{}CH0'.format(modno), raw=raw,
                          frames_per_train=frame_counts)
             ], ntrains=64, chunksize=32, format_version=format_version)
-    if not raw:
-        return
+
     write_file(osp.join(dir_path, '{}-R0238-DA01-S00000.h5'.format(prefix)),
                [ XGM('SA1_XTD2_XGM/DOOCS/MAIN'),
                  XGM('SPB_XTD9_XGM/DOOCS/MAIN'),

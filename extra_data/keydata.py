@@ -95,6 +95,27 @@ class KeyData:
     def __getitem__(self, item):
         return self.select_trains(item)
 
+    def data_counts(self):
+        """Get a count of data points in each train.
+
+        Returns a pandas series with an index of train IDs.
+        """
+        import pandas as pd
+
+        seq_series = []
+
+        for f in self.files:
+            if self.section == 'CONTROL':
+                counts = np.ones(len(f.train_ids), dtype=np.uint64)
+            else:
+                _, counts = f.get_index(self.source, self._key_group)
+            seq_series.append(pd.Series(counts, index=f.train_ids))
+
+        ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
+        # Select out only the train IDs of interest
+        train_ids = ser.index.intersection(self.train_ids)
+        return ser.loc[train_ids]
+
     # Getting data as different kinds of array: -------------------------------
 
     def ndarray(self, roi=()):
