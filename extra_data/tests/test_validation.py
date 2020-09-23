@@ -1,4 +1,5 @@
 import os.path as osp
+from pathlib import Path
 
 from h5py import File
 from pytest import fixture, raises
@@ -29,6 +30,16 @@ def data_aggregator_file():
 def test_validate_run(mock_fxe_raw_run):
     rv = RunValidator(mock_fxe_raw_run)
     rv.validate()
+
+
+def test_file_error(mock_fxe_raw_run):
+    not_readable = Path(mock_fxe_raw_run) / 'notReadable.h5'
+    not_readable.touch(mode=0o066)
+
+    problems = RunValidator(mock_fxe_raw_run).run_checks()
+    assert len(problems) == 1
+    assert problems[0]['msg'] == 'Could not open file'
+    assert problems[0]['file'] == str(not_readable)
 
 
 def test_zeros_in_train_ids(agipd_file):
