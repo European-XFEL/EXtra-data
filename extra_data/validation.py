@@ -28,9 +28,10 @@ class ValidationError(Exception):
 
 
 class FileValidator:
-    def __init__(self, file: FileAccess):
+    def __init__(self, file: FileAccess, timestamp=False):
         self.file = file
         self.filename = file.filename
+        self.extras = {'timestamp': timestamp}
         self.problems = []
 
     def validate(self):
@@ -42,6 +43,10 @@ class FileValidator:
         self.problems = []
         self.check_indices()
         self.check_trainids()
+        for check, do in self.extras.items():
+            if do:
+                getattr(self, f'check_{check}')()
+
         return self.problems
 
     def record(self, msg, **kwargs):
@@ -153,6 +158,35 @@ class FileValidator:
             )
 
         check_index_contiguous(first, count, record)
+
+    def check_timestamp(self):
+        for source in self.file.control_sources:
+            for key in self.file.get_keys(source):
+                if not key.endswith('.timestamp'):
+                    continue
+
+                ds_path = f'CONTROL/{source}/{key.replace(".", "/")}'
+                ts = self.file.file[ds_path][:]
+
+                if (ts == 0).any():
+                    first0 = np.where(ts == 0)[0][0]
+                    if not (ts[first0:] == 0).all():
+                        self.record(
+                            'Zeroes in Timestamp before last train ID',
+                            dataset=ds_path
+                        )
+                    nonzero_ts = ts[:first0]
+                else:
+                    nonzero_ts = ts
+
+                non_incr = (nonzero_ts[1:] < nonzero_ts[:-1]).nonzero()[0]
+                if non_incr.size > 0:
+                    pos = non_incr[0]
+                    self.record(
+                        f'Timestamp is decreasing, e.g. at '
+                        f'{pos + 1} ({ts[pos + 1]} < {ts[pos]})',
+                        dataset=ds_path,
+                    )
 
 
 def check_index_contiguous(firsts, counts, record):
@@ -295,6 +329,10 @@ def main(argv=None):
 
     ap = ArgumentParser(prog='extra-data-validate')
     ap.add_argument('path', help="HDF5 file or run directory of HDF5 files.")
+    ap.add_argument(
+        '-ts', '--timestamp', action='store_true',
+        help='check that timestamps are increasing on control data sources'
+    )
     args = ap.parse_args(argv)
 
     path = args.path
