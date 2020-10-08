@@ -156,6 +156,18 @@ data, so you use them like this::
 
    .. automethod:: union
 
+Selecting a single data source
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+One can select a single data source as a ``KeyData`` object. It offers the same
+functionality you can find in the ``DataCollection`` object. To select a data source
+from a run::
+
+  keydata = run[source, key]
+
+.. autoclass:: extra_data.keydata.KeyData
+   :members:
+
 Writing selected data
 ---------------------
 
