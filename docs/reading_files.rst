@@ -71,31 +71,33 @@ to refer to all data associated with that 0.1 second window.
 Getting data by source & key
 ----------------------------
 
-Where data will fit into memory, it's usually quickest and most convenient
-to load it like this.
+.. note::
+
+   When applicable, we recommand getting data using :class:`extra_data.keydata.KeyData`
+   objects.
+
+   One can select a single data source as a :class:`extra_data.keydata.KeyData` object.
+   It offers the same functionality you can find in the :class:`DataCollection` object.
+   To select a data source from a run::
+
+      xgm_intensity = run['SA1_XTD2_XGM/XGM/DOOCS:output', 'data.intensityTD']
+
+   :ref:`See more about KeyData<keydata>`.
+
+We can also use methods directly on a :class:`DataCollection` object to load data. This
+can be useful if you want to iterate over multiple data source at a time, or get a
+:ref:`Pandas.DataFrame<getdf>` or a :ref:`virtual dataset<getvds>` from run data.
 
 .. class:: DataCollection
    :noindex:
 
    .. automethod:: get_array
 
-     .. seealso::
-       `xarray documentation <http://xarray.pydata.org/en/stable/indexing.html>`__
-         How to use the arrays returned by :meth:`~.get_array`
-
-       :doc:`xpd_examples`
-         Examples using xarray & pandas with EuXFEL data
-
    .. automethod:: get_dask_array
 
-     .. seealso::
-       `Dask Array documentation <https://docs.dask.org/en/latest/array.html>`__
-         How to use the objects returned by :meth:`~.get_dask_array`
-
-       :doc:`dask_averaging`
-         An example using Dask with EuXFEL data
-
    .. automethod:: get_series
+
+   .. _getdf:
 
    .. automethod:: get_dataframe
 
@@ -106,6 +108,8 @@ to load it like this.
 
         :doc:`xpd_examples`
           Examples using xarray & pandas with EuXFEL data
+
+   .. _getvds:
 
    .. automethod:: get_virtual_dataset
 
@@ -118,6 +122,13 @@ to load it like this.
 
 Getting data by train
 ---------------------
+
+.. note::
+
+   When applicable, we recommand getting data using :class:`extra_data.keydata.KeyData`
+   objects.
+
+   :ref:`See more about KeyData<keydata>`.
 
 Some kinds of data, e.g. from AGIPD, are too big to load a whole run into
 memory at once. In these cases, it's convenient to load one train at a time.
@@ -156,17 +167,55 @@ data, so you use them like this::
 
    .. automethod:: union
 
+.. _keydata:
+
 Selecting a single data source
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-One can select a single data source as a ``KeyData`` object. It offers the same
-functionality you can find in the ``DataCollection`` object. To select a data source
-from a run::
+One can select a single data source as a :class:`extra_data.keydata.KeyData` object. It
+offers the same functionality you can find in the :class:`DataCollection` object. To
+select a data source from a run::
 
-  keydata = run[source, key]
+  keydata = run['SA1_XTD2_XGM/XGM/DOOCS:output', 'data.intensityTD']
 
-.. autoclass:: extra_data.keydata.KeyData
-   :members:
+.. class:: extra_data.keydata.KeyData
+
+   .. autoattribute:: hdf5_data_path
+
+   .. autoattribute:: shape
+
+   .. automethod:: select_trains
+      :noindex:
+
+   .. automethod:: data_counts
+
+   .. automethod:: series
+
+   .. automethod:: ndarray
+
+   .. automethod:: xarray
+   
+     .. seealso::
+       `xarray documentation <http://xarray.pydata.org/en/stable/indexing.html>`__
+         How to use the arrays returned by :meth:`DataCollection.get_array`
+
+       :doc:`xpd_examples`
+         Examples using xarray & pandas with EuXFEL data
+
+   .. automethod:: dask_array
+
+    .. seealso::
+       `Dask Array documentation <https://docs.dask.org/en/latest/array.html>`__
+         How to use the objects returned by :meth:`DataCollection.get_dask_array`
+
+       :doc:`dask_averaging`
+         An example using Dask with EuXFEL data
+
+   .. automethod:: train_from_index
+
+   .. automethod:: train_from_id
+
+   .. automethod:: trains
 
 Writing selected data
 ---------------------

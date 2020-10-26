@@ -160,11 +160,22 @@ class KeyData:
         The first dimension is labelled with train IDs. Other dimensions may be
         named by passing a list of names to *extra_dims*.
 
-        *roi* may be a ``numpy.s_[]`` expression to load e.g. only part of each
-        image from a camera.
+        Parameters
+        ----------
 
-        The array's name may be given by *name*, by default the source and key
-        is joined by a dot.
+        extra_dims: list of str
+            Name extra dimensions in the array. The first dimension is
+            automatically called 'train'. The default for extra dimensions
+            is dim_0, dim_1, ...
+        roi: numpy.s_[], slice, tuple of slices, or by_index
+            The region of interest. This expression selects data in all
+            dimensions apart from the first (trains) dimension. If the data
+            holds a 1D array for each entry, roi=np.s_[:8] would get the
+            first 8 values from every train. If the data is 2D or more at
+            each entry, selection looks like roi=np.s_[:8, 5:10] .
+        name: str
+            Name the array itself. The default is the source and key joined
+            by a dot.
         """
         import xarray
 
@@ -189,7 +200,8 @@ class KeyData:
         return xarray.DataArray(ndarr, dims=dims, coords=coords, name=name)
 
     def series(self):
-        """Load this data as a pandas Series. Only for 1D data."""
+        """Load this data as a pandas Series. Only for 1D data.
+        """
         import pandas as pd
 
         if self.ndim > 1:
@@ -206,11 +218,23 @@ class KeyData:
     def dask_array(self, labelled=False):
         """Make a Dask array for this data.
 
-        Dask does lazy computation, so the data is not actually loaded until
-        you call a ``.compute()`` method to get a result.
+        Dask is a system for lazy parallel computation. This method doesn't
+        actually load the data, but gives you an array-like object which you
+        can operate on. Dask loads the data and calculates results when you ask
+        it to, e.g. by calling a ``.compute()`` method.
+        See the Dask documentation for more details.
 
-        Passing ``labelled=True`` will wrap the Dask array in an xarray
-        DataArray with train IDs labelled.
+        If your computation depends on reading lots of data, consider creating
+        a dask.distributed.Client before calling this.
+        If you don't do this, Dask uses threads by default, which is not
+        efficient for reading HDF5 files.
+
+        Parameters
+        ----------
+
+        labelled: bool
+            If True, label the train IDs for the data, returning an
+            xarray.DataArray object wrapping a Dask array.
         """
         import dask.array as da
 
