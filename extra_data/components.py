@@ -396,7 +396,9 @@ class MPxDetectorBase:
 
             arrays.append(mod_arr)
 
-        return xarray.concat(arrays, pd.Index(modnos, name='module'))
+        # set the fill_value to prevent xarray from changing the dtype to float
+        fill_value = 0 if arrays[0].dtype.kind != 'f' else xr.core.dtypes.NA
+        return xarray.concat(arrays, pd.Index(modnos, name='module'), fill_value=fill_value)
 
     def trains(self, pulses=np.s_[:], require_all=True):
         """Iterate over trains for detector data.
