@@ -34,7 +34,6 @@ class DetectorModule:
     def image_keys(self):
         if self.raw:
             return [
-                ('cellId', 'u2', (1,)),
                 ('data', 'u2', self.image_dims),
                 ('length', 'u4', (1,)),
                 ('status', 'u2', (1,)),
@@ -42,7 +41,6 @@ class DetectorModule:
 
         else:
             return [
-                ('cellId', 'u2', ()),
                 ('data', 'f4', self.image_dims),
                 ('mask', 'u4', self.image_dims),
                 ('gain', 'u1', self.image_dims),
@@ -114,6 +112,10 @@ class DetectorModule:
             pid = f.create_dataset('INSTRUMENT/%s:xtdf/image/pulseId' % self.device_id,
                                    (nframes, 1), 'u8', maxshape=(None, 1))
             pid[:, 0] = pid_index
+
+            cid = f.create_dataset('INSTRUMENT/%s:xtdf/image/cellId' % self.device_id,
+                                   (nframes, 1), 'u2', maxshape=(None, 1))
+            cid[:, 0] = pid_index  # Cell IDs mirror pulse IDs for now
         else:
             # Corrected data drops the extra dimension, and maxshape==shape.
             f.create_dataset(
@@ -124,6 +126,11 @@ class DetectorModule:
             f.create_dataset(
                 'INSTRUMENT/%s:xtdf/image/pulseId' % self.device_id,
                 (nframes,), 'u8', chunks=True, data=pid_index
+            )
+
+            f.create_dataset(  # Cell IDs mirror pulse IDs for now
+                'INSTRUMENT/%s:xtdf/image/cellId' % self.device_id,
+                (nframes,), 'u2', chunks=True, data=pid_index
             )
 
         max_len = None if self.raw else nframes
