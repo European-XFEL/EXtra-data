@@ -42,6 +42,13 @@ def test_stack_detector_data_missing(mock_fxe_raw_run):
     assert (comb[:, :, 7] == 22).all()  # Key missing
     assert (comb[:, :, 5] == 22).all()  # Empty array
 
+    # default fillvalue for int is 0
+    comb = stack_detector_data(data, 'image.data')
+    assert (comb[:, :, 3] == 0).all()
+
+    with pytest.raises(ValueError):
+        comb = stack_detector_data(data, 'image.data', fillvalue=np.nan)
+
 
 def test_stack_detector_data_stackview(mock_fxe_raw_run):
     test_run = RunDirectory(mock_fxe_raw_run)

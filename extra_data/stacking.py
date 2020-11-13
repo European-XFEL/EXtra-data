@@ -53,7 +53,7 @@ def stack_data(train, data, axis=-3, xcept=()):
     return np.stack(ordered_arrays, axis=axis)
 
 
-def stack_detector_data(train, data, axis=-3, modules=16, fillvalue=np.nan,
+def stack_detector_data(train, data, axis=-3, modules=16, fillvalue=None,
                         real_array=True):
     """Stack data from detector modules in a train.
 
@@ -117,6 +117,11 @@ def stack_detector_data(train, data, axis=-3, modules=16, fillvalue=np.nan,
 
     dtype = dtypes.pop()
     shape = shapes.pop()
+
+    if fillvalue is None:
+        fillvalue = np.nan if dtype.kind == 'f' else 0
+    fillvalue = dtype.type(fillvalue)  # check value compatibility with dtype
+
     stack = StackView(
         modno_arrays, modules, shape, dtype, fillvalue, stack_axis=axis
     )
