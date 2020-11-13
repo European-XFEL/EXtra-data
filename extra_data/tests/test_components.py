@@ -23,6 +23,11 @@ def test_get_array(mock_fxe_raw_run):
     assert arr.dtype == np.uint16
     assert arr.dims == ('module', 'train_pulse', 'slow_scan', 'fast_scan')
 
+    # fill value
+    with pytest.raises(ValueError):
+        det.get_array('image.data', fill_value=np.nan)
+
+
 def test_get_array_pulse_id(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run.select_trains(by_index[:3]))
