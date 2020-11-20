@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/European-XFEL/EXtra-data.svg?branch=master)](https://travis-ci.org/European-XFEL/EXtra-data)
+[![Build Status](https://github.com/European-XFEL/EXtra-data/workflows/Tests/badge.svg)](https://github.com/European-XFEL/EXtra-data/actions?query=workflow%3ATests)
 [![codecov](https://codecov.io/gh/European-XFEL/EXtra-data/branch/master/graph/badge.svg)](https://codecov.io/gh/European-XFEL/EXtra-data)
 
 Python 3 tools for reading European XFEL's HDF5 files.
