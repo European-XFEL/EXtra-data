@@ -23,7 +23,7 @@ def find_version(*parts):
 
 setup(
     name="EXtra-data",
-    version=find_version("extra_data", "__init__.py"),
+    version=find_version("src", "extra_data", "__init__.py"),
     author="European XFEL GmbH",
     author_email="da-support@xfel.eu",
     maintainer="Thomas Michelat",
@@ -32,10 +32,11 @@ setup(
     long_description=read("README.md"),
     long_description_content_type='text/markdown',
     license="BSD-3-Clause",
-    packages=find_packages(),
+    packages=find_packages("src"),
     package_data={
         'extra_data.tests': ['dssc_geo_june19.h5', 'lpd_mar_18.h5'],
     },
+    package_dir={"": "src"},
     entry_points={
         "console_scripts": [
             "lsxfel = extra_data.lsxfel:main",
