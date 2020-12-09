@@ -131,6 +131,42 @@ def stack_detector_data(train, data, axis=-3, modules=16, fillvalue=None,
     return stack
 
 
+def stack_from_xarray(xrdata, axis=-3, modules=16, fillvalue=np.nan,
+                      real_array=True):
+    
+    dtypes, shapes, empty_mods = set(), set(), set()
+    modno_arrays = {}
+    for (modno, data) in zip(xrdata.module.values, xrdata):
+        array = data
+        dtypes.add(array.dtype)
+        shapes.add(array.shape)
+        modno_arrays[modno] = array
+
+    if len(dtypes) > 1:
+        raise ValueError("Arrays have mismatched dtypes: {}".format(dtypes))
+    if len(shapes) > 1:
+        s1, s2, *_ = sorted(shapes)
+        if len(shapes) > 2 or (s1[0] != 0) or (s1[1:] != s2[1:]):
+            raise ValueError("Arrays have mismatched shapes: {}".format(shapes))
+        empty_mods = {n for n, a in modno_arrays.items() if a.shape == s1}
+        for modno in empty_mods:
+            del modno_arrays[modno]
+        shapes.remove(s1)
+
+    if max(modno_arrays) >= modules:
+        raise IndexError("Module {} is out of range for a detector with {} modules"
+                         .format(max(modno_arrays), modules))
+
+    dtype = dtypes.pop()
+    shape = shapes.pop()
+    stack = StackView(
+        modno_arrays, modules, shape, dtype, fillvalue, stack_axis=axis
+    )
+    if real_array:
+        return stack.asarray()
+
+    return stack
+
 class StackView:
     """Limited array-like object holding detector data from several modules.
 
