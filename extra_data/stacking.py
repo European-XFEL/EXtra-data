@@ -4,6 +4,7 @@ import re
 __all__ = [
     'stack_data',
     'stack_detector_data',
+    'stack_from_xarray'
 ]
 
 def stack_data(train, data, axis=-3, xcept=()):
@@ -131,37 +132,54 @@ def stack_detector_data(train, data, axis=-3, modules=16, fillvalue=None,
     return stack
 
 
-def stack_from_xarray(xrdata, axis=-3, modules=16, fillvalue=np.nan,
+def stack_from_xarray(xrdata, axis=-3, modules=16, fillvalue=None,
                       real_array=True):
-    
-    dtypes, shapes, empty_mods = set(), set(), set()
-    modno_arrays = {}
-    for (modno, data) in zip(xrdata.module.values, xrdata):
-        array = data
-        dtypes.add(array.dtype)
-        shapes.add(array.shape)
-        modno_arrays[modno] = array
+    """Stack data from a xarray.
 
-    if len(dtypes) > 1:
-        raise ValueError("Arrays have mismatched dtypes: {}".format(dtypes))
-    if len(shapes) > 1:
-        s1, s2, *_ = sorted(shapes)
-        if len(shapes) > 2 or (s1[0] != 0) or (s1[1:] != s2[1:]):
-            raise ValueError("Arrays have mismatched shapes: {}".format(shapes))
-        empty_mods = {n for n, a in modno_arrays.items() if a.shape == s1}
-        for modno in empty_mods:
-            del modno_arrays[modno]
-        shapes.remove(s1)
+    Parameters
+    ----------
+    xrdata: xarray
+        (Big) detector data. Expected dims are:
+        ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
+    axis: int
+        Array axis on which you wish to stack (default is -3).
+    modules: int
+        Number of modules composing a detector (default is 16).
+    fillvalue: number
+        Value to use in place of data for missing modules. The default is nan
+        (not a number) for floating-point data, and 0 for integers.
+    real_array: bool
+        If True (default), copy the data together into a real numpy array.
+        If False, avoid copying the data and return a limited array-like wrapper
+        around the existing arrays. This is sufficient for assembling images
+        using detector geometry, and allows better performance.
+
+    Returns
+    -------
+    stack: numpy.array
+        Stacked data for requested data path.
+    """
+    modno_arrays = {}
+    for modno in xrdata.module.values:
+        data = xrdata.sel(module=modno)
+        modno_arrays[modno] = data
+
+    if len(np.unique(xrdata.module)) != len(xrdata.module):
+        raise ValueError("There are duplicated module numbers")
 
     if max(modno_arrays) >= modules:
         raise IndexError("Module {} is out of range for a detector with {} modules"
                          .format(max(modno_arrays), modules))
+    if fillvalue is None:
+        fillvalue = np.nan if xrdata.dtype.kind == 'f' else 0
+    fillvalue = xrdata.dtype.type(fillvalue)  # check value compatibility with dtype
 
-    dtype = dtypes.pop()
-    shape = shapes.pop()
     stack = StackView(
-        modno_arrays, modules, shape, dtype, fillvalue, stack_axis=axis
+        modno_arrays, modules,
+        mod_shape=xrdata.sel(module=modno).shape,
+        dtype=xrdata.dtype, fillvalue=fillvalue, stack_axis=axis
     )
+
     if real_array:
         return stack.asarray()
 
