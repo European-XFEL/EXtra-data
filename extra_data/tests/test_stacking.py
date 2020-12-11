@@ -168,4 +168,4 @@ def test_stack_from_xarray():
                         dims=dims, coords=coords)
 
     comb = stack_from_xarray(data)
-    assert comb.shape == (2, 2, 16, 8, 8)
+    assert comb.shape == (2, 2, 16, 10, 10)
