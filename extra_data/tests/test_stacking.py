@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
+import xarray as xr
 
-from extra_data import RunDirectory, stack_data, stack_detector_data
+from extra_data import RunDirectory, stack_data, stack_detector_data, stack_from_xarray
 from extra_data.stacking import StackView
 
 def test_stack_data(mock_fxe_raw_run):
@@ -155,3 +156,16 @@ def test_stackview_squeeze():
 
     with pytest.raises(np.AxisError):
         sv.squeeze(axis=4)
+
+def test_stack_from_xarray():
+    coords = {'module': np.arange(2),
+              'train': np.arange(2),
+              'pulse': np.arange(2)
+    }
+    dims = ['module', 'train', 'pulse', 'slow_scan', 'fast_scan']
+    
+    data = xr.DataArray(np.zeros(800).reshape(2,2,2,10,10),
+                        dims=dims, coords=coords)
+
+    comb = stack_from_xarray(data)
+    assert comb.shape == (2, 2, 16, 8, 8)
