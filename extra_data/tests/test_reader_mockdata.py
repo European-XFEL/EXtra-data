@@ -478,6 +478,17 @@ def test_select(mock_fxe_raw_run):
         assert set(source_data.keys()) == {'image.pulseId', 'metadata'}
 
 
+def test_select_require_all(mock_sa3_control_data):
+    run = H5File(mock_sa3_control_data).select('*/BEAMVIEW2:daqOutput')
+    subrun = run.select('*/BEAMVIEW2:daqOutput', require_all=True)
+
+    assert run.all_sources == subrun.all_sources
+
+    # SA3_XTD10_IMGFEL/CAM/BEAMVIEW2 contains every other train,
+    # skipping the first.
+    np.testing.assert_array_equal(subrun.train_ids, run.train_ids[1::2])
+
+
 def test_deselect(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
 
