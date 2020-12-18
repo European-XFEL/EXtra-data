@@ -626,6 +626,10 @@ class DataCollection:
                 self._select_glob(src_glob, key_glob)
                 for (src_glob, key_glob) in selection
             )
+        elif isinstance(selection, DataCollection):
+            return self._expand_selection(selection.selection)
+        elif isinstance(selection, KeyData):
+            res[selection.source] = {selection.key}
         else:
             raise TypeError("Unknown selection type: {}".format(type(selection)))
 
@@ -663,7 +667,7 @@ class DataCollection:
     def select(self, seln_or_source_glob, key_glob='*'):
         """Select a subset of sources and keys from this data.
 
-        There are three possible ways to select data:
+        There are four possible ways to select data:
 
         1. With two glob patterns (see below) for source and key names::
 
@@ -687,6 +691,11 @@ class DataCollection:
            Unlike the others, this option *doesn't* allow glob patterns.
            It's a more precise but less convenient option for code that knows
            exactly what sources and keys it needs.
+
+        4. With an existing DataCollection or KeyData object::
+
+             # Select the same data contained in another DataCollection
+             prev_run.select(sel)
 
         Returns a new :class:`DataCollection` object for the selected data.
 
@@ -741,6 +750,10 @@ class DataCollection:
                 keys = self.keys_for_source(source)
 
             selection[source] = keys - desel_keys
+
+            if not selection[source]:
+                # Drop the source if all keys were deselected
+                del selection[source]
 
         files = [f for f in self.files
                  if f.all_sources.intersection(selection.keys())]

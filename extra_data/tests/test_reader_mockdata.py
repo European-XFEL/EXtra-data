@@ -477,6 +477,10 @@ def test_select(mock_fxe_raw_run):
         print(source)
         assert set(source_data.keys()) == {'image.pulseId', 'metadata'}
 
+    sel2 = run.select(sel)
+    assert 'SPB_XTD9_XGM/DOOCS/MAIN' not in sel2.control_sources
+    assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in sel2.instrument_sources
+
 
 def test_deselect(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
@@ -492,6 +496,10 @@ def test_deselect(mock_fxe_raw_run):
     assert xtd9_xgm in sel.control_sources
     assert 'beamPosition.ixPos.value' not in sel.selection[xtd9_xgm]
     assert 'beamPosition.iyPos.value' in sel.selection[xtd9_xgm]
+
+    sel = run.deselect(run.select('*_XGM/DOOCS*'))
+    assert xtd9_xgm not in sel.control_sources
+    assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in sel.instrument_sources
 
 
 def test_select_trains(mock_fxe_raw_run):
