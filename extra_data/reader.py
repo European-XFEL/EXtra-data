@@ -615,7 +615,10 @@ class DataCollection:
                 if source not in self.all_sources:
                     raise SourceNameError(source)
 
-                res[source].update(keys or None)
+                if keys:
+                    res[source].update(keys)
+                else:
+                    res[source] = None
 
         elif isinstance(selection, Iterable):
             # selection = [('src_glob', 'key_glob'), ...]
