@@ -158,13 +158,13 @@ def test_stackview_squeeze():
         sv.squeeze(axis=4)
 
 def test_stack_from_xarray():
-    coords = {'module': np.arange(2),
+    coords = {'module': np.array([0, 2, 3]),
               'train': np.arange(2),
               'pulse': np.arange(2)
     }
     dims = ['module', 'train', 'pulse', 'slow_scan', 'fast_scan']
     
-    data = xr.DataArray(np.zeros(800).reshape(2,2,2,10,10),
+    data = xr.DataArray(np.zeros((3, 2, 2, 10, 10)),
                         dims=dims, coords=coords)
 
     comb = stack_from_xarray(data)
