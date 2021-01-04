@@ -134,12 +134,13 @@ def stack_detector_data(train, data, axis=-3, modules=16, fillvalue=None,
 
 def stack_from_xarray(xrdata, axis=-3, modules=16, fillvalue=None,
                       real_array=True):
-    """Stack data from a xarray.
+    """Stack detector data from an xarray DataArray.
 
     Parameters
     ----------
-    xrdata: xarray
+    xrdata: xarray.DataArray
         (Big) detector data. Expected dims are:
+        ('module', 'dim_1', 'dim_2', 'dim_3', 'dim_4'). e.g.:
         ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
     axis: int
         Array axis on which you wish to stack (default is -3).
@@ -156,8 +157,8 @@ def stack_from_xarray(xrdata, axis=-3, modules=16, fillvalue=None,
 
     Returns
     -------
-    stack: numpy.array
-        Stacked data for requested data path.
+    stack: numpy.ndarray
+        Stacked data in an unlabelled array.
     """
     modno_arrays = {}
     for modno in xrdata.module.values:
