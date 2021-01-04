@@ -222,7 +222,7 @@ class FileAccess:
         train_ids = self.train_ids
         flag = np.ones_like(train_ids, dtype=bool)
 
-        for ix in np.nonzero(np.diff(train_ids) < 0)[0]:
+        for ix in np.nonzero(train_ids[1:] <= train_ids[:-1])[0]:
             # train_ids[ix] > train_ids[ix + 1]
             invalid_before = train_ids[:ix+1] > train_ids[ix+1]
             invalid_after = train_ids[ix+1:] < train_ids[ix]
