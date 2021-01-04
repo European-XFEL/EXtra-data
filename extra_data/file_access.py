@@ -124,6 +124,7 @@ class FileAccess:
             self.train_ids = _cache_info['train_ids']
             self.control_sources = _cache_info['control_sources']
             self.instrument_sources = _cache_info['instrument_sources']
+            self.validity_flag = _cache_info.get('flag', None)
         else:
             tid_data = self.file['INDEX/trainId'][:]
             self.train_ids = tid_data[tid_data != 0]
@@ -133,6 +134,13 @@ class FileAccess:
             # Store the stat of the file as it was when we read the metadata.
             # This is used by the run files map.
             self.metadata_fstat = os.stat(self.file.id.get_vfd_handle())
+            self.validity_flag = None
+
+        if self.validity_flag is None:
+            if self.format_version == '0.5':
+                self.validity_flag = np.ones_like(self.train_ids, dtype=bool)
+            else:
+                self.validity_flag = self.file['INDEX/flag'][:len(self.train_ids)].astype(bool)
 
         # {(file, source, group): (firsts, counts)}
         self._index_cache = {}
@@ -148,6 +156,10 @@ class FileAccess:
             self._file = h5py.File(self.filename, 'r')
 
         return self._file
+
+    @property
+    def valid_train_ids(self):
+        return self.train_ids[self.validity_flag]
 
     def close(self):
         """Close* the HDF5 file this refers to.

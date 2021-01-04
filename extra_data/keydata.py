@@ -27,10 +27,10 @@ class KeyData:
             firsts, counts = file.get_index(self.source, self._key_group)
 
             # Of trains in this file, which are in selection
-            selected = np.isin(file.train_ids, self.train_ids)
+            include = np.isin(file.train_ids, self.train_ids) & file.validity_flag
 
             # Assemble contiguous chunks of data from this file
-            for _from, _to in contiguous_regions(selected):
+            for _from, _to in contiguous_regions(include):
                 yield DataChunk(
                     file, self.hdf5_data_path,
                     first=firsts[_from],

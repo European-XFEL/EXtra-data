@@ -102,7 +102,7 @@ class DataCollection:
         self.instrument_sources = frozenset(self.instrument_sources)
 
         if train_ids is None:
-            train_ids = sorted(set().union(*(f.train_ids for f in files)))
+            train_ids = sorted(set().union(*(f.valid_train_ids for f in files)))
         self.train_ids = train_ids
 
     @staticmethod
