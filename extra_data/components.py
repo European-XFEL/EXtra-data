@@ -320,7 +320,20 @@ class MPxDetectorBase:
             dim=('train' if unstack_pulses else 'train_pulse'),
         )
 
-    def get_array(self, key, pulses=np.s_[:], unstack_pulses=True):
+    @staticmethod
+    def _fill_value(value, dtype):
+        if value is None:
+            if dtype.kind != 'f':
+                value = 0
+            else:
+                value = np.nan
+
+        # enforce that fill value is compatible with array dtype
+        value = dtype.type(value)
+        return value
+
+    def get_array(self, key, pulses=np.s_[:], unstack_pulses=True,
+                  fill_value=None):
         """Get a labelled array of detector data
 
         Parameters
@@ -334,6 +347,9 @@ class MPxDetectorBase:
           all pulses. Only used for per-train data.
         unstack_pulses: bool
           Whether to separate train and pulse dimensions.
+        fill_value: int or float, optional
+            Value to use for missing values. If None (default) the fill value
+            is 0 for integers and np.nan for floats.
         """
         pulses = _check_pulse_selection(pulses)
 
@@ -349,9 +365,13 @@ class MPxDetectorBase:
                 arrays.append(self.data.get_array(source, key))
             modnos.append(modno)
 
-        return xarray.concat(arrays, pd.Index(modnos, name='module'))
+        return xarray.concat(
+            arrays,
+            pd.Index(modnos, name='module'),
+            fill_value=self._fill_value(fill_value, arrays[0].dtype)
+        )
 
-    def get_dask_array(self, key, subtrain_index='pulseId'):
+    def get_dask_array(self, key, subtrain_index='pulseId', fill_value=None):
         """Get a labelled Dask array of detector data
 
         Dask does lazy, parallelised computing, and can work with large data
@@ -369,6 +389,9 @@ class MPxDetectorBase:
           other devices, but depends on how the detector was manually configured
           when the data was taken. Cell ID refers to the memory cell used for
           that frame in the detector hardware.
+        fill_value: int or float, optional
+            Value to use for missing values. If None (default) the fill value
+            is 0 for integers and np.nan for floats.
         """
         if subtrain_index not in {'pulseId', 'cellId'}:
             raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
@@ -396,7 +419,12 @@ class MPxDetectorBase:
 
             arrays.append(mod_arr)
 
-        return xarray.concat(arrays, pd.Index(modnos, name='module'))
+        # set the fill_value to prevent xarray from changing the dtype to float
+        return xarray.concat(
+            arrays,
+            pd.Index(modnos, name='module'),
+            fill_value=self._fill_value(fill_value, arrays[0].dtype)
+        )
 
     def trains(self, pulses=np.s_[:], require_all=True):
         """Iterate over trains for detector data.
