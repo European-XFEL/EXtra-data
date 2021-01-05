@@ -806,7 +806,7 @@ class LPD1M(MPxDetectorBase):
         gain = np.zeros_like(inner_ids, dtype=np.uint8)
         inner_ids_fixed = np.zeros_like(inner_ids)
         for n_in_train in frame_counts:  # Iterate through trains
-            n_per_gain_stage = n_in_train // 3
+            n_per_gain_stage = int(n_in_train // 3)
             train_inner_ids = inner_ids[cursor: cursor + n_per_gain_stage]
             for stage in range(3):
                 end = cursor + n_per_gain_stage
