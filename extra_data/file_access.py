@@ -223,9 +223,9 @@ class FileAccess:
         flag = np.ones_like(train_ids, dtype=bool)
 
         for ix in np.nonzero(train_ids[1:] <= train_ids[:-1])[0]:
-            # train_ids[ix] > train_ids[ix + 1]
-            invalid_before = train_ids[:ix+1] > train_ids[ix+1]
-            invalid_after = train_ids[ix+1:] < train_ids[ix]
+            # train_ids[ix] >= train_ids[ix + 1]
+            invalid_before = train_ids[:ix+1] >= train_ids[ix+1]
+            invalid_after = train_ids[ix+1:] <= train_ids[ix]
             # Which side of the downward jump in train IDs would need fewer
             # train IDs invalidated?
             if np.count_nonzero(invalid_before) < np.count_nonzero(invalid_after):
