@@ -38,7 +38,7 @@ def _guess_axes(data, train_pulse_ids, unstack_pulses):
     if unstack_pulses:
         # Separate train & pulse dimensions, and arrange dimensions
         # so that the data is contiguous in memory.
-        dim_order = ['train', 'pulse'] + dims[1:]
+        dim_order = train_pulse_ids.names + dims[1:]
         return arr.unstack('train_pulse').transpose(*dim_order)
     else:
         return arr
@@ -239,7 +239,17 @@ class MPxDetectorBase:
 
         return np.concatenate(positions)
 
-    def _get_module_pulse_data(self, source, key, pulses, unstack_pulses):
+    def _get_module_pulse_data(self, source, key, pulses, unstack_pulses,
+                               inner_index='pulseId'):
+        def get_inner_ids(f, ix_name='pulseId'):
+            ids = f.file[f'/INSTRUMENT/{source}/{group}/{ix_name}'][
+                data_slice
+            ]
+            # Raw files have a spurious extra dimension
+            if ids.ndim >= 2 and ids.shape[1] == 1:
+                ids = ids[:, 0]
+            return ids
+
         seq_arrays = []
         data_path = "/INSTRUMENT/{}/{}".format(source, key.replace('.', '/'))
         for f in self.data._source_index[source]:
@@ -263,14 +273,13 @@ class MPxDetectorBase:
                     np.arange(first_tid, last_tid + 1, dtype=np.uint64),
                     chunk_counts.astype(np.intp),
                 )
-                pulse_id = f.file['/INSTRUMENT/{}/{}/pulseId'.format(source, group)][
-                    data_slice
-                ]
-                # Raw files have a spurious extra dimension
-                if pulse_id.ndim >= 2 and pulse_id.shape[1] == 1:
-                    pulse_id = pulse_id[:, 0]
+                inner_ids = get_inner_ids(f, inner_index)
 
                 if isinstance(pulses, by_id):
+                    if inner_index == 'pulseId':
+                        pulse_id = inner_ids
+                    else:
+                        pulse_id = get_inner_ids(f, 'pulseId')
                     positions = self._select_pulse_ids(pulses, pulse_id)
                 else:  # by_index
                     positions = self._select_pulse_indices(
@@ -278,9 +287,9 @@ class MPxDetectorBase:
                     )
 
                 trainids = trainids[positions]
-                pulse_id = pulse_id[positions]
+                inner_ids = inner_ids[positions]
                 index = pd.MultiIndex.from_arrays(
-                    [trainids, pulse_id], names=['train', 'pulse']
+                    [trainids, inner_ids], names=['train', inner_index[:-2]]
                 )
 
                 if isinstance(positions, slice):
@@ -332,8 +341,8 @@ class MPxDetectorBase:
         value = dtype.type(value)
         return value
 
-    def get_array(self, key, pulses=np.s_[:], unstack_pulses=True,
-                  fill_value=None):
+    def get_array(self, key, pulses=np.s_[:], unstack_pulses=True, *,
+                  fill_value=None, subtrain_index='pulseId'):
         """Get a labelled array of detector data
 
         Parameters
@@ -350,7 +359,15 @@ class MPxDetectorBase:
         fill_value: int or float, optional
             Value to use for missing values. If None (default) the fill value
             is 0 for integers and np.nan for floats.
+        subtrain_index: str
+          Specify 'pulseId' (default) or 'cellId' to label the frames recorded
+          within each train. Pulse ID should allow this data to be matched with
+          other devices, but depends on how the detector was manually configured
+          when the data was taken. Cell ID refers to the memory cell used for
+          that frame in the detector hardware.
         """
+        if subtrain_index not in {'pulseId', 'cellId'}:
+            raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
         pulses = _check_pulse_selection(pulses)
 
         arrays = []
@@ -360,7 +377,8 @@ class MPxDetectorBase:
             # If that changes, this check will need to change as well.
             if key.startswith('image.'):
                 arrays.append(self._get_module_pulse_data(
-                    source, key, pulses, unstack_pulses))
+                    source, key, pulses, unstack_pulses, subtrain_index,
+                ))
             else:
                 arrays.append(self.data.get_array(source, key))
             modnos.append(modno)

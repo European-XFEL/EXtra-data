@@ -50,6 +50,18 @@ def test_get_array_pulse_id(mock_fxe_raw_run):
     assert list(arr.coords['pulse']) == [1, 7, 22, 23]
 
 
+def test_get_array_with_cell_ids(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    det = LPD1M(run.select_trains(by_index[:3]))
+    arr = det.get_array('image.data', subtrain_index='cellId')
+    assert arr.shape == (16, 3, 128, 256, 256)
+    assert arr.dims == ('module', 'train', 'cell', 'slow_scan', 'fast_scan')
+
+    arr = det.get_array('image.data', pulses=by_id[0], subtrain_index='cellId')
+    assert arr.shape == (16, 3, 1, 256, 256)
+    assert (arr.coords['cell'] == 0).all()
+
+
 def test_get_array_pulse_indexes(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run.select_trains(by_index[:3]))
