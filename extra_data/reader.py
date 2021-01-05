@@ -267,7 +267,8 @@ class DataCollection:
 
         return False
 
-    def trains(self, devices=None, train_range=None, *, require_all=False):
+    def trains(self, devices=None, train_range=None, *, require_all=False,
+               flat_keys=False):
         """Iterate over all trains in the data and gather all sources.
 
         ::
@@ -293,6 +294,11 @@ class DataCollection:
             this only makes sense if you make a selection with *devices*
             or :meth:`select`.
 
+        flat_keys: bool
+            False (default) returns nested dictionaries in each
+            iteration indexed by source and then key. True returns a
+            flat dictionary indexed by (source, key) tuples.
+
         Yields
         ------
 
@@ -306,7 +312,8 @@ class DataCollection:
             dc = dc.select(devices)
         if train_range is not None:
             dc = dc.select_trains(train_range)
-        return iter(TrainIterator(dc, require_all=require_all))
+        return iter(TrainIterator(dc, require_all=require_all,
+                                  flat_keys=flat_keys))
 
     def train_from_id(self, train_id, devices=None):
         """Get train data for specified train ID.
@@ -1047,11 +1054,25 @@ class TrainIterator:
 
     Created by :meth:`DataCollection.trains`.
     """
-    def __init__(self, data, require_all=True):
+    def __init__(self, data, require_all=True, flat_keys=False):
         self.data = data
         self.require_all = require_all
         # {(source, key): (f, dataset)}
         self._datasets_cache = {}
+
+        self._set_result = self._set_result_flat if flat_keys \
+            else self._set_result_nested
+
+    @staticmethod
+    def _set_result_nested(res, source, key, value):
+        try:
+            res[source][key] = value
+        except KeyError:
+            res[source] = {key: value}
+
+    @staticmethod
+    def _set_result_flat(res, source, key, value):
+        res[(source, key)] = value
 
     def _find_data(self, source, key, tid):
         file, ds = self._datasets_cache.get((source, key), (None, None))
@@ -1074,19 +1095,19 @@ class TrainIterator:
     def _assemble_data(self, tid):
         res = {}
         for source in self.data.control_sources:
-            source_data = res[source] = {
-                'metadata': {'source': source, 'timestamp.tid': tid}
-            }
+            self._set_result(res, source, 'metadata',
+                             {'source': source, 'timestamp.tid': tid})
+
+
             for key in self.data.keys_for_source(source):
                 _, pos, ds = self._find_data(source, key, tid)
                 if ds is None:
                     continue
-                source_data[key] = ds[pos]
+                self._set_result(res, source, key, ds[pos])
 
         for source in self.data.instrument_sources:
-            source_data = res[source] = {
-                'metadata': {'source': source, 'timestamp.tid': tid}
-            }
+            self._set_result(res, source, 'metadata',
+                             {'source': source, 'timestamp.tid': tid})
             for key in self.data.keys_for_source(source):
                 file, pos, ds = self._find_data(source, key, tid)
                 if ds is None:
@@ -1095,9 +1116,10 @@ class TrainIterator:
                 firsts, counts = file.get_index(source, group)
                 first, count = firsts[pos], counts[pos]
                 if count == 1:
-                    source_data[key] = ds[first]
+                    self._set_result(res, source, key, ds[first])
                 elif count > 0:
-                    source_data[key] = ds[first : first + count]
+                    self._set_result(res, source, key,
+                                     ds[first : first + count])
 
         return res
 

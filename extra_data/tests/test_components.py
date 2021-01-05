@@ -20,7 +20,13 @@ def test_get_array(mock_fxe_raw_run):
 
     arr = det.get_array('image.data', pulses=by_index[:10], unstack_pulses=False)
     assert arr.shape == (16, 30, 256, 256)
+    assert arr.dtype == np.uint16
     assert arr.dims == ('module', 'train_pulse', 'slow_scan', 'fast_scan')
+
+    # fill value
+    with pytest.raises(ValueError):
+        det.get_array('image.data', fill_value=np.nan)
+
 
 def test_get_array_pulse_id(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
@@ -128,6 +134,7 @@ def test_get_dask_array(mock_fxe_raw_run):
 
     assert isinstance(arr.data, da.Array)
     assert arr.shape == (16, 480 * 128, 1, 256, 256)
+    assert arr.dtype == np.uint16
     assert arr.dims == ('module', 'train_pulse', 'dim_0', 'dim_1', 'dim_2')
     np.testing.assert_array_equal(arr.coords['module'], np.arange(16))
     np.testing.assert_array_equal(
