@@ -38,3 +38,18 @@ jobs:
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v1
+
+  automerge-dependabot:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+
+    needs:
+      - tests
+
+    steps:
+      - name: Automerge Dependabot
+        uses: pascalgn/automerge-action@v0.12.0
+        if: steps.waitforstatuschecks.outputs.status == 'success'
+        env:
+          MERGE_METHOD: "squash"
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
