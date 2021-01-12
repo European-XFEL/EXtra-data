@@ -183,6 +183,17 @@ def test_get_dask_array_reduced_data(mock_reduced_spb_proc_run):
     assert np.isin(arr.coords['pulseId'], np.arange(0, 20)).all()
 
 
+def test_get_dask_array_lpd_parallelgain(mock_lpd_parallelgain_run):
+    run = RunDirectory(mock_lpd_parallelgain_run)
+    det = LPD1M(run.select_trains(by_index[:2]), parallel_gain=True)
+    assert det.detector_name == 'FXE_DET_LPD1M-1'
+
+    arr = det.get_dask_array('image.data')
+    assert arr.shape == (16, 2 * 3 * 100, 1, 256, 256)
+    assert arr.dims[:2] == ('module', 'train_pulse')
+    np.testing.assert_array_equal(arr.coords['pulseId'], np.tile(np.arange(100), 6))
+
+
 def test_iterate(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run.select_trains(by_index[:2]))
