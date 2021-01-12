@@ -25,6 +25,13 @@ def test_iterate_trains(mock_agipd_data):
             assert 'image.data' in data['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf']
 
 
+def test_iterate_trains_flat_keys(mock_agipd_data):
+    with H5File(mock_agipd_data) as f:
+        for train_id, data in islice(f.trains(flat_keys=True), 10):
+            assert train_id in range(10000, 10250)
+            assert ('SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.data') in data
+
+
 def test_get_train_bad_device_name(mock_spb_control_data_badname):
     # Check that we can handle devices which don't have the standard Karabo
     # name structure A/B/C.
