@@ -671,9 +671,7 @@ class MPxDetectorTrainIterator:
             positions = self._select_pulse_indices(count)
         pulse_ids = pulse_ids[positions]
         train_ids = np.array([tid] * len(pulse_ids), dtype=np.uint64)
-        train_pulse_ids = pd.MultiIndex.from_arrays(
-            [train_ids, pulse_ids], names=['train', 'pulse']
-        )
+        train_pulse_ids = self.data._make_image_index(train_ids, pulse_ids)
 
         if isinstance(positions, slice):
             data_positions = slice(
