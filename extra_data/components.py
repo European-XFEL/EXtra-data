@@ -451,7 +451,10 @@ class MPxDetectorBase:
                 mod_arr.coords['train_pulse'] = self._make_image_index(
                     mod_arr.coords['train_pulse'].values, inner_ix.values,
                     inner_name=subtrain_index,
-                )
+                ).set_names('trainId', level=0)
+                # This uses 'trainId' where a concrete array from the same class
+                # uses 'train'. I didn't notice that inconsistency when I
+                # introduced it, and now code may be relying on each name.
 
             arrays.append(mod_arr)
 
