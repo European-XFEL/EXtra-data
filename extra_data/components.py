@@ -239,7 +239,7 @@ class MPxDetectorBase:
 
         return np.concatenate(positions)
 
-    def _make_image_index(self, tids, frame_counts, inner_ids, inner_name='pulse'):
+    def _make_image_index(self, tids, inner_ids, inner_name='pulse'):
         # Overridden in LPD1M for parallel gain mode
         return pd.MultiIndex.from_arrays(
             [tids, inner_ids], names=['train', inner_name]
@@ -294,7 +294,7 @@ class MPxDetectorBase:
                     chunk_counts.astype(np.intp),
                 )
                 index = self._make_image_index(
-                    trainids, chunk_counts, inner_ids, inner_index[:-2]
+                    trainids, inner_ids, inner_index[:-2]
                 )[positions]
 
                 if isinstance(positions, slice):
@@ -413,9 +413,9 @@ class MPxDetectorBase:
 
                 mod_arr = mod_arr.rename({'trainId': 'train_pulse'})
 
-                mod_arr.coords['train_pulse'] = pd.MultiIndex.from_arrays(
-                    [mod_arr.coords['train_pulse'].values, inner_ix.values],
-                    names=['trainId', subtrain_index]
+                mod_arr.coords['train_pulse'] = self._make_image_index(
+                    mod_arr.coords['train_pulse'].values, inner_ix.values,
+                    inner_name=subtrain_index,
                 )
 
             arrays.append(mod_arr)
@@ -793,26 +793,27 @@ class LPD1M(MPxDetectorBase):
                     "parallel_gain=True needs the frames in each train to be divisible by 3"
                 )
 
-    def _make_image_index(self, tids, frame_counts, inner_ids, inner_name='pulse'):
+    def _make_image_index(self, tids, inner_ids, inner_name='pulse'):
         if not self.parallel_gain:
-            return super()._make_image_index(tids, frame_counts, inner_ids, inner_name)
+            return super()._make_image_index(tids, inner_ids, inner_name)
 
         # In 'parallel gain' mode, the first 1/3 of pulse/cell IDs in each train
         # are valid, but the remaining 2/3 are junk. So we'll repeat the valid
         # ones 3 times (in inner_ids_fixed). At the same time, we make a gain
         # stage index (0-2), so each frame has a unique entry in the MultiIndex
         # (train ID, gain, pulse/cell ID)
-        cursor = 0
         gain = np.zeros_like(inner_ids, dtype=np.uint8)
         inner_ids_fixed = np.zeros_like(inner_ids)
-        for n_in_train in frame_counts:  # Iterate through trains
-            n_per_gain_stage = int(n_in_train // 3)
-            train_inner_ids = inner_ids[cursor: cursor + n_per_gain_stage]
+
+        _, firsts, counts = np.unique(tids, return_index=True, return_counts=True)
+        for ix, frames in zip(firsts, counts):  # Iterate through trains
+            n_per_gain_stage = int(frames // 3)
+            train_inner_ids = inner_ids[ix: ix + n_per_gain_stage]
             for stage in range(3):
-                end = cursor + n_per_gain_stage
-                gain[cursor:end] = stage
-                inner_ids_fixed[cursor:end] = train_inner_ids
-                cursor = end
+                start = ix + (stage * n_per_gain_stage)
+                end = start + n_per_gain_stage
+                gain[start:end] = stage
+                inner_ids_fixed[start:end] = train_inner_ids
 
         return pd.MultiIndex.from_arrays(
             [tids, gain, inner_ids_fixed], names=['train', 'gain', inner_name]
