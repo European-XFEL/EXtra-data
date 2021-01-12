@@ -138,6 +138,18 @@ def test_get_array_roi(mock_fxe_raw_run):
     assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
 
 
+def test_get_array_lpd_parallelgain(mock_lpd_parallelgain_run):
+    run = RunDirectory(mock_lpd_parallelgain_run)
+    det = LPD1M(run.select_trains(by_index[:2]), parallel_gain=True)
+    assert det.detector_name == 'FXE_DET_LPD1M-1'
+
+    arr = det.get_array('image.data')
+    assert arr.shape == (16, 2, 3, 100, 256, 256)
+    assert arr.dims == ('module', 'train', 'gain', 'pulse', 'slow_scan', 'fast_scan')
+    np.testing.assert_array_equal(arr.coords['gain'], np.arange(3))
+    np.testing.assert_array_equal(arr.coords['pulse'], np.arange(100))
+
+
 def test_get_dask_array(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run)
