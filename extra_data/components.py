@@ -246,7 +246,7 @@ class MPxDetectorBase:
         )
 
     def _get_module_pulse_data(self, source, key, pulses, unstack_pulses,
-                               inner_index='pulseId'):
+                               inner_index='pulseId', roi=()):
         def get_inner_ids(f, data_slice, ix_name='pulseId'):
             ids = f.file[f'/INSTRUMENT/{source}/{group}/{ix_name}'][
                 data_slice
@@ -311,7 +311,13 @@ class MPxDetectorBase:
                         # https://github.com/h5py/h5py/issues/1169
                         data_positions = slice(0, 0)
 
-                data = f.file[data_path][data_positions]
+                dset = f.file[data_path]
+                if dset.ndim >= 2 and dset.shape[1] == 1:
+                    # Ensure ROI applies to pixel dimensions, not the extra
+                    # dim in raw data (except AGIPD, where it is data/gain)
+                    roi = np.index_exp[:] + roi
+
+                data = f.file[data_path][(data_positions,) + roi]
 
                 arr = _guess_axes(data, index, unstack_pulses)
 
@@ -335,7 +341,7 @@ class MPxDetectorBase:
         )
 
     def get_array(self, key, pulses=np.s_[:], unstack_pulses=True, *,
-                  subtrain_index='pulseId'):
+                  subtrain_index='pulseId', roi=()):
         """Get a labelled array of detector data
 
         Parameters
@@ -355,9 +361,16 @@ class MPxDetectorBase:
           other devices, but depends on how the detector was manually configured
           when the data was taken. Cell ID refers to the memory cell used for
           that frame in the detector hardware.
+        roi: tuple
+          Specify e.g. ``np.s_[10:60, 100:200]`` to select pixels within each
+          frame when reading data. For AGIPD raw data, each frame is a 3D array
+          with 2 entries on the first dimension, for data & gain information,
+          so ``roi=np.s_[0]`` will select only the data part of each frame.
         """
         if subtrain_index not in {'pulseId', 'cellId'}:
             raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
+        if not isinstance(roi, tuple):
+            roi = (roi,)
         pulses = _check_pulse_selection(pulses)
 
         arrays = []
@@ -367,10 +380,10 @@ class MPxDetectorBase:
             # If that changes, this check will need to change as well.
             if key.startswith('image.'):
                 arrays.append(self._get_module_pulse_data(
-                    source, key, pulses, unstack_pulses, subtrain_index,
+                    source, key, pulses, unstack_pulses, subtrain_index, roi=roi
                 ))
             else:
-                arrays.append(self.data.get_array(source, key))
+                arrays.append(self.data.get_array(source, key, roi=roi))
             modnos.append(modno)
 
         return xarray.concat(arrays, pd.Index(modnos, name='module'))

@@ -121,6 +121,17 @@ def test_get_array_pulse_indexes_reduced_data(mock_reduced_spb_proc_run):
     arr = det.get_array('image.data', pulses=[1, 7, 15, 23])
     assert np.isin(arr.coords['pulse'], [1, 7, 15, 23]).all()
 
+
+def test_get_array_roi(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    det = LPD1M(run.select_trains(by_index[:3]))
+    assert det.detector_name == 'FXE_DET_LPD1M-1'
+
+    arr = det.get_array('image.data', roi=np.s_[10:60, 100:200])
+    assert arr.shape == (16, 3, 128, 50, 100)
+    assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
+
+
 def test_get_dask_array(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run)
