@@ -378,9 +378,11 @@ class MPxDetectorBase:
           that frame in the detector hardware.
         roi: tuple
           Specify e.g. ``np.s_[10:60, 100:200]`` to select pixels within each
-          frame when reading data. For AGIPD raw data, each frame is a 3D array
-          with 2 entries on the first dimension, for data & gain information,
-          so ``roi=np.s_[0]`` will select only the data part of each frame.
+          module when reading data. The selection is applied to each individual
+          module, so it may only be useful when working with a single module.
+          For AGIPD raw data, each module records a frame as a 3D array with 2
+          entries on the first dimension, for data & gain information, so
+          ``roi=np.s_[0]`` will select only the data part of each frame.
         """
         if subtrain_index not in {'pulseId', 'cellId'}:
             raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
