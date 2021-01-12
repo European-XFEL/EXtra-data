@@ -242,6 +242,17 @@ def test_iterate_pulse_index(mock_fxe_raw_run):
     assert d['image.data'].shape == (16, 1, 4, 256, 256)
     assert list(d['image.data'].coords['pulse']) == [1, 7, 22, 23]
 
+
+def test_iterate_lpd_parallel_gain(mock_lpd_parallelgain_run):
+    run = RunDirectory(mock_lpd_parallelgain_run)
+    det = LPD1M(run.select_trains(by_index[:3]), parallel_gain=True)
+
+    tid, d = next(iter(det.trains()))
+    assert d['image.data'].shape == (16, 1, 3, 100, 256, 256)
+    assert d['image.data'].dims == \
+           ('module', 'train', 'gain', 'pulse', 'slow_scan', 'fast_scan')
+
+
 def test_write_virtual_cxi(mock_spb_proc_run, tmpdir):
     run = RunDirectory(mock_spb_proc_run)
     det = AGIPD1M(run)
