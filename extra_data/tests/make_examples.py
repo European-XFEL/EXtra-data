@@ -230,6 +230,17 @@ def make_fxe_run(dir_path, raw=True, format_version='0.5'):
         GECCamera('FXE_XAD_GEC/CAM/CAMERA_NODATA', nsamples=0),
     ], ntrains=80, firsttrain=10400, chunksize=200, format_version=format_version)
 
+def make_lpd_parallelgain_run(dir_path, raw=True, format_version='0.5'):
+    prefix = 'RAW' if raw else 'CORR'
+    for modno in range(16):
+        path = osp.join(dir_path,
+                        '{}-R0450-LPD{:0>2}-S00000.h5'.format(prefix,
+                                                              modno))
+        write_file(path, [
+            LPDModule('FXE_DET_LPD1M-1/DET/{}CH0'.format(modno), raw=raw,
+                      frames_per_train=300)
+        ], ntrains=100, chunksize=32, format_version=format_version)
+
 def make_spb_run(dir_path, raw=True, sensor_size=(1024, 768), format_version='0.5'):
     prefix = 'RAW' if raw else 'CORR'
     for modno in range(16):

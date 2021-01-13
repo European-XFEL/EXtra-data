@@ -25,6 +25,13 @@ def test_iterate_trains(mock_agipd_data):
             assert 'image.data' in data['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf']
 
 
+def test_iterate_trains_flat_keys(mock_agipd_data):
+    with H5File(mock_agipd_data) as f:
+        for train_id, data in islice(f.trains(flat_keys=True), 10):
+            assert train_id in range(10000, 10250)
+            assert ('SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.data') in data
+
+
 def test_get_train_bad_device_name(mock_spb_control_data_badname):
     # Check that we can handle devices which don't have the standard Karabo
     # name structure A/B/C.
@@ -477,6 +484,10 @@ def test_select(mock_fxe_raw_run):
         print(source)
         assert set(source_data.keys()) == {'image.pulseId', 'metadata'}
 
+    sel2 = run.select(sel)
+    assert 'SPB_XTD9_XGM/DOOCS/MAIN' not in sel2.control_sources
+    assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in sel2.instrument_sources
+
 
 def test_select_require_all(mock_sa3_control_data):
     run = H5File(mock_sa3_control_data).select('*/BEAMVIEW2:daqOutput')
@@ -503,6 +514,10 @@ def test_deselect(mock_fxe_raw_run):
     assert xtd9_xgm in sel.control_sources
     assert 'beamPosition.ixPos.value' not in sel.selection[xtd9_xgm]
     assert 'beamPosition.iyPos.value' in sel.selection[xtd9_xgm]
+
+    sel = run.deselect(run.select('*_XGM/DOOCS*'))
+    assert xtd9_xgm not in sel.control_sources
+    assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in sel.instrument_sources
 
 
 def test_select_trains(mock_fxe_raw_run):

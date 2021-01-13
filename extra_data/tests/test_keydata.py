@@ -104,3 +104,12 @@ def test_data_counts(mock_reduced_spb_proc_run):
     count = mod.data_counts()
     assert count.index.tolist() == mod.train_ids
     assert count.values.sum() == mod.shape[0]
+
+
+def test_select_by(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.data']
+
+    subrun = run.select(am0)
+    assert subrun.all_sources == {am0.source}
+    assert subrun.keys_for_source(am0.source) == {am0.key}
