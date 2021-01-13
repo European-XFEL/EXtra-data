@@ -820,7 +820,8 @@ class LPD1M(MPxDetectorBase):
     parallel_gain: bool
       Set to True to read this data as parallel gain data, where high, medium
       and low gain data are stored sequentially within each train. This will
-      repeat the pulse & cell IDs from the first 1/3 of each train.
+      repeat the pulse & cell IDs from the first 1/3 of each train, and add gain
+      stage labels from 0 (high-gain) to 2 (low-gain).
     """
     _source_re = re.compile(r'(?P<detname>(.+)_LPD1M(.*))/DET/(\d+)CH')
     module_shape = (256, 256)
