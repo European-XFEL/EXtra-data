@@ -127,6 +127,29 @@ def test_get_array_pulse_indexes_reduced_data(mock_reduced_spb_proc_run):
     arr = det.get_array('image.data', pulses=[1, 7, 15, 23])
     assert np.isin(arr.coords['pulse'], [1, 7, 15, 23]).all()
 
+
+def test_get_array_roi(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    det = LPD1M(run.select_trains(by_index[:3]))
+    assert det.detector_name == 'FXE_DET_LPD1M-1'
+
+    arr = det.get_array('image.data', roi=np.s_[10:60, 100:200])
+    assert arr.shape == (16, 3, 128, 50, 100)
+    assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
+
+
+def test_get_array_lpd_parallelgain(mock_lpd_parallelgain_run):
+    run = RunDirectory(mock_lpd_parallelgain_run)
+    det = LPD1M(run.select_trains(by_index[:2]), parallel_gain=True)
+    assert det.detector_name == 'FXE_DET_LPD1M-1'
+
+    arr = det.get_array('image.data')
+    assert arr.shape == (16, 2, 3, 100, 256, 256)
+    assert arr.dims == ('module', 'train', 'gain', 'pulse', 'slow_scan', 'fast_scan')
+    np.testing.assert_array_equal(arr.coords['gain'], np.arange(3))
+    np.testing.assert_array_equal(arr.coords['pulse'], np.arange(100))
+
+
 def test_get_dask_array(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run)
@@ -158,6 +181,17 @@ def test_get_dask_array_reduced_data(mock_reduced_spb_proc_run):
     np.testing.assert_array_equal(arr.coords['module'], np.arange(16))
     assert np.isin(arr.coords['trainId'], np.arange(10000, 10480)).all()
     assert np.isin(arr.coords['pulseId'], np.arange(0, 20)).all()
+
+
+def test_get_dask_array_lpd_parallelgain(mock_lpd_parallelgain_run):
+    run = RunDirectory(mock_lpd_parallelgain_run)
+    det = LPD1M(run.select_trains(by_index[:2]), parallel_gain=True)
+    assert det.detector_name == 'FXE_DET_LPD1M-1'
+
+    arr = det.get_dask_array('image.data')
+    assert arr.shape == (16, 2 * 3 * 100, 1, 256, 256)
+    assert arr.dims[:2] == ('module', 'train_pulse')
+    np.testing.assert_array_equal(arr.coords['pulseId'], np.tile(np.arange(100), 6))
 
 
 def test_iterate(mock_fxe_raw_run):
@@ -207,6 +241,17 @@ def test_iterate_pulse_index(mock_fxe_raw_run):
     tid, d = next(iter(det.trains(pulses=by_index[[1, 7, 22, 23]])))
     assert d['image.data'].shape == (16, 1, 4, 256, 256)
     assert list(d['image.data'].coords['pulse']) == [1, 7, 22, 23]
+
+
+def test_iterate_lpd_parallel_gain(mock_lpd_parallelgain_run):
+    run = RunDirectory(mock_lpd_parallelgain_run)
+    det = LPD1M(run.select_trains(by_index[:3]), parallel_gain=True)
+
+    tid, d = next(iter(det.trains()))
+    assert d['image.data'].shape == (16, 1, 3, 100, 256, 256)
+    assert d['image.data'].dims == \
+           ('module', 'train', 'gain', 'pulse', 'slow_scan', 'fast_scan')
+
 
 def test_write_virtual_cxi(mock_spb_proc_run, tmpdir):
     run = RunDirectory(mock_spb_proc_run)

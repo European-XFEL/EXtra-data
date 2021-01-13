@@ -239,9 +239,15 @@ class MPxDetectorBase:
 
         return np.concatenate(positions)
 
+    def _make_image_index(self, tids, inner_ids, inner_name='pulse'):
+        # Overridden in LPD1M for parallel gain mode
+        return pd.MultiIndex.from_arrays(
+            [tids, inner_ids], names=['train', inner_name]
+        )
+
     def _get_module_pulse_data(self, source, key, pulses, unstack_pulses,
-                               inner_index='pulseId'):
-        def get_inner_ids(f, ix_name='pulseId'):
+                               inner_index='pulseId', roi=()):
+        def get_inner_ids(f, data_slice, ix_name='pulseId'):
             ids = f.file[f'/INSTRUMENT/{source}/{group}/{ix_name}'][
                 data_slice
             ]
@@ -269,28 +275,27 @@ class MPxDetectorBase:
                 data_slice = slice(
                     chunk_firsts[0], int(chunk_firsts[-1] + chunk_counts[-1])
                 )
-                trainids = np.repeat(
-                    np.arange(first_tid, last_tid + 1, dtype=np.uint64),
-                    chunk_counts.astype(np.intp),
-                )
-                inner_ids = get_inner_ids(f, inner_index)
+
+                inner_ids = get_inner_ids(f, data_slice, inner_index)
 
                 if isinstance(pulses, by_id):
                     if inner_index == 'pulseId':
                         pulse_id = inner_ids
                     else:
-                        pulse_id = get_inner_ids(f, 'pulseId')
+                        pulse_id = get_inner_ids(f, data_slice, 'pulseId')
                     positions = self._select_pulse_ids(pulses, pulse_id)
                 else:  # by_index
                     positions = self._select_pulse_indices(
                         pulses, chunk_firsts - data_slice.start, chunk_counts
                     )
 
-                trainids = trainids[positions]
-                inner_ids = inner_ids[positions]
-                index = pd.MultiIndex.from_arrays(
-                    [trainids, inner_ids], names=['train', inner_index[:-2]]
+                trainids = np.repeat(
+                    np.arange(first_tid, last_tid + 1, dtype=np.uint64),
+                    chunk_counts.astype(np.intp),
                 )
+                index = self._make_image_index(
+                    trainids, inner_ids, inner_index[:-2]
+                )[positions]
 
                 if isinstance(positions, slice):
                     data_positions = slice(
@@ -306,7 +311,13 @@ class MPxDetectorBase:
                         # https://github.com/h5py/h5py/issues/1169
                         data_positions = slice(0, 0)
 
-                data = f.file[data_path][data_positions]
+                dset = f.file[data_path]
+                if dset.ndim >= 2 and dset.shape[1] == 1:
+                    # Ensure ROI applies to pixel dimensions, not the extra
+                    # dim in raw data (except AGIPD, where it is data/gain)
+                    roi = np.index_exp[:] + roi
+
+                data = f.file[data_path][(data_positions,) + roi]
 
                 arr = _guess_axes(data, index, unstack_pulses)
 
@@ -342,7 +353,7 @@ class MPxDetectorBase:
         return value
 
     def get_array(self, key, pulses=np.s_[:], unstack_pulses=True, *,
-                  fill_value=None, subtrain_index='pulseId'):
+                  fill_value=None, subtrain_index='pulseId', roi=()):
         """Get a labelled array of detector data
 
         Parameters
@@ -365,9 +376,18 @@ class MPxDetectorBase:
           other devices, but depends on how the detector was manually configured
           when the data was taken. Cell ID refers to the memory cell used for
           that frame in the detector hardware.
+        roi: tuple
+          Specify e.g. ``np.s_[10:60, 100:200]`` to select pixels within each
+          module when reading data. The selection is applied to each individual
+          module, so it may only be useful when working with a single module.
+          For AGIPD raw data, each module records a frame as a 3D array with 2
+          entries on the first dimension, for data & gain information, so
+          ``roi=np.s_[0]`` will select only the data part of each frame.
         """
         if subtrain_index not in {'pulseId', 'cellId'}:
             raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
+        if not isinstance(roi, tuple):
+            roi = (roi,)
         pulses = _check_pulse_selection(pulses)
 
         arrays = []
@@ -377,10 +397,10 @@ class MPxDetectorBase:
             # If that changes, this check will need to change as well.
             if key.startswith('image.'):
                 arrays.append(self._get_module_pulse_data(
-                    source, key, pulses, unstack_pulses, subtrain_index,
+                    source, key, pulses, unstack_pulses, subtrain_index, roi=roi
                 ))
             else:
-                arrays.append(self.data.get_array(source, key))
+                arrays.append(self.data.get_array(source, key, roi=roi))
             modnos.append(modno)
 
         return xarray.concat(
@@ -430,10 +450,13 @@ class MPxDetectorBase:
 
                 mod_arr = mod_arr.rename({'trainId': 'train_pulse'})
 
-                mod_arr.coords['train_pulse'] = pd.MultiIndex.from_arrays(
-                    [mod_arr.coords['train_pulse'].values, inner_ix.values],
-                    names=['trainId', subtrain_index]
-                )
+                mod_arr.coords['train_pulse'] = self._make_image_index(
+                    mod_arr.coords['train_pulse'].values, inner_ix.values,
+                    inner_name=subtrain_index,
+                ).set_names('trainId', level=0)
+                # This uses 'trainId' where a concrete array from the same class
+                # uses 'train'. I didn't notice that inconsistency when I
+                # introduced it, and now code may be relying on each name.
 
             arrays.append(mod_arr)
 
@@ -650,9 +673,7 @@ class MPxDetectorTrainIterator:
             positions = self._select_pulse_indices(count)
         pulse_ids = pulse_ids[positions]
         train_ids = np.array([tid] * len(pulse_ids), dtype=np.uint64)
-        train_pulse_ids = pd.MultiIndex.from_arrays(
-            [train_ids, pulse_ids], names=['train', 'pulse']
-        )
+        train_pulse_ids = self.data._make_image_index(train_ids, pulse_ids)
 
         if isinstance(positions, slice):
             data_positions = slice(
@@ -796,9 +817,51 @@ class LPD1M(MPxDetectorBase):
       if the dataset includes more than one LPD detector.
     min_modules: int
       Include trains where at least n modules have data. Default is 1.
+    parallel_gain: bool
+      Set to True to read this data as parallel gain data, where high, medium
+      and low gain data are stored sequentially within each train. This will
+      repeat the pulse & cell IDs from the first 1/3 of each train, and add gain
+      stage labels from 0 (high-gain) to 2 (low-gain).
     """
     _source_re = re.compile(r'(?P<detname>(.+)_LPD1M(.*))/DET/(\d+)CH')
     module_shape = (256, 256)
+
+    def __init__(self, data: DataCollection, detector_name=None, modules=None,
+                 *, min_modules=1, parallel_gain=False):
+        super().__init__(data, detector_name, modules, min_modules=min_modules)
+
+        self.parallel_gain = parallel_gain
+        if parallel_gain:
+            if ((self.frame_counts % 3) != 0).any():
+                raise ValueError(
+                    "parallel_gain=True needs the frames in each train to be divisible by 3"
+                )
+
+    def _make_image_index(self, tids, inner_ids, inner_name='pulse'):
+        if not self.parallel_gain:
+            return super()._make_image_index(tids, inner_ids, inner_name)
+
+        # In 'parallel gain' mode, the first 1/3 of pulse/cell IDs in each train
+        # are valid, but the remaining 2/3 are junk. So we'll repeat the valid
+        # ones 3 times (in inner_ids_fixed). At the same time, we make a gain
+        # stage index (0-2), so each frame has a unique entry in the MultiIndex
+        # (train ID, gain, pulse/cell ID)
+        gain = np.zeros_like(inner_ids, dtype=np.uint8)
+        inner_ids_fixed = np.zeros_like(inner_ids)
+
+        _, firsts, counts = np.unique(tids, return_index=True, return_counts=True)
+        for ix, frames in zip(firsts, counts):  # Iterate through trains
+            n_per_gain_stage = int(frames // 3)
+            train_inner_ids = inner_ids[ix: ix + n_per_gain_stage]
+            for stage in range(3):
+                start = ix + (stage * n_per_gain_stage)
+                end = start + n_per_gain_stage
+                gain[start:end] = stage
+                inner_ids_fixed[start:end] = train_inner_ids
+
+        return pd.MultiIndex.from_arrays(
+            [tids, gain, inner_ids_fixed], names=['train', 'gain', inner_name]
+        )
 
 
 def identify_multimod_detectors(
