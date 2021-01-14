@@ -529,7 +529,7 @@ class DataCollection:
     def get_array(self, source, key, extra_dims=None, roi=(), name=None):
         """Return a labelled array for a data field defined by source and key.
 
-        see :meth:`extra_data.keydata.KeyData.xarray` for details.
+        see :meth:`.KeyData.xarray` for details.
         """
         if isinstance(roi, by_index):
             roi = roi.value
@@ -540,7 +540,7 @@ class DataCollection:
     def get_dask_array(self, source, key, labelled=False):
         """Get a Dask array for a data field defined by source and key.
 
-        see :meth:`extra_data.keydata.KeyData.dask_array` for details.
+        see :meth:`.KeyData.dask_array` for details.
         """
         return self._get_key_data(source, key).dask_array(labelled=labelled)
 

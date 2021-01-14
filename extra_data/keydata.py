@@ -69,6 +69,10 @@ class KeyData:
 
     @property
     def shape(self):
+        """The shape of this data as a tuple, like for a NumPy array
+
+        Finding the shape may require getting index data from several files
+        """
         return (sum(c.total_count for c in self._data_chunks),) + self.entry_shape
 
     def select_trains(self, trains):
@@ -96,7 +100,7 @@ class KeyData:
         return self.select_trains(item)
 
     def data_counts(self):
-        """Get a count of data points in each train.
+        """Get a count of data entries in each train.
 
         Returns a pandas series with an index of train IDs.
         """
