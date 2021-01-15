@@ -122,12 +122,6 @@ below, e.g.::
        :doc:`dask_averaging`
          An example using Dask with EuXFEL data
 
-   .. automethod:: train_from_index
-
-   .. automethod:: train_from_id
-
-   .. automethod:: trains
-
    .. automethod:: select_trains
 
 The run or file object (a :class:`DataCollection`) also has methods to load
@@ -169,11 +163,25 @@ Getting data by train
 Some kinds of data, e.g. from AGIPD, are too big to load a whole run into
 memory at once. In these cases, it's convenient to load one train at a time.
 
-If you want to do this for just one source & key, see :meth:`.KeyData.trains`
-above. Or to work with multiple modules of the same detector, see
-:doc:`agipd_lpd_data`.
+If you want to do this for just one source & key with :class:`KeyData` methods,
+like this::
 
-The methods below can give you multiple different sources & keys together.
+    for tid, arr in run['SA1_XTD2_XGM/XGM/DOOCS:output', 'data.intensityTD'].trains():
+        ...
+
+.. class:: KeyData
+   :noindex:
+
+   .. automethod:: trains
+
+   .. automethod:: train_from_id
+
+   .. automethod:: train_from_index
+
+To work with multiple modules of the same detector, see :doc:`agipd_lpd_data`.
+
+You can also get data by train for multiple sources and keys together from a run
+or file object.
 It's always a good idea to select the data you're interested in, either using
 :meth:`~.DataCollection.select`, or the ``devices=`` parameter. If you don't,
 they will read data for all sources in the run, which may be very slow.
