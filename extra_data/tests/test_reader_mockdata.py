@@ -489,6 +489,19 @@ def test_select(mock_fxe_raw_run):
     assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in sel2.instrument_sources
 
 
+@pytest.mark.parametrize('select_str',
+                         ['*/BEAMVIEW2:daqOutput', '*/BEAMVIEW2*', '*'])
+def test_select_require_all(mock_sa3_control_data, select_str):
+    # De-select two sources in this example set, which have no trains
+    # at all, to allow matching trains across all sources with the same
+    # result.
+    run = H5File(mock_sa3_control_data) \
+        .deselect([('SA3_XTD10_MCP/ADC/1:*', '*'),
+                   ('SA3_XTD10_IMGFEL/CAM/BEAMVIEW:*', '*')])
+    subrun = run.select(select_str, require_all=True)
+    np.testing.assert_array_equal(subrun.train_ids, run.train_ids[1::2])
+
+
 def test_deselect(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
 

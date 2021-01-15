@@ -671,7 +671,7 @@ class DataCollection:
                              .format((source_glob, key_glob)))
         return matched
 
-    def select(self, seln_or_source_glob, key_glob='*'):
+    def select(self, seln_or_source_glob, key_glob='*', require_all=False):
         """Select a subset of sources and keys from this data.
 
         There are four possible ways to select data:
@@ -704,6 +704,10 @@ class DataCollection:
              # Select the same data contained in another DataCollection
              prev_run.select(sel)
 
+        The optional `require_all` argument restricts the trains to those for
+        which all selected sources and keys have at least one data entry. By
+        default, all trains remain selected.
+
         Returns a new :class:`DataCollection` object for the selected data.
 
         .. note::
@@ -727,7 +731,48 @@ class DataCollection:
         files = [f for f in self.files
                  if f.all_sources.intersection(selection.keys())]
 
-        return DataCollection(files, selection=selection, train_ids=self.train_ids)
+        if require_all:
+            # Select only those trains for which all selected sources
+            # and keys have data, i.e. have a count > 0 in their
+            # respective INDEX section.
+
+            train_ids = self.train_ids
+
+            for source, keys in selection.items():
+                if source in self.instrument_sources:
+                    # For INSTRUMENT sources, the INDEX is saved by
+                    # key group, which is the first hash component. In
+                    # many cases this is 'data', but not always.
+                    if keys is None:
+                        # All keys are selected.
+                        keys = self.keys_for_source(source)
+
+                    groups = {key.partition('.')[0] for key in keys}
+                else:
+                    # CONTROL data has no key group.
+                    groups = ['']
+
+                for group in groups:
+                    source_tids = []
+
+                    for f in self._source_index[source]:
+                        # Add the trains with data in each file.
+                        source_tids = np.union1d(
+                            f.train_ids[f.get_index(source, group)[1] > 0],
+                            source_tids)
+
+                    # Remove any trains previously selected, for which this
+                    # selected source and key group has no data.
+                    train_ids = np.intersect1d(train_ids, source_tids)
+
+            # Filtering may have eliminated previously selected files.
+            files = [f for f in files
+                     if np.intersect1d(f.train_ids, train_ids).size > 0]
+
+        else:
+            train_ids = self.train_ids
+
+        return DataCollection(files, selection=selection, train_ids=train_ids)
 
     def deselect(self, seln_or_source_glob, key_glob='*'):
         """Select everything except the specified sources and keys.
