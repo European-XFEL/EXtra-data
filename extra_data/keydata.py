@@ -69,14 +69,14 @@ class KeyData:
 
     @property
     def shape(self):
-        """The shape of this data as a tuple, like for a NumPy array
+        """The shape of this data as a tuple, like for a NumPy array.
 
         Finding the shape may require getting index data from several files
         """
         return (sum(c.total_count for c in self._data_chunks),) + self.entry_shape
 
     def select_trains(self, trains):
-        """Select a subset of the trains in this data
+        """Select a subset of trains in this data as a new :class:`KeyData` object.
 
         Also available by slicing and indexing the KeyData object::
 
