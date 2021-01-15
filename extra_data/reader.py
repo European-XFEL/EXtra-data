@@ -631,7 +631,15 @@ class DataCollection:
                         if not self._has_source_key(source, key):
                             raise PropertyNameError(key, source)
 
-                    res[source].update(keys)
+                    if self.selection[source] is not None:
+                        # If the current DataCollection also selected
+                        # specific keys, make sure the new keys are a
+                        # subset of it.
+                        res[source].update(keys & self.selection[source])
+                    else:
+                        res[source].update(keys)
+                elif self.selection[source] is not None:
+                    res[source] = self.selection[source]
                 else:
                     res[source] = None
 
@@ -667,7 +675,10 @@ class DataCollection:
                 continue
 
             if key_glob == '*':
-                matched[source] = None
+                if self.selection[source] is None:
+                    matched[source] = None
+                else:
+                    matched[source] = self.selection[source]
             else:
                 r = ctrl_key_re if source in self.control_sources else key_re
                 keys = set(filter(r.match, self.keys_for_source(source)))

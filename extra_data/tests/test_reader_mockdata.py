@@ -494,6 +494,23 @@ def test_select(mock_fxe_raw_run):
     assert sel_by_dict.keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf') == \
         sel.keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf')
 
+    # Re-select using * selection, should yield the same keys.
+    assert sel.keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf') == \
+        sel.select('FXE_DET_LPD1M-1/DET/0CH0:xtdf', '*') \
+           .keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf')
+    assert sel.keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf') == \
+        sel.select({'FXE_DET_LPD1M-1/DET/0CH0:xtdf': {}}) \
+           .keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf')
+
+    # Re-select a different but originally valid key, should fail.
+    with pytest.raises(ValueError):
+        # ValueError due to globbing.
+        sel.select('FXE_DET_LPD1M-1/DET/0CH0:xtdf', 'image.trainId')
+
+    with pytest.raises(PropertyNameError):
+        # PropertyNameError via explicit key.
+        sel.select({'FXE_DET_LPD1M-1/DET/0CH0:xtdf': {'image.trainId'}})
+
     # Select by another DataCollection.
     sel_by_dc = run.select(sel)
     assert sel_by_dc.control_sources == sel.control_sources
