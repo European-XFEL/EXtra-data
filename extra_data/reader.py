@@ -623,6 +623,14 @@ class DataCollection:
                     raise SourceNameError(source)
 
                 if keys:
+                    # keys may be None, which is allowed as an
+                    # undocumented behaviour to support passing a
+                    # DataCollection as the selector.
+
+                    for key in keys:
+                        if not self._has_source_key(source, key):
+                            raise PropertyNameError(key, source)
+
                     res[source].update(keys)
                 else:
                     res[source] = None
