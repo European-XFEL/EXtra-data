@@ -71,29 +71,70 @@ to refer to all data associated with that 0.1 second window.
 Getting data by source & key
 ----------------------------
 
-Where data will fit into memory, it's usually quickest and most convenient
-to load it like this.
+Selecting a single source & key in a run gives a :class:`.KeyData` object.
+You can get the data from this in various forms with the methods described
+below, e.g.::
+
+    xgm_intensity = run['SA1_XTD2_XGM/XGM/DOOCS:output', 'data.intensityTD'].xarray()
+
+.. class:: KeyData
+
+   .. attribute:: dtype
+
+      The NumPy dtype for this data. This indicates whether it contains
+      integers or floating point numbers, and how many bytes of memory each
+      number needs.
+
+   .. attribute:: ndim
+
+      The number of dimensions the data has. All data has at least 1 dimension
+      (time). A sequence of 2D images would have 3 dimensions.
+
+   .. autoattribute:: shape
+
+   .. attribute:: entry_shape
+
+      The shape of a single entry in the data, e.g. a single frame from a
+      camera. This is equivalent to ``key.shape[1:]``, but may be quicker than
+      that.
+
+   .. automethod:: data_counts
+
+   .. automethod:: ndarray
+
+   .. automethod:: series
+
+   .. automethod:: xarray
+
+     .. seealso::
+       `xarray documentation <http://xarray.pydata.org/en/stable/indexing.html>`__
+         How to use the arrays returned by :meth:`DataCollection.get_array`
+
+       :doc:`xpd_examples`
+         Examples using xarray & pandas with EuXFEL data
+
+   .. automethod:: dask_array
+
+    .. seealso::
+       `Dask Array documentation <https://docs.dask.org/en/latest/array.html>`__
+         How to use the objects returned by :meth:`DataCollection.get_dask_array`
+
+       :doc:`dask_averaging`
+         An example using Dask with EuXFEL data
+
+   .. automethod:: select_trains
+
+The run or file object (a :class:`DataCollection`) also has methods to load
+data by sources and keys. Some of them are directly equivalent to the options
+above, but :meth:`.get_dataframe` and :meth:`.get_virtual_dataset` offer extra
+capabilities.
 
 .. class:: DataCollection
    :noindex:
 
    .. automethod:: get_array
 
-     .. seealso::
-       `xarray documentation <http://xarray.pydata.org/en/stable/indexing.html>`__
-         How to use the arrays returned by :meth:`~.get_array`
-
-       :doc:`xpd_examples`
-         Examples using xarray & pandas with EuXFEL data
-
    .. automethod:: get_dask_array
-
-     .. seealso::
-       `Dask Array documentation <https://docs.dask.org/en/latest/array.html>`__
-         How to use the objects returned by :meth:`~.get_dask_array`
-
-       :doc:`dask_averaging`
-         An example using Dask with EuXFEL data
 
    .. automethod:: get_series
 
@@ -122,9 +163,28 @@ Getting data by train
 Some kinds of data, e.g. from AGIPD, are too big to load a whole run into
 memory at once. In these cases, it's convenient to load one train at a time.
 
-When accessing data like this, it's worth selecting which sources you're
-interested in, either using :meth:`~.DataCollection.select`, or the ``devices=``
-parameter. This avoids reading all the other data.
+If you want to do this for just one source & key with :class:`KeyData` methods,
+like this::
+
+    for tid, arr in run['SA1_XTD2_XGM/XGM/DOOCS:output', 'data.intensityTD'].trains():
+        ...
+
+.. class:: KeyData
+   :noindex:
+
+   .. automethod:: trains
+
+   .. automethod:: train_from_id
+
+   .. automethod:: train_from_index
+
+To work with multiple modules of the same detector, see :doc:`agipd_lpd_data`.
+
+You can also get data by train for multiple sources and keys together from a run
+or file object.
+It's always a good idea to select the data you're interested in, either using
+:meth:`~.DataCollection.select`, or the ``devices=`` parameter. If you don't,
+they will read data for all sources in the run, which may be very slow.
 
 .. class:: DataCollection
    :noindex:
@@ -220,7 +280,7 @@ Here are some problems we've seen, and possible solutions or workarounds:
 
   - In one case, a train ID had the maximum possible value (2\ :sup:`64` - 1),
     causing :meth:`~.info` to fail. You can select everything except this train
-    using :meth:`~.select_trains`::
+    using :meth:`~.DataCollection.select_trains`::
 
         from extra_data import by_id
         sel = run.select_trains(by_id[:2**64-1])

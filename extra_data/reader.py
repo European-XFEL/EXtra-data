@@ -527,37 +527,9 @@ class DataCollection:
         return pd.concat(series, axis=1)
 
     def get_array(self, source, key, extra_dims=None, roi=(), name=None):
-        """Return a labelled array for a particular data field.
+        """Return a labelled array for a data field defined by source and key.
 
-        ::
-
-            arr = run.get_array("SA3_XTD10_PES/ADC/1:network", "digitizers.channel_4_A.raw.samples")
-
-        This should work for any data.
-        The first axis of the returned data will be labelled with the train IDs.
-
-        Parameters
-        ----------
-
-        source: str
-            Device name with optional output channel, e.g.
-            "SA1_XTD2_XGM/DOOCS/MAIN" or "SPB_DET_AGIPD1M-1/DET/7CH0:xtdf"
-        key: str
-            Key of parameter within that device, e.g. "beamPosition.iyPos.value"
-            or "header.linkId".
-        extra_dims: list of str
-            Name extra dimensions in the array. The first dimension is
-            automatically called 'train'. The default for extra dimensions
-            is dim_0, dim_1, ...
-        roi: slice, tuple of slices, or by_index
-            The region of interest. This expression selects data in all
-            dimensions apart from the first (trains) dimension. If the data
-            holds a 1D array for each entry, roi=np.s_[:8] would get the
-            first 8 values from every train. If the data is 2D or more at
-            each entry, selection looks like roi=np.s_[:8, 5:10] .
-        name: str
-            Name the array itself. The default is the source and key joined
-            by a dot.
+        see :meth:`.KeyData.xarray` for details.
         """
         if isinstance(roi, by_index):
             roi = roi.value
@@ -566,28 +538,9 @@ class DataCollection:
             extra_dims=extra_dims, roi=roi, name=name)
 
     def get_dask_array(self, source, key, labelled=False):
-        """Get a Dask array for the specified data field.
+        """Get a Dask array for a data field defined by source and key.
 
-        Dask is a system for lazy parallel computation. This method doesn't
-        actually load the data, but gives you an array-like object which you
-        can operate on. Dask loads the data and calculates results when you ask
-        it to, e.g. by calling a ``.compute()`` method.
-        See the Dask documentation for more details.
-
-        If your computation depends on reading lots of data, consider creating
-        a dask.distributed.Client before calling this.
-        If you don't do this, Dask uses threads by default, which is not
-        efficient for reading HDF5 files.
-
-        Parameters
-        ----------
-        source: str
-            Source name, e.g. "SPB_DET_AGIPD1M-1/DET/7CH0:xtdf"
-        key: str
-            Key of parameter within that device, e.g. "image.data".
-        labelled: bool
-            If True, label the train IDs for the data, returning an
-            xarray.DataArray object wrapping a Dask array.
+        see :meth:`.KeyData.dask_array` for details.
         """
         return self._get_key_data(source, key).dask_array(labelled=labelled)
 
