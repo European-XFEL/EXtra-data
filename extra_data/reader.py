@@ -570,15 +570,53 @@ class DataCollection:
         res = defaultdict(set)
         if isinstance(selection, dict):
             # {source: {key1, key2}}
-            # {source: {}} -> all keys for this source
-            for source, keys in selection.items():  #
+            # {source: {}} or {source: None} -> all keys for this source
+            for source, in_keys in selection.items():
                 if source not in self.all_sources:
                     raise SourceNameError(source)
 
-                if keys:
-                    res[source].update(keys)
+                # Keys of the current DataCollection.
+                cur_keys = self.selection[source]
+
+                # Keys input as the new selection.
+                if in_keys:
+                    # If a specific set of keys is selected, make sure
+                    # they are all valid.
+                    for key in in_keys:
+                        if not self._has_source_key(source, key):
+                            raise PropertyNameError(key, source)
                 else:
+                    # Catches both an empty set and None.
+                    # While the public API describes an empty set to
+                    # refer to all keys, the internal API actually uses
+                    # None for this case. This method is supposed to
+                    # accept both cases in order to natively support
+                    # passing a DataCollection as the selector. To keep
+                    # the conditions below clearer, any non-True value
+                    # is converted to None.
+                    in_keys = None
+
+                if cur_keys is None and in_keys is None:
+                    # Both the new and current keys select all.
                     res[source] = None
+
+                elif cur_keys is not None and in_keys is not None:
+                    # Both the new and current keys are specific, take
+                    # the intersection of both. This should never be
+                    # able to result in an empty set, but to prevent the
+                    # code further below from breaking, assert it.
+                    res[source] = cur_keys & in_keys
+                    assert res[source]
+
+                elif cur_keys is None and in_keys is not None:
+                    # Current keys are unspecific but new ones are, just
+                    # use the new keys.
+                    res[source] = in_keys
+
+                elif cur_keys is not None and in_keys is None:
+                    # The current keys are specific but new ones are
+                    # not, use the current keys.
+                    res[source] = cur_keys
 
         elif isinstance(selection, Iterable):
             # selection = [('src_glob', 'key_glob'), ...]
@@ -612,7 +650,14 @@ class DataCollection:
                 continue
 
             if key_glob == '*':
-                matched[source] = None
+                # When the selection refers to all keys, make sure this
+                # is restricted to the current selection of keys for
+                # this source.
+
+                if self.selection[source] is None:
+                    matched[source] = None
+                else:
+                    matched[source] = self.selection[source]
             else:
                 r = ctrl_key_re if source in self.control_sources else key_re
                 keys = set(filter(r.match, self.keys_for_source(source)))
