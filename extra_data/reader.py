@@ -472,6 +472,14 @@ class DataCollection:
                     # Does pulse-oriented data always have an extra dimension?
                     assert data.shape[1] == 1
                     data = data[:, 0]
+
+                    warn(
+                        "Getting a series with pulseId labels is deprecated, "
+                        "as it only works in very specific cases. "
+                        "If you still need this, please contact "
+                        "da-support@xfel.eu to discuss it.",
+                        stacklevel=2
+                    )
                 data = data[: len(index)]
 
                 seq_series.append(pd.Series(data, name=name, index=index))
