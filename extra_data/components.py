@@ -86,6 +86,7 @@ class MPxDetectorBase:
     """
 
     _source_re = re.compile(r'(?P<detname>.+)/DET/(\d+)CH')
+    _main_data_key = 'image.data'  # This is correct for AGIPD/DSSC/LPD
     n_modules = 16
     # Override in subclass
     module_shape = (0, 0)
@@ -107,7 +108,7 @@ class MPxDetectorBase:
         # pandas' missing-data handling converts the data to floats if there
         # are any gaps - so fill them with 0s and convert back to uint64.
         mod_data_counts = pd.DataFrame({
-            src: data.get_data_counts(src, 'image.data')
+            src: data.get_data_counts(src, self._main_data_key)
             for src in source_to_modno
         }).fillna(0).astype(np.uint64)
 
@@ -886,6 +887,7 @@ class JUNGFRAU(MPxDetectorBase):
     _source_re = re.compile(
         r'(?P<detname>.+_(JNGFR|JF4M))/DET/(MODULE_|JNGFR)(?P<modno>\d+)'
     )
+    _main_data_key = 'data.adc'
     module_shape = (512, 1024)
 
 
