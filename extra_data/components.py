@@ -139,7 +139,7 @@ class MPxDetectorBase:
         for source in data.instrument_sources:
             m = cls._source_re.match(source)
             if m:
-                detector_names.add(m.group(1))
+                detector_names.add(m.group('detname'))
         if not detector_names:
             raise SourceNameError(cls._source_re.pattern)
         elif len(detector_names) > 1:
@@ -151,21 +151,19 @@ class MPxDetectorBase:
             )
         return detector_names.pop()
 
-    @staticmethod
-    def _identify_sources(data, detector_name=None, modules=None):
-        detector_re = re.compile(re.escape(detector_name) + r'/DET/(\d+)CH')
+    def _identify_sources(self, data, detector_name, modules=None):
         source_to_modno = {}
         for source in data.instrument_sources:
-            m = detector_re.match(source)
-            if m:
-                source_to_modno[source] = int(m.group(1))
+            m = self._source_re.match(source)
+            if m and m.group('detname') == detector_name:
+                source_to_modno[source] = int(m.group('modno'))
 
         if modules is not None:
             source_to_modno = {s: n for (s, n) in source_to_modno.items()
                                if n in modules}
 
         if not source_to_modno:
-            raise SourceNameError(detector_re.pattern)
+            raise SourceNameError(f'{detector_name}/DET/...')
 
         return source_to_modno
 
@@ -776,7 +774,7 @@ class AGIPD1M(MPxDetectorBase):
     min_modules: int
       Include trains where at least n modules have data. Default is 1.
     """
-    _source_re = re.compile(r'(?P<detname>(.+)_AGIPD1M(.*))/DET/(\d+)CH')
+    _source_re = re.compile(r'(?P<detname>(.+)_AGIPD1M(.*))/DET/(?P<modno>\d+)CH')
     module_shape = (512, 128)
 
 
@@ -797,7 +795,7 @@ class DSSC1M(MPxDetectorBase):
     min_modules: int
       Include trains where at least n modules have data. Default is 1.
     """
-    _source_re = re.compile(r'(?P<detname>(.+)_DSSC1M(.*))/DET/(\d+)CH')
+    _source_re = re.compile(r'(?P<detname>(.+)_DSSC1M(.*))/DET/(?P<modno>\d+)CH')
     module_shape = (128, 512)
 
 
@@ -823,7 +821,7 @@ class LPD1M(MPxDetectorBase):
       repeat the pulse & cell IDs from the first 1/3 of each train, and add gain
       stage labels from 0 (high-gain) to 2 (low-gain).
     """
-    _source_re = re.compile(r'(?P<detname>(.+)_LPD1M(.*))/DET/(\d+)CH')
+    _source_re = re.compile(r'(?P<detname>(.+)_LPD1M(.*))/DET/(?P<modno>\d+)CH')
     module_shape = (256, 256)
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
@@ -881,8 +879,14 @@ class JUNGFRAU(MPxDetectorBase):
     min_modules: int
       Include trains where at least n modules have data. Default is 1.
     """
-    _source_re = re.compile(r'(?P<detname>(.+)_JNGFR(.*))/DET/MODULE_(\d+)')
-    module_shape = (1024, 512)
+    # We appear to have a couple of different formats for source names:
+    # SPB_IRDA_JNGFR/DET/MODULE_1:daqOutput  (e.g. in p 2566, r 61)
+    # SPB_IRDA_JF4M/DET/JNGFR03:daqOutput    (e.g. in p 2732, r 12)
+    # This should catch both. We may need to generalise it more in the future.
+    _source_re = re.compile(
+        r'(?P<detname>.+_(JNGFR|JF4M))/DET/(MODULE_|JNGFR)(?P<modno>\d+)'
+    )
+    module_shape = (512, 1024)
 
 
 def identify_multimod_detectors(
