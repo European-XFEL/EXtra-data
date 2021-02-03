@@ -6,7 +6,9 @@ import pytest
 from testpath import assert_isfile
 
 from extra_data.reader import RunDirectory, H5File, by_id, by_index
-from extra_data.components import AGIPD1M, LPD1M, identify_multimod_detectors
+from extra_data.components import (
+    AGIPD1M, LPD1M, JUNGFRAU, identify_multimod_detectors,
+)
 
 
 def test_get_array(mock_fxe_raw_run):
@@ -148,6 +150,17 @@ def test_get_array_lpd_parallelgain(mock_lpd_parallelgain_run):
     assert arr.dims == ('module', 'train', 'gain', 'pulse', 'slow_scan', 'fast_scan')
     np.testing.assert_array_equal(arr.coords['gain'], np.arange(3))
     np.testing.assert_array_equal(arr.coords['pulse'], np.arange(100))
+
+
+def test_get_array_jungfrau(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    jf = JUNGFRAU(run.select_trains(by_index[:2]))
+    assert jf.detector_name == 'SPB_IRDA_JF4M'
+
+    arr = jf.get_array('data.adc')
+    assert arr.shape == (8, 2, 16, 512, 1024)
+    print(arr.dims)
+    np.testing.assert_array_equal(arr.coords['trainId'], [10000, 10001])
 
 
 def test_get_dask_array(mock_fxe_raw_run):
