@@ -893,12 +893,16 @@ class JUNGFRAU(MPxDetectorBase):
     @staticmethod
     def _label_dims(arr):
         # Label dimensions to match the AGIPD/DSSC/LPD data access
-        arr = arr.rename({'trainId': 'train'})
-        if arr.ndim == 5:
+        ndim_pertrain = arr.ndim
+        if 'trainId' in arr.dims:
+            arr = arr.rename({'trainId': 'train'})
+            ndim_pertrain = arr.ndim - 1
+
+        if ndim_pertrain == 4:
             arr = arr.rename({
                 'dim_0': 'pulse', 'dim_1': 'slow_scan', 'dim_2': 'fast_scan'
             })
-        elif arr.ndim == 3:
+        elif ndim_pertrain == 2:
             arr = arr.rename({'dim_0': 'pulse'})
         return arr
 
@@ -941,6 +945,26 @@ class JUNGFRAU(MPxDetectorBase):
         """
         arr = super().get_dask_array(key, fill_value=fill_value)
         return self._label_dims(arr)
+
+    def trains(self, require_all=True):
+        """Iterate over trains for detector data.
+
+        Parameters
+        ----------
+
+        require_all: bool
+          If True (default), skip trains where any of the selected detector
+          modules are missing data.
+
+        Yields
+        ------
+
+        train_data: dict
+          A dictionary mapping key names (e.g. ``image.data``) to labelled
+          arrays.
+        """
+        for tid, d in super().trains(require_all=require_all):
+            yield tid, {k: self._label_dims(a) for (k, a) in d.items()}
 
     def write_virtual_cxi(self, filename, fillvalues=None):
         raise NotImplementedError("Virtual CXI files not implemented for JUNGFRAU")

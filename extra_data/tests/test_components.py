@@ -277,6 +277,16 @@ def test_iterate_lpd_parallel_gain(mock_lpd_parallelgain_run):
            ('module', 'train', 'gain', 'pulse', 'slow_scan', 'fast_scan')
 
 
+def test_iterate_jungfrau(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    jf = JUNGFRAU(run)
+
+    tid, d = next(iter(jf.trains()))
+    assert tid == 10000
+    assert d['data.adc'].shape == (8, 16, 512, 1024)
+    assert d['data.adc'].dims == ('module', 'pulse', 'slow_scan', 'fast_scan')
+
+
 def test_write_virtual_cxi(mock_spb_proc_run, tmpdir):
     run = RunDirectory(mock_spb_proc_run)
     det = AGIPD1M(run)
