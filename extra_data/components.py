@@ -918,6 +918,14 @@ class JUNGFRAU(MPxDetectorBase):
             arr = arr.rename({'dim_0': 'pulse'})
         return arr
 
+    def write_virtual_cxi(self, filename, fillvalues=None):
+        raise NotImplementedError("Virtual CXI files not implemented for JUNGFRAU")
+
+    def write_frames(self, filename, trains, pulses):
+        raise NotImplementedError(
+            "Writing selected frames not implemented for JUNGFRAU"
+        )
+
 
 def identify_multimod_detectors(
         data, detector_name=None, *, single=False, clses=None
