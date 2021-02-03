@@ -880,12 +880,12 @@ class JUNGFRAU(MPxDetectorBase):
     min_modules: int
       Include trains where at least n modules have data. Default is 1.
     """
-    # We appear to have a couple of different formats for source names:
+    # We appear to have a few different formats for source names:
     # SPB_IRDA_JNGFR/DET/MODULE_1:daqOutput  (e.g. in p 2566, r 61)
     # SPB_IRDA_JF4M/DET/JNGFR03:daqOutput    (e.g. in p 2732, r 12)
-    # This should catch both. We may need to generalise it more in the future.
+    # FXE_XAD_JF1M/DET/RECEIVER-1
     _source_re = re.compile(
-        r'(?P<detname>.+_(JNGFR|JF4M))/DET/(MODULE_|JNGFR)(?P<modno>\d+)'
+        r'(?P<detname>.+_(JNGFR|JF[14]M))/DET/(MODULE_|RECEIVER-|JNGFR)(?P<modno>\d+)'
     )
     _main_data_key = 'data.adc'
     module_shape = (512, 1024)
