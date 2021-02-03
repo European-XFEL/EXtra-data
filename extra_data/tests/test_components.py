@@ -160,7 +160,6 @@ def test_get_array_jungfrau(mock_jungfrau_run):
     arr = jf.get_array('data.adc')
     assert arr.shape == (8, 2, 16, 512, 1024)
     assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
-    print(arr.dims)
     np.testing.assert_array_equal(arr.coords['train'], [10000, 10001])
 
 
@@ -206,6 +205,17 @@ def test_get_dask_array_lpd_parallelgain(mock_lpd_parallelgain_run):
     assert arr.shape == (16, 2 * 3 * 100, 1, 256, 256)
     assert arr.dims[:2] == ('module', 'train_pulse')
     np.testing.assert_array_equal(arr.coords['pulseId'], np.tile(np.arange(100), 6))
+
+
+def test_get_dask_array_jungfrau(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    jf = JUNGFRAU(run)
+    assert jf.detector_name == 'SPB_IRDA_JF4M'
+
+    arr = jf.get_dask_array('data.adc')
+    assert arr.shape == (8, 100, 16, 512, 1024)
+    assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
+    np.testing.assert_array_equal(arr.coords['train'], np.arange(10000, 10100))
 
 
 def test_iterate(mock_fxe_raw_run):

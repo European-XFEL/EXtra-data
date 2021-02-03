@@ -890,6 +890,18 @@ class JUNGFRAU(MPxDetectorBase):
     _main_data_key = 'data.adc'
     module_shape = (512, 1024)
 
+    @staticmethod
+    def _label_dims(arr):
+        # Label dimensions to match the AGIPD/DSSC/LPD data access
+        arr = arr.rename({'trainId': 'train'})
+        if arr.ndim == 5:
+            arr = arr.rename({
+                'dim_0': 'pulse', 'dim_1': 'slow_scan', 'dim_2': 'fast_scan'
+            })
+        elif arr.ndim == 3:
+            arr = arr.rename({'dim_0': 'pulse'})
+        return arr
+
     def get_array(self, key, *, fill_value=None, roi=()):
         """Get a labelled array of detector data
 
@@ -909,14 +921,26 @@ class JUNGFRAU(MPxDetectorBase):
           you're using a single module.
         """
         arr = super().get_array(key, fill_value=fill_value, roi=roi)
-        arr = arr.rename({'trainId': 'train'})
-        if arr.ndim == 5:
-            arr = arr.rename({
-                'dim_0': 'pulse', 'dim_1': 'slow_scan', 'dim_2': 'fast_scan'
-            })
-        elif arr.ndim == 3:
-            arr = arr.rename({'dim_0': 'pulse'})
-        return arr
+        return self._label_dims(arr)
+
+    def get_dask_array(self, key, fill_value=None):
+        """Get a labelled Dask array of detector data
+
+        Dask does lazy, parallelised computing, and can work with large data
+        volumes. This method doesn't immediately load the data: that only
+        happens once you trigger a computation.
+
+        Parameters
+        ----------
+
+        key: str
+          The data to get, e.g. 'data.adc' for pixel values.
+        fill_value: int or float, optional
+            Value to use for missing values. If None (default) the fill value
+            is 0 for integers and np.nan for floats.
+        """
+        arr = super().get_dask_array(key, fill_value=fill_value)
+        return self._label_dims(arr)
 
     def write_virtual_cxi(self, filename, fillvalues=None):
         raise NotImplementedError("Virtual CXI files not implemented for JUNGFRAU")
