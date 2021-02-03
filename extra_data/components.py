@@ -890,6 +890,34 @@ class JUNGFRAU(MPxDetectorBase):
     _main_data_key = 'data.adc'
     module_shape = (512, 1024)
 
+    def get_array(self, key, *, fill_value=None, roi=()):
+        """Get a labelled array of detector data
+
+        Parameters
+        ----------
+
+        key: str
+          The data to get, e.g. 'data.adc' for pixel values.
+        fill_value: int or float, optional
+            Value to use for missing values. If None (default) the fill value
+            is 0 for integers and np.nan for floats.
+        roi: tuple
+          Specify e.g. ``np.s_[:, 10:60, 100:200]`` to select data within each
+          module & each train when reading data. The first dimension is pulses,
+          then there are two pixel dimensions. The same selection is applied
+          to data from each module, so selecting pixels may only make sense if
+          you're using a single module.
+        """
+        arr = super().get_array(key, fill_value=fill_value, roi=roi)
+        arr = arr.rename({'trainId': 'train'})
+        if arr.ndim == 5:
+            arr = arr.rename({
+                'dim_0': 'pulse', 'dim_1': 'slow_scan', 'dim_2': 'fast_scan'
+            })
+        elif arr.ndim == 3:
+            arr = arr.rename({'dim_0': 'pulse'})
+        return arr
+
 
 def identify_multimod_detectors(
         data, detector_name=None, *, single=False, clses=None

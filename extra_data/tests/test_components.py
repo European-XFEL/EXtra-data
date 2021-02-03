@@ -159,8 +159,9 @@ def test_get_array_jungfrau(mock_jungfrau_run):
 
     arr = jf.get_array('data.adc')
     assert arr.shape == (8, 2, 16, 512, 1024)
+    assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
     print(arr.dims)
-    np.testing.assert_array_equal(arr.coords['trainId'], [10000, 10001])
+    np.testing.assert_array_equal(arr.coords['train'], [10000, 10001])
 
 
 def test_get_dask_array(mock_fxe_raw_run):
