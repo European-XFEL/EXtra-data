@@ -255,7 +255,7 @@ class MultimodDetectorBase:
         return MPxDetectorTrainIterator(self, require_all=require_all)
 
 
-class MultimodFastDetectorBase(MultimodDetectorBase):
+class XtdfDetectorBase(MultimodDetectorBase):
     """Common machinery for a group of detectors with similar data format
 
     AGIPD, DSSC & LPD all store pulse-resolved data in an "image" group,
@@ -843,7 +843,7 @@ class MPxDetectorTrainIterator:
             yield tid, self._assemble_data(tid)
 
 
-class AGIPD1M(MultimodFastDetectorBase):
+class AGIPD1M(XtdfDetectorBase):
     """An interface to AGIPD-1M data.
 
     Parameters
@@ -864,7 +864,7 @@ class AGIPD1M(MultimodFastDetectorBase):
     module_shape = (512, 128)
 
 
-class DSSC1M(MultimodFastDetectorBase):
+class DSSC1M(XtdfDetectorBase):
     """An interface to DSSC-1M data.
 
     Parameters
@@ -885,7 +885,7 @@ class DSSC1M(MultimodFastDetectorBase):
     module_shape = (128, 512)
 
 
-class LPD1M(MultimodFastDetectorBase):
+class LPD1M(XtdfDetectorBase):
     """An interface to LPD-1M data.
 
     Parameters
