@@ -15,33 +15,6 @@ log = logging.getLogger(__name__)
 MAX_PULSES = 2700
 
 
-def _guess_axes(data, train_pulse_ids, unstack_pulses):
-    # Raw files have a spurious extra dimension
-    if data.ndim >= 2 and data.shape[1] == 1:
-        data = data[:, 0]
-
-    # TODO: this assumes we can tell what the axes are just from the
-    # number of dimensions. Works for the data we've seen, but we
-    # should look for a more reliable way.
-    if data.ndim == 4:
-        # image.data in raw data
-        dims = ['train_pulse', 'data_gain', 'slow_scan', 'fast_scan']
-    elif data.ndim == 3:
-        # image.data, image.gain, image.mask in calibrated data
-        dims = ['train_pulse', 'slow_scan', 'fast_scan']
-    else:
-        # Everything else seems to be 1D
-        dims = ['train_pulse']
-
-    arr = xarray.DataArray(data, {'train_pulse': train_pulse_ids}, dims=dims)
-
-    if unstack_pulses:
-        # Separate train & pulse dimensions, and arrange dimensions
-        # so that the data is contiguous in memory.
-        dim_order = train_pulse_ids.names + dims[1:]
-        return arr.unstack('train_pulse').transpose(*dim_order)
-    else:
-        return arr
 
 
 def _check_pulse_selection(pulses):
@@ -81,14 +54,14 @@ def _check_pulse_selection(pulses):
     return type(pulses)(val)
 
 
-class MPxDetectorBase:
-    """Base class for megapixel detectors (AGIPD, LPD)
+class MultimodDetectorBase:
+    """Base class for detectors made of several modules as separate data sources
     """
 
     _source_re = re.compile(r'(?P<detname>.+)/DET/(\d+)CH')
-    _main_data_key = 'image.data'  # This is correct for AGIPD/DSSC/LPD
     n_modules = 16
     # Override in subclass
+    _main_data_key = ''  # Key to use for checking data counts match
     module_shape = (0, 0)
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
@@ -198,6 +171,102 @@ class MPxDetectorBase:
         )
 
     @staticmethod
+    def _fill_value(value, dtype):
+        if value is None:
+            if dtype.kind != 'f':
+                value = 0
+            else:
+                value = np.nan
+
+        # enforce that fill value is compatible with array dtype
+        value = dtype.type(value)
+        return value
+
+    def get_array(self, key, *, fill_value=None, roi=()):
+        """Get a labelled array of detector data
+
+        Parameters
+        ----------
+
+        key: str
+          The data to get, e.g. 'image.data' for pixel values.
+        fill_value: int or float, optional
+            Value to use for missing values. If None (default) the fill value
+            is 0 for integers and np.nan for floats.
+        roi: tuple
+          Specify e.g. ``np.s_[10:60, 100:200]`` to select pixels within each
+          module when reading data. The selection is applied to each individual
+          module, so it may only be useful when working with a single module.
+        """
+        arrays = []
+        modnos = []
+        for modno, source in sorted(self.modno_to_source.items()):
+            arrays.append(self.data.get_array(source, key, roi=roi))
+            modnos.append(modno)
+
+        return xarray.concat(
+            arrays,
+            pd.Index(modnos, name='module'),
+            fill_value=self._fill_value(fill_value, arrays[0].dtype)
+        )
+
+    def get_dask_array(self, key, fill_value=None):
+        """Get a labelled Dask array of detector data
+
+        Parameters
+        ----------
+
+        key: str
+          The data to get, e.g. 'image.data' for pixel values.
+        fill_value: int or float, optional
+            Value to use for missing values. If None (default) the fill value
+            is 0 for integers and np.nan for floats.
+        """
+        arrays = []
+        modnos = []
+        for modno, source in sorted(self.modno_to_source.items()):
+            modnos.append(modno)
+            mod_arr = self.data.get_dask_array(source, key, labelled=True)
+            arrays.append(mod_arr)
+
+        # set the fill_value to prevent xarray from changing the dtype to float
+        return xarray.concat(
+            arrays,
+            pd.Index(modnos, name='module'),
+            fill_value=self._fill_value(fill_value, arrays[0].dtype)
+        )
+
+    def trains(self, require_all=True):
+        """Iterate over trains for detector data.
+
+        Parameters
+        ----------
+
+        require_all: bool
+          If True (default), skip trains where any of the selected detector
+          modules are missing data.
+
+        Yields
+        ------
+
+        train_data: dict
+          A dictionary mapping key names (e.g. ``image.data``) to labelled
+          arrays.
+        """
+        return MPxDetectorTrainIterator(self, require_all=require_all)
+
+
+class MultimodFastDetectorBase(MultimodDetectorBase):
+    """Common machinery for a group of detectors with similar data format
+
+    AGIPD, DSSC & LPD all store pulse-resolved data in an "image" group,
+    with both trains and pulses along the first dimension. This allows a
+    different number of frames to be stored for each train, which makes
+    access more complicated.
+    """
+    _main_data_key = 'image.data'
+
+    @staticmethod
     def _select_pulse_ids(pulses, data_pulse_ids):
         """Select pulses by ID across a chunk of trains
 
@@ -243,6 +312,36 @@ class MPxDetectorBase:
         return pd.MultiIndex.from_arrays(
             [tids, inner_ids], names=['train', inner_name]
         )
+
+    @staticmethod
+    def _guess_axes(data, train_pulse_ids, unstack_pulses):
+        # Raw files have a spurious extra dimension
+        if data.ndim >= 2 and data.shape[1] == 1:
+            data = data[:, 0]
+
+        # TODO: this assumes we can tell what the axes are just from the
+        # number of dimensions. Works for the data we've seen, but we
+        # should look for a more reliable way.
+        if data.ndim == 4:
+            # image.data in raw data
+            dims = ['train_pulse', 'data_gain', 'slow_scan', 'fast_scan']
+        elif data.ndim == 3:
+            # image.data, image.gain, image.mask in calibrated data
+            dims = ['train_pulse', 'slow_scan', 'fast_scan']
+        else:
+            # Everything else seems to be 1D
+            dims = ['train_pulse']
+
+        arr = xarray.DataArray(data, {'train_pulse': train_pulse_ids},
+                               dims=dims)
+
+        if unstack_pulses:
+            # Separate train & pulse dimensions, and arrange dimensions
+            # so that the data is contiguous in memory.
+            dim_order = train_pulse_ids.names + dims[1:]
+            return arr.unstack('train_pulse').transpose(*dim_order)
+        else:
+            return arr
 
     def _get_module_pulse_data(self, source, key, pulses, unstack_pulses,
                                inner_index='pulseId', roi=()):
@@ -318,7 +417,7 @@ class MPxDetectorBase:
 
                 data = f.file[data_path][(data_positions,) + roi]
 
-                arr = _guess_axes(data, index, unstack_pulses)
+                arr = self._guess_axes(data, index, unstack_pulses)
 
                 seq_arrays.append(arr)
 
@@ -339,18 +438,6 @@ class MPxDetectorBase:
             dim=('train' if unstack_pulses else 'train_pulse'),
         )
 
-    @staticmethod
-    def _fill_value(value, dtype):
-        if value is None:
-            if dtype.kind != 'f':
-                value = 0
-            else:
-                value = np.nan
-
-        # enforce that fill value is compatible with array dtype
-        value = dtype.type(value)
-        return value
-
     def get_array(self, key, pulses=np.s_[:], unstack_pulses=True, *,
                   fill_value=None, subtrain_index='pulseId', roi=()):
         """Get a labelled array of detector data
@@ -363,7 +450,7 @@ class MPxDetectorBase:
         pulses: slice, array, by_id or by_index
           Select the pulses to include from each train. by_id selects by pulse
           ID, by_index by index within the data being read. The default includes
-          all pulses. Only used for per-train data.
+          all pulses. Only used for per-pulse data.
         unstack_pulses: bool
           Whether to separate train and pulse dimensions.
         fill_value: int or float, optional
@@ -387,26 +474,24 @@ class MPxDetectorBase:
             raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
         if not isinstance(roi, tuple):
             roi = (roi,)
-        pulses = _check_pulse_selection(pulses)
 
-        arrays = []
-        modnos = []
-        for modno, source in sorted(self.modno_to_source.items()):
-            # At present, all the per-pulse data is stored in the 'image' key.
-            # If that changes, this check will need to change as well.
-            if key.startswith('image.'):
+        if key.startswith('image.'):
+            pulses = _check_pulse_selection(pulses)
+
+            arrays, modnos = [], []
+            for modno, source in sorted(self.modno_to_source.items()):
                 arrays.append(self._get_module_pulse_data(
                     source, key, pulses, unstack_pulses, subtrain_index, roi=roi
                 ))
-            else:
-                arrays.append(self.data.get_array(source, key, roi=roi))
-            modnos.append(modno)
+                modnos.append(modno)
 
-        return xarray.concat(
-            arrays,
-            pd.Index(modnos, name='module'),
-            fill_value=self._fill_value(fill_value, arrays[0].dtype)
-        )
+            return xarray.concat(
+                arrays,
+                pd.Index(modnos, name='module'),
+                fill_value=self._fill_value(fill_value, arrays[0].dtype)
+            )
+        else:
+            return super().get_array(key, fill_value=fill_value, roi=roi)
 
     def get_dask_array(self, key, subtrain_index='pulseId', fill_value=None):
         """Get a labelled Dask array of detector data
@@ -684,7 +769,7 @@ class MPxDetectorTrainIterator:
             # h5py fancy indexing needs a list, not an ndarray
             data_positions = list(first + positions)
 
-        return _guess_axes(ds[data_positions], train_pulse_ids, unstack_pulses=True)
+        return self.data._guess_axes(ds[data_positions], train_pulse_ids, unstack_pulses=True)
 
     def _select_pulse_ids(self, pulse_ids):
         """Select pulses by ID
@@ -758,7 +843,7 @@ class MPxDetectorTrainIterator:
             yield tid, self._assemble_data(tid)
 
 
-class AGIPD1M(MPxDetectorBase):
+class AGIPD1M(MultimodFastDetectorBase):
     """An interface to AGIPD-1M data.
 
     Parameters
@@ -779,7 +864,7 @@ class AGIPD1M(MPxDetectorBase):
     module_shape = (512, 128)
 
 
-class DSSC1M(MPxDetectorBase):
+class DSSC1M(MultimodFastDetectorBase):
     """An interface to DSSC-1M data.
 
     Parameters
@@ -800,7 +885,7 @@ class DSSC1M(MPxDetectorBase):
     module_shape = (128, 512)
 
 
-class LPD1M(MPxDetectorBase):
+class LPD1M(MultimodFastDetectorBase):
     """An interface to LPD-1M data.
 
     Parameters
@@ -863,7 +948,7 @@ class LPD1M(MPxDetectorBase):
         )
 
 
-class JUNGFRAU(MPxDetectorBase):
+class JUNGFRAU(MultimodDetectorBase):
     """An interface to JUNGFRAU data.
 
     Parameters
@@ -965,14 +1050,6 @@ class JUNGFRAU(MPxDetectorBase):
         """
         for tid, d in super().trains(require_all=require_all):
             yield tid, {k: self._label_dims(a) for (k, a) in d.items()}
-
-    def write_virtual_cxi(self, filename, fillvalues=None):
-        raise NotImplementedError("Virtual CXI files not implemented for JUNGFRAU")
-
-    def write_frames(self, filename, trains, pulses):
-        raise NotImplementedError(
-            "Writing selected frames not implemented for JUNGFRAU"
-        )
 
 
 def identify_multimod_detectors(

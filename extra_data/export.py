@@ -17,7 +17,7 @@ from warnings import warn
 from karabo_bridge import ServerInThread
 from karabo_bridge.server import Sender
 
-from .components import MPxDetectorBase
+from .components import MultimodFastDetectorBase
 from .exceptions import SourceNameError
 from .reader import RunDirectory, H5File
 from .stacking import stack_detector_data
@@ -54,7 +54,7 @@ def _iter_trains(data, merge_detector=False):
     """
     det, source_name = None, ''
     if merge_detector:
-        for detector in MPxDetectorBase.__subclasses__():
+        for detector in MultimodFastDetectorBase.__subclasses__():
             try:
                 det = detector(data)
                 source_name = f'{det.detector_name}/DET/APPEND'
