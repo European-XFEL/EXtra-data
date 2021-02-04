@@ -59,7 +59,6 @@ class MultimodDetectorBase:
     """
 
     _source_re = re.compile(r'(?P<detname>.+)/DET/(\d+)CH')
-    n_modules = 16
     # Override in subclass
     _main_data_key = ''  # Key to use for checking data counts match
     module_shape = (0, 0)
@@ -264,6 +263,7 @@ class MultimodFastDetectorBase(MultimodDetectorBase):
     different number of frames to be stored for each train, which makes
     access more complicated.
     """
+    n_modules = 16
     _main_data_key = 'image.data'
 
     @staticmethod
@@ -850,7 +850,7 @@ class AGIPD1M(MultimodFastDetectorBase):
     ----------
 
     data: DataCollection
-      A data collection, e.g. from RunDirectory.
+      A data collection, e.g. from :func:`.RunDirectory`.
     modules: set of ints, optional
       Detector module numbers to use. By default, all available modules
       are used.
@@ -871,7 +871,7 @@ class DSSC1M(MultimodFastDetectorBase):
     ----------
 
     data: DataCollection
-      A data collection, e.g. from RunDirectory.
+      A data collection, e.g. from :func:`.RunDirectory`.
     modules: set of ints, optional
       Detector module numbers to use. By default, all available modules
       are used.
@@ -892,7 +892,7 @@ class LPD1M(MultimodFastDetectorBase):
     ----------
 
     data: DataCollection
-      A data collection, e.g. from RunDirectory.
+      A data collection, e.g. from :func:`.RunDirectory`.
     modules: set of ints, optional
       Detector module numbers to use. By default, all available modules
       are used.
@@ -955,7 +955,7 @@ class JUNGFRAU(MultimodDetectorBase):
     ----------
 
     data: DataCollection
-      A data collection, e.g. from RunDirectory.
+      A data collection, e.g. from :func:`.RunDirectory`.
     modules: set of ints, optional
       Detector module numbers to use. By default, all available modules
       are used.
@@ -1045,7 +1045,7 @@ class JUNGFRAU(MultimodDetectorBase):
         ------
 
         train_data: dict
-          A dictionary mapping key names (e.g. ``image.data``) to labelled
+          A dictionary mapping key names (e.g. 'data.adc') to labelled
           arrays.
         """
         for tid, d in super().trains(require_all=require_all):
