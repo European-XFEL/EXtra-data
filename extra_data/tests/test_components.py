@@ -6,7 +6,9 @@ import pytest
 from testpath import assert_isfile
 
 from extra_data.reader import RunDirectory, H5File, by_id, by_index
-from extra_data.components import AGIPD1M, LPD1M, identify_multimod_detectors
+from extra_data.components import (
+    AGIPD1M, LPD1M, JUNGFRAU, identify_multimod_detectors,
+)
 
 
 def test_get_array(mock_fxe_raw_run):
@@ -150,6 +152,17 @@ def test_get_array_lpd_parallelgain(mock_lpd_parallelgain_run):
     np.testing.assert_array_equal(arr.coords['pulse'], np.arange(100))
 
 
+def test_get_array_jungfrau(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    jf = JUNGFRAU(run.select_trains(by_index[:2]))
+    assert jf.detector_name == 'SPB_IRDA_JF4M'
+
+    arr = jf.get_array('data.adc')
+    assert arr.shape == (8, 2, 16, 512, 1024)
+    assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
+    np.testing.assert_array_equal(arr.coords['train'], [10000, 10001])
+
+
 def test_get_dask_array(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run)
@@ -192,6 +205,17 @@ def test_get_dask_array_lpd_parallelgain(mock_lpd_parallelgain_run):
     assert arr.shape == (16, 2 * 3 * 100, 1, 256, 256)
     assert arr.dims[:2] == ('module', 'train_pulse')
     np.testing.assert_array_equal(arr.coords['pulseId'], np.tile(np.arange(100), 6))
+
+
+def test_get_dask_array_jungfrau(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    jf = JUNGFRAU(run)
+    assert jf.detector_name == 'SPB_IRDA_JF4M'
+
+    arr = jf.get_dask_array('data.adc')
+    assert arr.shape == (8, 100, 16, 512, 1024)
+    assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
+    np.testing.assert_array_equal(arr.coords['train'], np.arange(10000, 10100))
 
 
 def test_iterate(mock_fxe_raw_run):
@@ -251,6 +275,16 @@ def test_iterate_lpd_parallel_gain(mock_lpd_parallelgain_run):
     assert d['image.data'].shape == (16, 1, 3, 100, 256, 256)
     assert d['image.data'].dims == \
            ('module', 'train', 'gain', 'pulse', 'slow_scan', 'fast_scan')
+
+
+def test_iterate_jungfrau(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    jf = JUNGFRAU(run)
+
+    tid, d = next(iter(jf.trains()))
+    assert tid == 10000
+    assert d['data.adc'].shape == (8, 16, 512, 1024)
+    assert d['data.adc'].dims == ('module', 'pulse', 'slow_scan', 'fast_scan')
 
 
 def test_write_virtual_cxi(mock_spb_proc_run, tmpdir):

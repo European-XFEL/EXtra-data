@@ -94,6 +94,13 @@ def mock_spb_raw_run(format_version):
 
 
 @pytest.fixture(scope='session')
+def mock_jungfrau_run():
+    with TemporaryDirectory() as td:
+        make_examples.make_jungfrau_run(td)
+        yield td
+
+
+@pytest.fixture(scope='session')
 def empty_h5_file():
     with TemporaryDirectory() as td:
         path = osp.join(td, 'empty.h5')

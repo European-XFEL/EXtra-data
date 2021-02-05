@@ -12,6 +12,9 @@ from .mockdata.detectors import AGIPDModule, LPDModule
 from .mockdata.gauge import Gauge
 from .mockdata.gec_camera import GECCamera
 from .mockdata.imgfel import IMGFELCamera, IMGFELMotor
+from .mockdata.jungfrau import (
+    JUNGFRAUModule, JUNGFRAUControl, JUNGFRAUMonitor, JUNGFRAUPower,
+)
 from .mockdata.motor import Motor
 from .mockdata.mpod import MPOD
 from .mockdata.tsens import TemperatureSensor
@@ -293,6 +296,20 @@ def make_reduced_spb_run(dir_path, raw=True, rng=None, format_version='0.5'):
                  BaslerCam('SPB_IRU_CAM/CAM/SIDEMIC', sensor_size=(1024, 768))
                ], ntrains=32, firsttrain=10032, chunksize=32,
                format_version=format_version)
+
+def make_jungfrau_run(dir_path):
+    # Naming based on /gpfs/exfel/exp/SPB/202022/p002732/raw/r0012
+    for modno in range(1, 9):
+        path = osp.join(dir_path, f'RAW-R0012-JNGFR{modno:02}-S00000.h5')
+        write_file(path, [
+            JUNGFRAUModule(f'SPB_IRDA_JF4M/DET/JNGFR{modno:02}')
+        ], ntrains=100, chunksize=1, format_version='1.0')
+
+    write_file(osp.join(dir_path, f'RAW-R0012-JNGFRCTRL00-S00000.h5'), [
+        JUNGFRAUControl('SPB_IRDA_JF4M/DET/CONTROL'),
+        JUNGFRAUMonitor('SPB_IRDA_JF4M/MDL/MONITOR'),
+        JUNGFRAUPower('SPB_IRDA_JF4M/MDL/POWER'),
+    ], ntrains=100, chunksize=1, format_version='1.0')
 
 if __name__ == '__main__':
     make_agipd_example_file('agipd_example.h5')
