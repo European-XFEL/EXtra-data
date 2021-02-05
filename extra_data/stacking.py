@@ -53,8 +53,10 @@ def stack_data(train, data, axis=-3, xcept=()):
     return np.stack(ordered_arrays, axis=axis)
 
 
-def stack_detector_data(train, data, axis=-3, modules=16, fillvalue=None,
-                        real_array=True):
+def stack_detector_data(
+        train, data, axis=-3, modules=16, fillvalue=None, real_array=True, *,
+        pattern=r'/DET/(\d+)CH', startsat1=False,
+):
     """Stack data from detector modules in a train.
 
     Parameters
@@ -75,6 +77,12 @@ def stack_detector_data(train, data, axis=-3, modules=16, fillvalue=None,
         If False, avoid copying the data and return a limited array-like wrapper
         around the existing arrays. This is sufficient for assembling images
         using detector geometry, and allows better performance.
+    pattern: str
+        Regex to find the module number in source names. Should contain a group
+        which can be converted to an integer.
+    startsat1: bool
+        If False (by default), module numbers start at 0, and module 0 will be
+        inserted if it is missing. If True, module numbers start at 1.
 
     Returns
     -------
@@ -87,14 +95,14 @@ def stack_detector_data(train, data, axis=-3, modules=16, fillvalue=None,
 
     dtypes, shapes, empty_mods = set(), set(), set()
     modno_arrays = {}
-    for device in train:
-        det_mod_match = re.search(r'/DET/(\d+)CH', device)
+    for src in train:
+        det_mod_match = re.search(pattern, src)
         if not det_mod_match:
-            raise ValueError("Non-detector source: {}".format(device))
-        modno = int(det_mod_match.group(1))
+            raise ValueError(f"Source {src!r} doesn't match pattern {pattern!r}")
+        modno = int(det_mod_match.group(1)) - int(startsat1)
 
         try:
-            array = train[device][data]
+            array = train[src][data]
         except KeyError:
             continue
         dtypes.add(array.dtype)
