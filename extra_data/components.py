@@ -860,8 +860,19 @@ class AGIPD1M(XtdfDetectorBase):
     min_modules: int
       Include trains where at least n modules have data. Default is 1.
     """
-    _source_re = re.compile(r'(?P<detname>(.+)_AGIPD1M(.*))/DET/(?P<modno>\d+)CH')
+    _source_re = re.compile(r'(?P<detname>.+_AGIPD1M.*)/DET/(?P<modno>\d+)CH')
     module_shape = (512, 128)
+
+
+class AGIPD500K(XtdfDetectorBase):
+    """An interface to AGIPD-500K data
+
+    Detector names are like 'HED_DET_AGIPD500K2G', otherwise this is identical
+    to :class:`AGIPD1M`.
+    """
+    _source_re = re.compile(r'(?P<detname>.+_AGIPD500K.*)/DET/(?P<modno>\d+)CH')
+    module_shape = (512, 128)
+    n_modules = 8
 
 
 class DSSC1M(XtdfDetectorBase):
@@ -881,7 +892,7 @@ class DSSC1M(XtdfDetectorBase):
     min_modules: int
       Include trains where at least n modules have data. Default is 1.
     """
-    _source_re = re.compile(r'(?P<detname>(.+)_DSSC1M(.*))/DET/(?P<modno>\d+)CH')
+    _source_re = re.compile(r'(?P<detname>.+_DSSC1M.*)/DET/(?P<modno>\d+)CH')
     module_shape = (128, 512)
 
 
@@ -907,7 +918,7 @@ class LPD1M(XtdfDetectorBase):
       repeat the pulse & cell IDs from the first 1/3 of each train, and add gain
       stage labels from 0 (high-gain) to 2 (low-gain).
     """
-    _source_re = re.compile(r'(?P<detname>(.+)_LPD1M(.*))/DET/(?P<modno>\d+)CH')
+    _source_re = re.compile(r'(?P<detname>.+_LPD1M.*)/DET/(?P<modno>\d+)CH')
     module_shape = (256, 256)
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
