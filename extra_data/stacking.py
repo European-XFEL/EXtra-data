@@ -53,8 +53,10 @@ def stack_data(train, data, axis=-3, xcept=()):
     return np.stack(ordered_arrays, axis=axis)
 
 
-def stack_detector_data(train, data, axis=-3, modules=16, fillvalue=None,
-                        real_array=True):
+def stack_detector_data(
+        train, data, axis=-3, modules=16, fillvalue=None, real_array=True, *,
+        pattern=r'/DET/(\d+)CH', starts_at=0,
+):
     """Stack data from detector modules in a train.
 
     Parameters
@@ -75,6 +77,14 @@ def stack_detector_data(train, data, axis=-3, modules=16, fillvalue=None,
         If False, avoid copying the data and return a limited array-like wrapper
         around the existing arrays. This is sufficient for assembling images
         using detector geometry, and allows better performance.
+    pattern: str
+        Regex to find the module number in source names. Should contain a group
+        which can be converted to an integer. E.g. ``r'/DET/JNGFR(\\d+)'`` for
+        one JUNGFRAU naming convention.
+    starts_at: int
+        By default, uses module numbers starting at 0 (e.g. 0-15 inclusive).
+        If the numbering is e.g. 1-16 instead, pass starts_at=1. This is not
+        automatic because the first or last module may be missing from the data.
 
     Returns
     -------
@@ -87,14 +97,14 @@ def stack_detector_data(train, data, axis=-3, modules=16, fillvalue=None,
 
     dtypes, shapes, empty_mods = set(), set(), set()
     modno_arrays = {}
-    for device in train:
-        det_mod_match = re.search(r'/DET/(\d+)CH', device)
+    for src in train:
+        det_mod_match = re.search(pattern, src)
         if not det_mod_match:
-            raise ValueError("Non-detector source: {}".format(device))
-        modno = int(det_mod_match.group(1))
+            raise ValueError(f"Source {src!r} doesn't match pattern {pattern!r}")
+        modno = int(det_mod_match.group(1)) - starts_at
 
         try:
-            array = train[device][data]
+            array = train[src][data]
         except KeyError:
             continue
         dtypes.add(array.dtype)
