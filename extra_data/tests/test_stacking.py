@@ -143,7 +143,7 @@ def test_stack_detector_data_jungfrau(mock_jungfrau_run):
     _, data = run.select('*JF4M/DET/*', 'data.adc').train_from_index(0)
 
     comb = stack_detector_data(
-        data, 'data.adc', modules=8, pattern=r'/DET/JNGFR(\d+)', startsat1=True
+        data, 'data.adc', modules=8, pattern=r'/DET/JNGFR(\d+)', starts_at=1
     )
     assert comb.shape == (16, 8, 512, 1024)
 

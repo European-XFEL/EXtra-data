@@ -55,7 +55,7 @@ def stack_data(train, data, axis=-3, xcept=()):
 
 def stack_detector_data(
         train, data, axis=-3, modules=16, fillvalue=None, real_array=True, *,
-        pattern=r'/DET/(\d+)CH', startsat1=False,
+        pattern=r'/DET/(\d+)CH', starts_at=0,
 ):
     """Stack data from detector modules in a train.
 
@@ -79,10 +79,12 @@ def stack_detector_data(
         using detector geometry, and allows better performance.
     pattern: str
         Regex to find the module number in source names. Should contain a group
-        which can be converted to an integer.
-    startsat1: bool
-        If False (by default), module numbers start at 0, and module 0 will be
-        inserted if it is missing. If True, module numbers start at 1.
+        which can be converted to an integer. E.g. ``r'/DET/JNGFR(\\d+)'`` for
+        one JUNGFRAU naming convention.
+    starts_at: int
+        By default, uses module numbers starting at 0 (e.g. 0-15 inclusive).
+        If the numbering is e.g. 1-16 instead, pass starts_at=1. This is not
+        automatic because the first or last module may be missing from the data.
 
     Returns
     -------
@@ -99,7 +101,7 @@ def stack_detector_data(
         det_mod_match = re.search(pattern, src)
         if not det_mod_match:
             raise ValueError(f"Source {src!r} doesn't match pattern {pattern!r}")
-        modno = int(det_mod_match.group(1)) - int(startsat1)
+        modno = int(det_mod_match.group(1)) - starts_at
 
         try:
             array = train[src][data]
