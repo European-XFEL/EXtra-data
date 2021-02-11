@@ -166,6 +166,9 @@ def test_get_array_jungfrau(mock_jungfrau_run):
     assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
     np.testing.assert_array_equal(arr.coords['train'], [10000, 10001])
 
+    arr = jf.get_array('data.adc', astype=np.float32)
+    assert arr.dtype == np.float32
+
 
 def test_get_dask_array(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)

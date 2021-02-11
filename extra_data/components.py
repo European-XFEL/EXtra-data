@@ -177,10 +177,10 @@ class MultimodDetectorBase:
         fill_value = dtype.type(fill_value)
 
         return xarray.concat(
-            arrays,
+            [a.astype(dtype, copy=False) for a in arrays],
             pd.Index(index, name='module'),
             fill_value=fill_value
-        ).astype(dtype, copy=False)
+        )
 
     def get_array(self, key, *, fill_value=None, roi=(), astype=None):
         """Get a labelled array of detector data
@@ -999,7 +999,7 @@ class JUNGFRAU(MultimodDetectorBase):
             arr = arr.rename({'dim_0': 'pulse'})
         return arr
 
-    def get_array(self, key, *, fill_value=None, roi=()):
+    def get_array(self, key, *, fill_value=None, roi=(), astype=None):
         """Get a labelled array of detector data
 
         Parameters
@@ -1016,11 +1016,14 @@ class JUNGFRAU(MultimodDetectorBase):
           then there are two pixel dimensions. The same selection is applied
           to data from each module, so selecting pixels may only make sense if
           you're using a single module.
+        astype: Type
+          data type of the output array. If None (default) the dtype matches the
+          input array dtype
         """
-        arr = super().get_array(key, fill_value=fill_value, roi=roi)
+        arr = super().get_array(key, fill_value=fill_value, roi=roi, astype=astype)
         return self._label_dims(arr)
 
-    def get_dask_array(self, key, fill_value=None):
+    def get_dask_array(self, key, fill_value=None, astype=None):
         """Get a labelled Dask array of detector data
 
         Dask does lazy, parallelised computing, and can work with large data
@@ -1033,10 +1036,13 @@ class JUNGFRAU(MultimodDetectorBase):
         key: str
           The data to get, e.g. 'data.adc' for pixel values.
         fill_value: int or float, optional
-            Value to use for missing values. If None (default) the fill value
-            is 0 for integers and np.nan for floats.
+          Value to use for missing values. If None (default) the fill value
+          is 0 for integers and np.nan for floats.
+        astype: Type
+          data type of the output array. If None (default) the dtype matches the
+          input array dtype
         """
-        arr = super().get_dask_array(key, fill_value=fill_value)
+        arr = super().get_dask_array(key, fill_value=fill_value, astype=astype)
         return self._label_dims(arr)
 
     def trains(self, require_all=True):
