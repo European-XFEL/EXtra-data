@@ -33,7 +33,7 @@ You should have received a copy of the 3-Clause BSD License along with this
 program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 """
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 
 from .keydata import KeyData
