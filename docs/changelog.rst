@@ -33,8 +33,10 @@ Deprecations & potentially breaking changes:
   multi-module detectors to floats (in :meth:`~.LPD1M.get_array` and
   :meth:`~.LPD1M.get_dask_array`) with the special value NaN for missing data.
   This version preserves the data type, but missing integer data will be filled
-  with 0. You can use the ``min_modules`` parameter to get only trains where
-  all modules have data.
+  with 0. If this is not suitable, you can use the ``min_modules`` parameter
+  to get only trains where all modules have data, or pass
+  ``astype=np.float64, fill_value=np.nan`` to convert data to floats and fill
+  gaps with NaN as before.
 - Special handling in :meth:`~.get_series` to label some fast detector data with
   pulse IDs was deprecated (:ghpull:`131`). We believe no-one is using this.
   If you are, please contact da-support@xfel.eu to discuss alternatives.
