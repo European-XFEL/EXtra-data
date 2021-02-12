@@ -17,6 +17,7 @@ def test_get_array(mock_fxe_raw_run):
     assert det.detector_name == 'FXE_DET_LPD1M-1'
 
     arr = det.get_array('image.data')
+    assert arr.dtype == np.uint16
     assert arr.shape == (16, 3, 128, 256, 256)
     assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
 
@@ -28,6 +29,9 @@ def test_get_array(mock_fxe_raw_run):
     # fill value
     with pytest.raises(ValueError):
         det.get_array('image.data', fill_value=np.nan)
+    
+    arr = det.get_array('image.data', astype=np.float32)
+    assert arr.dtype == np.float32
 
 
 def test_get_array_pulse_id(mock_fxe_raw_run):
@@ -162,11 +166,14 @@ def test_get_array_jungfrau(mock_jungfrau_run):
     assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
     np.testing.assert_array_equal(arr.coords['train'], [10000, 10001])
 
+    arr = jf.get_array('data.adc', astype=np.float32)
+    assert arr.dtype == np.float32
+
 
 def test_get_dask_array(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run)
-    arr = det.get_dask_array('image.data')
+    arr = det.get_dask_array('image.data', fill_value=42)
 
     assert isinstance(arr.data, da.Array)
     assert arr.shape == (16, 480 * 128, 1, 256, 256)

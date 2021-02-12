@@ -170,18 +170,19 @@ class MultimodDetectorBase:
         )
 
     @staticmethod
-    def _fill_value(value, dtype):
-        if value is None:
-            if dtype.kind != 'f':
-                value = 0
-            else:
-                value = np.nan
+    def _concat(arrays, index, fill_value, astype):
+        dtype = arrays[0].dtype if astype is None else np.dtype(astype)
+        if fill_value is None:
+            fill_value = np.nan if dtype.kind == 'f' else 0
+        fill_value = dtype.type(fill_value)
 
-        # enforce that fill value is compatible with array dtype
-        value = dtype.type(value)
-        return value
+        return xarray.concat(
+            [a.astype(dtype, copy=False) for a in arrays],
+            pd.Index(index, name='module'),
+            fill_value=fill_value
+        )
 
-    def get_array(self, key, *, fill_value=None, roi=()):
+    def get_array(self, key, *, fill_value=None, roi=(), astype=None):
         """Get a labelled array of detector data
 
         Parameters
@@ -196,6 +197,9 @@ class MultimodDetectorBase:
           Specify e.g. ``np.s_[10:60, 100:200]`` to select pixels within each
           module when reading data. The selection is applied to each individual
           module, so it may only be useful when working with a single module.
+        astype: Type
+          Data type of the output array. If None (default) the dtype matches the
+          input array dtype
         """
         arrays = []
         modnos = []
@@ -203,23 +207,20 @@ class MultimodDetectorBase:
             arrays.append(self.data.get_array(source, key, roi=roi))
             modnos.append(modno)
 
-        return xarray.concat(
-            arrays,
-            pd.Index(modnos, name='module'),
-            fill_value=self._fill_value(fill_value, arrays[0].dtype)
-        )
+        return self._concat(arrays, modnos, fill_value, astype)
 
-    def get_dask_array(self, key, fill_value=None):
+    def get_dask_array(self, key, fill_value=None, astype=None):
         """Get a labelled Dask array of detector data
-
         Parameters
         ----------
-
         key: str
           The data to get, e.g. 'image.data' for pixel values.
         fill_value: int or float, optional
-            Value to use for missing values. If None (default) the fill value
-            is 0 for integers and np.nan for floats.
+          Value to use for missing values. If None (default) the fill value is 0
+          for integers and np.nan for floats.
+        astype: Type
+          Data type of the output array. If None (default) the dtype matches the
+          input array dtype
         """
         arrays = []
         modnos = []
@@ -228,12 +229,7 @@ class MultimodDetectorBase:
             mod_arr = self.data.get_dask_array(source, key, labelled=True)
             arrays.append(mod_arr)
 
-        # set the fill_value to prevent xarray from changing the dtype to float
-        return xarray.concat(
-            arrays,
-            pd.Index(modnos, name='module'),
-            fill_value=self._fill_value(fill_value, arrays[0].dtype)
-        )
+        return self._concat(arrays, modnos, fill_value, astype)
 
     def trains(self, require_all=True):
         """Iterate over trains for detector data.
@@ -439,7 +435,8 @@ class XtdfDetectorBase(MultimodDetectorBase):
         )
 
     def get_array(self, key, pulses=np.s_[:], unstack_pulses=True, *,
-                  fill_value=None, subtrain_index='pulseId', roi=()):
+                  fill_value=None, subtrain_index='pulseId', roi=(),
+                  astype=None):
         """Get a labelled array of detector data
 
         Parameters
@@ -454,8 +451,8 @@ class XtdfDetectorBase(MultimodDetectorBase):
         unstack_pulses: bool
           Whether to separate train and pulse dimensions.
         fill_value: int or float, optional
-            Value to use for missing values. If None (default) the fill value
-            is 0 for integers and np.nan for floats.
+          Value to use for missing values. If None (default) the fill value is 0
+          for integers and np.nan for floats.
         subtrain_index: str
           Specify 'pulseId' (default) or 'cellId' to label the frames recorded
           within each train. Pulse ID should allow this data to be matched with
@@ -469,6 +466,9 @@ class XtdfDetectorBase(MultimodDetectorBase):
           For AGIPD raw data, each module records a frame as a 3D array with 2
           entries on the first dimension, for data & gain information, so
           ``roi=np.s_[0]`` will select only the data part of each frame.
+        astype: Type
+          data type of the output array. If None (default) the dtype matches the
+          input array dtype
         """
         if subtrain_index not in {'pulseId', 'cellId'}:
             raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
@@ -485,15 +485,14 @@ class XtdfDetectorBase(MultimodDetectorBase):
                 ))
                 modnos.append(modno)
 
-            return xarray.concat(
-                arrays,
-                pd.Index(modnos, name='module'),
-                fill_value=self._fill_value(fill_value, arrays[0].dtype)
-            )
+            return self._concat(arrays, modnos, fill_value, astype)
         else:
-            return super().get_array(key, fill_value=fill_value, roi=roi)
+            return super().get_array(
+                key, fill_value=fill_value, roi=roi, astype=astype
+            )
 
-    def get_dask_array(self, key, subtrain_index='pulseId', fill_value=None):
+    def get_dask_array(self, key, subtrain_index='pulseId', fill_value=None,
+                       astype=None):
         """Get a labelled Dask array of detector data
 
         Dask does lazy, parallelised computing, and can work with large data
@@ -505,15 +504,18 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
         key: str
           The data to get, e.g. 'image.data' for pixel values.
-        subtrain_index: str
+        subtrain_index: str, optional
           Specify 'pulseId' (default) or 'cellId' to label the frames recorded
           within each train. Pulse ID should allow this data to be matched with
           other devices, but depends on how the detector was manually configured
           when the data was taken. Cell ID refers to the memory cell used for
           that frame in the detector hardware.
         fill_value: int or float, optional
-            Value to use for missing values. If None (default) the fill value
-            is 0 for integers and np.nan for floats.
+          Value to use for missing values. If None (default) the fill value is 0
+          for integers and np.nan for floats.
+        astype: Type, optional
+          data type of the output array. If None (default) the dtype matches the
+          input array dtype
         """
         if subtrain_index not in {'pulseId', 'cellId'}:
             raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
@@ -544,12 +546,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
             arrays.append(mod_arr)
 
-        # set the fill_value to prevent xarray from changing the dtype to float
-        return xarray.concat(
-            arrays,
-            pd.Index(modnos, name='module'),
-            fill_value=self._fill_value(fill_value, arrays[0].dtype)
-        )
+        return self._concat(arrays, modnos, fill_value, astype)
 
     def trains(self, pulses=np.s_[:], require_all=True):
         """Iterate over trains for detector data.
@@ -1002,7 +999,7 @@ class JUNGFRAU(MultimodDetectorBase):
             arr = arr.rename({'dim_0': 'pulse'})
         return arr
 
-    def get_array(self, key, *, fill_value=None, roi=()):
+    def get_array(self, key, *, fill_value=None, roi=(), astype=None):
         """Get a labelled array of detector data
 
         Parameters
@@ -1019,11 +1016,14 @@ class JUNGFRAU(MultimodDetectorBase):
           then there are two pixel dimensions. The same selection is applied
           to data from each module, so selecting pixels may only make sense if
           you're using a single module.
+        astype: Type
+          data type of the output array. If None (default) the dtype matches the
+          input array dtype
         """
-        arr = super().get_array(key, fill_value=fill_value, roi=roi)
+        arr = super().get_array(key, fill_value=fill_value, roi=roi, astype=astype)
         return self._label_dims(arr)
 
-    def get_dask_array(self, key, fill_value=None):
+    def get_dask_array(self, key, fill_value=None, astype=None):
         """Get a labelled Dask array of detector data
 
         Dask does lazy, parallelised computing, and can work with large data
@@ -1036,10 +1036,13 @@ class JUNGFRAU(MultimodDetectorBase):
         key: str
           The data to get, e.g. 'data.adc' for pixel values.
         fill_value: int or float, optional
-            Value to use for missing values. If None (default) the fill value
-            is 0 for integers and np.nan for floats.
+          Value to use for missing values. If None (default) the fill value
+          is 0 for integers and np.nan for floats.
+        astype: Type
+          data type of the output array. If None (default) the dtype matches the
+          input array dtype
         """
-        arr = super().get_dask_array(key, fill_value=fill_value)
+        arr = super().get_dask_array(key, fill_value=fill_value, astype=astype)
         return self._label_dims(arr)
 
     def trains(self, require_all=True):
