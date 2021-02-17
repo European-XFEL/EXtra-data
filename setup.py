@@ -52,7 +52,6 @@ setup(name="EXtra-data",
           'numpy',
           'pandas',
           'psutil',
-          'scipy',
           'xarray',
       ],
       extras_require={
