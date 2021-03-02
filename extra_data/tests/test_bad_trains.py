@@ -5,6 +5,7 @@ import h5py
 import pytest
 
 from extra_data import H5File
+from extra_data.exceptions import TrainIDError
 from extra_data.file_access import FileAccess
 from . import make_examples
 
@@ -86,25 +87,48 @@ def test_keydata_interface(agipd_file_tid_high):
     assert len(kd.train_ids) == 249
     assert kd.shape == (249 * 64, 512, 128)
 
-    fi = H5File(agipd_file_tid_high, inc_suspect_trains=True)
-    kdi = fi['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.data']
-    assert len(kdi.train_ids) == 250
-    assert kdi.shape == (250 * 64, 512, 128)
+    f = H5File(agipd_file_tid_high, inc_suspect_trains=True)
+    kd = f['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.data']
+    assert len(kd.train_ids) == 250
+    assert kd.shape == (250 * 64, 512, 128)
 
 def test_array(agipd_file_tid_low):
     f = H5File(agipd_file_tid_low)
     arr = f['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId'].xarray()
     assert arr.shape == (249 * 64, 1)
 
-    fi = H5File(agipd_file_tid_low, inc_suspect_trains=True)
-    arri = fi['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId'].xarray()
-    assert arri.shape == (250 * 64, 1)
+    f = H5File(agipd_file_tid_low, inc_suspect_trains=True)
+    arr = f['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId'].xarray()
+    assert arr.shape == (250 * 64, 1)
 
 def test_dask_array(agipd_file_flag0):
     f = H5File(agipd_file_flag0)
     arr = f['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.pulseId'].dask_array()
     assert arr.shape == (485 * 64, 1)
 
-    fi = H5File(agipd_file_flag0, inc_suspect_trains=True)
-    arri = fi['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.pulseId'].dask_array()
-    assert arri.shape == (486 * 64, 1)
+    f = H5File(agipd_file_flag0, inc_suspect_trains=True)
+    arr = f['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.pulseId'].dask_array()
+    assert arr.shape == (486 * 64, 1)
+
+def test_iterate_keydata(agipd_file_tid_high):
+    f = H5File(agipd_file_tid_high)
+    kd = f['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId']
+    tids = [t for (t, _) in kd.trains()]
+    assert len(tids) == 249
+    assert 11000 not in tids
+
+    f = H5File(agipd_file_tid_high, inc_suspect_trains=True)
+    kd = f['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId']
+    tids = [t for (t, _) in kd.trains()]
+    assert len(tids) == 250
+    assert 11000 in tids
+
+def test_get_train_keydata(agipd_file_tid_low):
+    f = H5File(agipd_file_tid_low)
+    kd = f['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId']
+    with pytest.raises(TrainIDError):
+        kd.train_from_id(9000)
+
+    f = H5File(agipd_file_tid_low, inc_suspect_trains=True)
+    kd = f['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId']
+    assert kd.train_from_id(9000)[0] == 9000
