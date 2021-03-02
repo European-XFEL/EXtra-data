@@ -73,9 +73,13 @@ class DataCollection:
     You normally get an instance of this class by calling :func:`H5File`
     for a single file or :func:`RunDirectory` for a directory.
     """
-    def __init__(self, files, selection=None, train_ids=None, ctx_closes=False):
+    def __init__(
+            self, files, selection=None, train_ids=None, ctx_closes=False, *,
+            inc_suspect_trains=False,
+    ):
         self.files = list(files)
         self.ctx_closes = ctx_closes
+        self.inc_suspect_trains = inc_suspect_trains
 
         # selection: {source: set(keys)}
         # None as value -> all keys for this source
@@ -102,7 +106,11 @@ class DataCollection:
         self.instrument_sources = frozenset(self.instrument_sources)
 
         if train_ids is None:
-            train_ids = sorted(set().union(*(f.valid_train_ids for f in files)))
+            if inc_suspect_trains:
+                tid_sets = [f.train_ids for f in files]
+            else:
+                tid_sets = [f.valid_train_ids for f in files]
+            train_ids = sorted(set().union(*tid_sets))
         self.train_ids = train_ids
 
     @staticmethod
@@ -115,7 +123,7 @@ class DataCollection:
             return osp.basename(path), fa
 
     @classmethod
-    def from_paths(cls, paths, _files_map=None):
+    def from_paths(cls, paths, _files_map=None, *, inc_suspect_trains=False):
         files = []
         uncached = []
         for path in paths:
@@ -149,12 +157,14 @@ class DataCollection:
         if not files:
             raise Exception("All HDF5 files specified are unusable")
 
-        return cls(files, ctx_closes=True)
+        return cls(
+            files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains
+        )
 
     @classmethod
-    def from_path(cls, path):
+    def from_path(cls, path, *, inc_suspect_trains=False):
         files = [FileAccess(path)]
-        return cls(files, ctx_closes=True)
+        return cls(files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains)
 
     def __enter__(self):
         if not self.ctx_closes:
@@ -231,6 +241,7 @@ class DataCollection:
             section=section,
             dtype=ds0.dtype,
             eshape=ds0.shape[1:],
+            inc_suspect_trains=self.inc_suspect_trains,
         )
 
     def __getitem__(self, item):
@@ -1131,7 +1142,7 @@ class TrainIterator:
             yield tid, self._assemble_data(tid)
 
 
-def H5File(path):
+def H5File(path, *, inc_suspect_trains=False):
     """Open a single HDF5 file generated at European XFEL.
 
     ::
@@ -1144,11 +1155,19 @@ def H5File(path):
     ----------
     path: str
         Path to the HDF5 file
+    inc_suspect_trains: bool
+        If False (default), suspect train IDs within a file are skipped.
+        In newer files (format >= 1.0), trains where INDEX/flag are 0 are
+        suspect. For older files which don't have this flag, it will try to
+        eliminate out of sequence train IDs so that the remaining IDs are
+        strictly increasing. If True, it tries to include these trains.
     """
-    return DataCollection.from_path(path)
+    return DataCollection.from_path(path, inc_suspect_trains=inc_suspect_trains)
 
 
-def RunDirectory(path, include='*', file_filter=locality.lc_any):
+def RunDirectory(
+        path, include='*', file_filter=locality.lc_any, *, inc_suspect_trains=False
+):
     """Open data files from a 'run' at European XFEL.
 
     ::
@@ -1169,6 +1188,12 @@ def RunDirectory(path, include='*', file_filter=locality.lc_any):
     file_filter: callable
         Function to subset the list of filenames to open.
         Meant to be used with functions in the extra_data.locality module.
+    inc_suspect_trains: bool
+        If False (default), suspect train IDs within a file are skipped.
+        In newer files (format >= 1.0), trains where INDEX/flag are 0 are
+        suspect. For older files which don't have this flag, it will try to
+        eliminate out of sequence train IDs so that the remaining IDs are
+        strictly increasing. If True, it tries to include these trains.
     """
     files = [f for f in os.listdir(path) if f.endswith('.h5')]
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
@@ -1178,7 +1203,9 @@ def RunDirectory(path, include='*', file_filter=locality.lc_any):
 
     files_map = RunFilesMap(path)
     t0 = time.monotonic()
-    d = DataCollection.from_paths(files, files_map)
+    d = DataCollection.from_paths(
+        files, files_map, inc_suspect_trains=inc_suspect_trains
+    )
     log.debug("Opened run with %d files in %.2g s",
               len(d.files), time.monotonic() - t0)
     files_map.save(d.files)

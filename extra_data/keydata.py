@@ -11,7 +11,10 @@ class KeyData:
 
     Don't create this directly; get it from ``run[source, key]``.
     """
-    def __init__(self, source, key, *, train_ids, files, section, dtype, eshape):
+    def __init__(
+            self, source, key, *, train_ids, files, section, dtype, eshape,
+            inc_suspect_trains=False,
+    ):
         self.source = source
         self.key = key
         self.train_ids = train_ids
@@ -20,6 +23,7 @@ class KeyData:
         self.dtype = dtype
         self.entry_shape = eshape
         self.ndim = len(eshape) + 1
+        self.inc_suspect_trains = inc_suspect_trains
 
     def _find_chunks(self):
         """Find contiguous chunks of data for this key, in any order."""
@@ -27,7 +31,9 @@ class KeyData:
             firsts, counts = file.get_index(self.source, self._key_group)
 
             # Of trains in this file, which are in selection
-            include = np.isin(file.train_ids, self.train_ids) & file.validity_flag
+            include = np.isin(file.train_ids, self.train_ids)
+            if not self.inc_suspect_trains:
+                include &= file.validity_flag
 
             # Assemble contiguous chunks of data from this file
             for _from, _to in contiguous_regions(include):
