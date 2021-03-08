@@ -30,6 +30,7 @@ file:
 
    This option can make ``lsxfel`` considerably slower.
 
+.. _cmd-validate:
 
 ``extra-data-validate``
 ------------------------
