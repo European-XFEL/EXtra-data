@@ -9,18 +9,18 @@ Architecture
 Objects
 -------
 
-The :class:`DataCollection` class is the central piece of EXtra-data. It
+The :class:`.DataCollection` class is the central piece of EXtra-data. It
 represents a collection of XFEL data sources and their keys, for a set of train
 IDs. It refers to data in one or more files (a run directory is often the
 starting point). A subset of its sources/keys or train IDs may be selected to
-make a new, more restricted :class:`DataCollection`.
+make a new, more restricted :class:`.DataCollection`.
 
-:class:`KeyData` represents data for a single source & key, selected from a
+:class:`.KeyData` represents data for a single source & key, selected from a
 ``DataCollection`` like ``run[source, key]``. This data may still be spread
 across several files. The data can be loaded into a NumPy array, among other
 types.
 
-:class:`FileAccess` manages access to a single EuXFEL format HDF5 file,
+:class:`.FileAccess` manages access to a single EuXFEL format HDF5 file,
 including caching index information. There should only be one ``FileAccess``
 object per file on disk, even if multiple ``DataCollection`` and ``KeyData``
 objects refer to it.
@@ -29,18 +29,18 @@ Modules
 -------
 
 - ``exceptions`` defines some custom error classes.
-- ``file_access`` contains :class:`FileAccess` (described above), along with
+- ``file_access`` contains :class:`.FileAccess` (described above), along with
   machinery to keep the number of open files under a limit.
 - ``locality`` can check whether files are available on disk or on tape,
   and is specific to EuXFEL & DESY infrastructure.
 - ``read_machinery`` is a collection of pieces that support ``reader``.
-- ``reader`` contains :class:`DataCollection` (described above), and functions
+- ``reader`` contains :class:`.DataCollection` (described above), and functions
   to open a run or a file.
 - ``run_files_map`` manages caching metadata about the files of a run in a
   JSON file, to speed up opening the run.
 - ``validation`` checks if files & runs have the expected format, for the
   :ref:`cmd-validate` command.
-- ``keydata`` contains :class:`KeyData` (described above).
+- ``keydata`` contains :class:`.KeyData` (described above).
 - ``components`` provides interfaces that bring together data from several
   similar sources, i.e. multi-module detectors where each module is a separate
   source.
