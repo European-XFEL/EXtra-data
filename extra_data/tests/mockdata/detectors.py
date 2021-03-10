@@ -161,3 +161,7 @@ class AGIPDModule(DetectorModule):
 class LPDModule(DetectorModule):
     image_dims = (1, 256, 256)
     detector_data_size = 416
+
+class DSSCModule(DetectorModule):
+    image_dims = (1, 128, 512)
+    detector_data_size = 416

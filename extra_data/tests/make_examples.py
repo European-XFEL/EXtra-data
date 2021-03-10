@@ -8,7 +8,7 @@ from .mockdata.adc import ADC
 from .mockdata.base import write_base_index
 from .mockdata.basler_camera import BaslerCamera as BaslerCam
 from .mockdata.dctrl import DCtrl
-from .mockdata.detectors import AGIPDModule, LPDModule
+from .mockdata.detectors import AGIPDModule, DSSCModule, LPDModule
 from .mockdata.gauge import Gauge
 from .mockdata.gec_camera import GECCamera
 from .mockdata.imgfel import IMGFELCamera, IMGFELMotor
@@ -310,6 +310,15 @@ def make_jungfrau_run(dir_path):
         JUNGFRAUMonitor('SPB_IRDA_JF4M/MDL/MONITOR'),
         JUNGFRAUPower('SPB_IRDA_JF4M/MDL/POWER'),
     ], ntrains=100, chunksize=1, format_version='1.0')
+
+def make_scs_run(dir_path):
+    # Multiple sequence files for detector modules
+    for modno in range(16):
+        mod = DSSCModule(f'SCS_DET_DSSC1M-1/DET/{modno}CH0', frames_per_train=64)
+        for seq in range(2):
+            path = osp.join(dir_path, f'RAW-R0163-DSSC{modno:0>2}-S{seq:0>5}.h5')
+            write_file(path, [mod], ntrains=64, firsttrain=(10000 + seq * 64),
+                       chunksize=32, format_version='1.0')
 
 if __name__ == '__main__':
     make_agipd_example_file('agipd_example.h5')

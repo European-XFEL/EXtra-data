@@ -7,7 +7,7 @@ from testpath import assert_isfile
 
 from extra_data.reader import RunDirectory, H5File, by_id, by_index
 from extra_data.components import (
-    AGIPD1M, LPD1M, JUNGFRAU, identify_multimod_detectors,
+    AGIPD1M, DSSC1M, LPD1M, JUNGFRAU, identify_multimod_detectors,
 )
 
 
@@ -142,6 +142,14 @@ def test_get_array_roi(mock_fxe_raw_run):
     arr = det.get_array('image.data', roi=np.s_[10:60, 100:200])
     assert arr.shape == (16, 3, 128, 50, 100)
     assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
+
+
+def test_get_array_roi_dssc(mock_scs_run):
+    run = RunDirectory(mock_scs_run)
+    det = DSSC1M(run, modules=[3])
+
+    arr = det.get_array('image.data', roi=np.s_[20:25, 40:52])
+    assert arr.shape == (1, 128, 64, 5, 12)
 
 
 def test_get_array_lpd_parallelgain(mock_lpd_parallelgain_run):
