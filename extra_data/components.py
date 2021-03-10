@@ -409,9 +409,11 @@ class XtdfDetectorBase(MultimodDetectorBase):
                 if dset.ndim >= 2 and dset.shape[1] == 1:
                     # Ensure ROI applies to pixel dimensions, not the extra
                     # dim in raw data (except AGIPD, where it is data/gain)
-                    roi = np.index_exp[:] + roi
+                    sel_args = (data_positions, np.s_[:]) + roi
+                else:
+                    sel_args = (data_positions,) + roi
 
-                data = f.file[data_path][(data_positions,) + roi]
+                data = f.file[data_path][sel_args]
 
                 arr = self._guess_axes(data, index, unstack_pulses)
 
