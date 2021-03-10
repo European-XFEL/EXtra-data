@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+1.4.1
+-----
+
+- Fix :meth:`~.LPD1M.get_array` for raw DSSC & LPD data with multiple sequence
+  files per module (:ghpull:`155`).
+- Drop unnecessary dependency on scipy (:ghpull:`147`).
+
 1.4
 ---
 
