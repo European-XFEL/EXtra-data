@@ -914,8 +914,12 @@ class DataCollection:
     def _find_data(self, source, train_id) -> (FileAccess, int):
         for f in self._source_index[source]:
             ixs = (f.train_ids == train_id).nonzero()[0]
-            if ixs.size > 0:
+            if self.inc_suspect_trains and ixs.size > 0:
                 return f, ixs[0]
+
+            for ix in ixs:
+                if f.validity_flag[ix]:
+                    return f, ix
 
         return None, None
 
@@ -1179,8 +1183,12 @@ class TrainIterator:
         file, ds = self._datasets_cache.get((source, key), (None, None))
         if ds:
             ixs = (file.train_ids == tid).nonzero()[0]
-            if ixs.size > 0:
+            if self.data.inc_suspect_trains and ixs.size > 0:
                 return file, ixs[0], ds
+
+            for ix in ixs:
+                if file.validity_flag[ix]:
+                    return file, ix, ds
 
         data = self.data
         section = 'CONTROL' if source in data.control_sources else 'INSTRUMENT'

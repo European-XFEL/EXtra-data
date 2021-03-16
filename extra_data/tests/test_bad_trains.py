@@ -19,7 +19,7 @@ def agipd_file_tid_very_high():
         make_examples.make_agipd_example_file(path, format_version='0.5')
         with h5py.File(path, 'r+') as f:
             # Initial train IDs are np.arange(10000, 10250)
-            f['INDEX/trainId'][10] = 11000
+            f['INDEX/trainId'][10] = 10400
         yield path
 
 @pytest.fixture(scope='module')
@@ -72,11 +72,11 @@ def test_validity_flag(agipd_file_flag0):
 def test_exc_trainid(agipd_file_tid_very_high, agipd_file_tid_high, agipd_file_tid_low, agipd_file_flag0):
     f = H5File(agipd_file_tid_very_high)
     assert len(f.train_ids) == 249
-    assert 11000 not in f.train_ids
+    assert 10400 not in f.train_ids
 
     f = H5File(agipd_file_tid_very_high, inc_suspect_trains=True)
     assert len(f.train_ids) == 250
-    assert 11000 in f.train_ids
+    assert 10400 in f.train_ids
 
     f = H5File(agipd_file_tid_high)
     assert len(f.train_ids) == 485
@@ -151,13 +151,13 @@ def test_iterate_keydata(agipd_file_tid_very_high):
     kd = f['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId']
     tids = [t for (t, _) in kd.trains()]
     assert len(tids) == 249
-    assert 11000 not in tids
+    assert 10400 not in tids
 
     f = H5File(agipd_file_tid_very_high, inc_suspect_trains=True)
     kd = f['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId']
     tids = [t for (t, _) in kd.trains()]
     assert len(tids) == 250
-    assert 11000 in tids
+    assert 10400 in tids
 
 def test_iterate_keydata_dup(agipd_file_tid_high):
     f = H5File(agipd_file_tid_high)
@@ -166,6 +166,12 @@ def test_iterate_keydata_dup(agipd_file_tid_high):
     assert len(tids) == 485
     assert 10100 in tids
     assert tids[9:11] == [10009, 10011]
+
+def test_iterate_datacollection(agipd_file_tid_low):
+    f = H5File(agipd_file_tid_low)
+    tids = [t for (t, _) in f.trains()]
+    assert len(tids) == 249
+    assert 9000 not in tids
 
 def test_get_train_keydata(agipd_file_tid_low):
     f = H5File(agipd_file_tid_low)
@@ -205,3 +211,37 @@ def test_write_virtual_cxi_dup(agipd_file_tid_high, tmp_path, caplog):
     agipd = AGIPD1M(f, modules=[0])
     with pytest.raises(AssertionError):
         agipd.write_virtual_cxi(str(tmp_path / 'inc_suspect.cxi'))
+
+def test_still_valid_elsewhere(agipd_file_tid_very_high, mock_sa3_control_data):
+    dc = H5File(agipd_file_tid_very_high).union(H5File(mock_sa3_control_data))
+    assert dc.train_ids == list(range(10000, 10500))
+
+    agipd_src = 'SPB_DET_AGIPD1M-1/DET/7CH0:xtdf'
+    tsens_src = 'SA3_XTD10_VAC/TSENS/S30250K'
+    sel = dc.select({
+        agipd_src: {'image.pulseId'},
+        tsens_src: {'value.value'}
+    })
+    assert sel.all_sources == {agipd_src, tsens_src}
+
+    _, t1 = sel.train_from_id(10200, flat_keys=True)
+    assert set(t1) >= {(agipd_src, 'image.pulseId'), (tsens_src, 'value.value')}
+
+    _, t2 = sel.train_from_id(10400, flat_keys=True)
+    assert (agipd_src, 'image.pulseId') not in t2
+    assert (tsens_src, 'value.value') in t2
+
+    tids_from_iter, data_from_iter = [], []
+    for tid, d in sel.trains(flat_keys=True):
+        if tid in (10200, 10400):
+            tids_from_iter.append(tid)
+            data_from_iter.append(d)
+
+    assert tids_from_iter == [10200, 10400]
+    assert [set(d) for d in data_from_iter] == [set(t1), set(t2)]
+
+    dc_inc = H5File(agipd_file_tid_very_high, inc_suspect_trains=True)\
+                .union(H5File(mock_sa3_control_data))
+    sel_inc = dc_inc.select(sel)
+    _, t2_inc = sel_inc.train_from_id(10400, flat_keys=True)
+    assert set(t2_inc) == set(t1)
