@@ -476,13 +476,59 @@ def test_select(mock_fxe_raw_run):
 
     assert 'SPB_XTD9_XGM/DOOCS/MAIN' in run.control_sources
 
+    # Basic selection machinery, glob API
     sel = run.select('*/DET/*', 'image.pulseId')
     assert 'SPB_XTD9_XGM/DOOCS/MAIN' not in sel.control_sources
     assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in sel.instrument_sources
     _, data = sel.train_from_id(10000)
     for source, source_data in data.items():
-        print(source)
         assert set(source_data.keys()) == {'image.pulseId', 'metadata'}
+
+    # Basic selection machinery, dict-based API
+    sel_by_dict = run.select({
+        'SA1_XTD2_XGM/DOOCS/MAIN': None,
+        'FXE_DET_LPD1M-1/DET/0CH0:xtdf': {'image.pulseId'}
+    })
+    assert sel_by_dict.control_sources == {'SA1_XTD2_XGM/DOOCS/MAIN'}
+    assert sel_by_dict.instrument_sources == {'FXE_DET_LPD1M-1/DET/0CH0:xtdf'}
+    assert sel_by_dict.keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf') == \
+        sel.keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf')
+
+    # Re-select using * selection, should yield the same keys.
+    assert sel.keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf') == \
+        sel.select('FXE_DET_LPD1M-1/DET/0CH0:xtdf', '*') \
+           .keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf')
+    assert sel.keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf') == \
+        sel.select({'FXE_DET_LPD1M-1/DET/0CH0:xtdf': {}}) \
+           .keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf')
+
+    # Re-select a different but originally valid key, should fail.
+    with pytest.raises(ValueError):
+        # ValueError due to globbing.
+        sel.select('FXE_DET_LPD1M-1/DET/0CH0:xtdf', 'image.trainId')
+
+    with pytest.raises(PropertyNameError):
+        # PropertyNameError via explicit key.
+        sel.select({'FXE_DET_LPD1M-1/DET/0CH0:xtdf': {'image.trainId'}})
+
+    # Select by another DataCollection.
+    sel_by_dc = run.select(sel)
+    assert sel_by_dc.control_sources == sel.control_sources
+    assert sel_by_dc.instrument_sources == sel.instrument_sources
+    assert sel_by_dc.train_ids == sel.train_ids
+
+
+@pytest.mark.parametrize('select_str',
+                         ['*/BEAMVIEW2:daqOutput', '*/BEAMVIEW2*', '*'])
+def test_select_require_all(mock_sa3_control_data, select_str):
+    # De-select two sources in this example set, which have no trains
+    # at all, to allow matching trains across all sources with the same
+    # result.
+    run = H5File(mock_sa3_control_data) \
+        .deselect([('SA3_XTD10_MCP/ADC/1:*', '*'),
+                   ('SA3_XTD10_IMGFEL/CAM/BEAMVIEW:*', '*')])
+    subrun = run.select(select_str, require_all=True)
+    np.testing.assert_array_equal(subrun.train_ids, run.train_ids[1::2])
 
 
 def test_deselect(mock_fxe_raw_run):
@@ -499,6 +545,10 @@ def test_deselect(mock_fxe_raw_run):
     assert xtd9_xgm in sel.control_sources
     assert 'beamPosition.ixPos.value' not in sel.selection[xtd9_xgm]
     assert 'beamPosition.iyPos.value' in sel.selection[xtd9_xgm]
+
+    sel = run.deselect(run.select('*_XGM/DOOCS*'))
+    assert xtd9_xgm not in sel.control_sources
+    assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in sel.instrument_sources
 
 
 def test_select_trains(mock_fxe_raw_run):

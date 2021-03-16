@@ -483,6 +483,14 @@ class DataCollection:
                     # Does pulse-oriented data always have an extra dimension?
                     assert data.shape[1] == 1
                     data = data[:, 0]
+
+                    warn(
+                        "Getting a series with pulseId labels is deprecated, "
+                        "as it only works in very specific cases. "
+                        "If you still need this, please contact "
+                        "da-support@xfel.eu to discuss it.",
+                        stacklevel=2
+                    )
                 data = data[: len(index)]
 
                 seq_series.append(pd.Series(data, name=name, index=index))
@@ -538,37 +546,9 @@ class DataCollection:
         return pd.concat(series, axis=1)
 
     def get_array(self, source, key, extra_dims=None, roi=(), name=None):
-        """Return a labelled array for a particular data field.
+        """Return a labelled array for a data field defined by source and key.
 
-        ::
-
-            arr = run.get_array("SA3_XTD10_PES/ADC/1:network", "digitizers.channel_4_A.raw.samples")
-
-        This should work for any data.
-        The first axis of the returned data will be labelled with the train IDs.
-
-        Parameters
-        ----------
-
-        source: str
-            Device name with optional output channel, e.g.
-            "SA1_XTD2_XGM/DOOCS/MAIN" or "SPB_DET_AGIPD1M-1/DET/7CH0:xtdf"
-        key: str
-            Key of parameter within that device, e.g. "beamPosition.iyPos.value"
-            or "header.linkId".
-        extra_dims: list of str
-            Name extra dimensions in the array. The first dimension is
-            automatically called 'train'. The default for extra dimensions
-            is dim_0, dim_1, ...
-        roi: slice, tuple of slices, or by_index
-            The region of interest. This expression selects data in all
-            dimensions apart from the first (trains) dimension. If the data
-            holds a 1D array for each entry, roi=np.s_[:8] would get the
-            first 8 values from every train. If the data is 2D or more at
-            each entry, selection looks like roi=np.s_[:8, 5:10] .
-        name: str
-            Name the array itself. The default is the source and key joined
-            by a dot.
+        see :meth:`.KeyData.xarray` for details.
         """
         if isinstance(roi, by_index):
             roi = roi.value
@@ -577,28 +557,9 @@ class DataCollection:
             extra_dims=extra_dims, roi=roi, name=name)
 
     def get_dask_array(self, source, key, labelled=False):
-        """Get a Dask array for the specified data field.
+        """Get a Dask array for a data field defined by source and key.
 
-        Dask is a system for lazy parallel computation. This method doesn't
-        actually load the data, but gives you an array-like object which you
-        can operate on. Dask loads the data and calculates results when you ask
-        it to, e.g. by calling a ``.compute()`` method.
-        See the Dask documentation for more details.
-
-        If your computation depends on reading lots of data, consider creating
-        a dask.distributed.Client before calling this.
-        If you don't do this, Dask uses threads by default, which is not
-        efficient for reading HDF5 files.
-
-        Parameters
-        ----------
-        source: str
-            Source name, e.g. "SPB_DET_AGIPD1M-1/DET/7CH0:xtdf"
-        key: str
-            Key of parameter within that device, e.g. "image.data".
-        labelled: bool
-            If True, label the train IDs for the data, returning an
-            xarray.DataArray object wrapping a Dask array.
+        see :meth:`.KeyData.dask_array` for details.
         """
         return self._get_key_data(source, key).dask_array(labelled=labelled)
 
@@ -631,12 +592,53 @@ class DataCollection:
         res = defaultdict(set)
         if isinstance(selection, dict):
             # {source: {key1, key2}}
-            # {source: {}} -> all keys for this source
-            for source, keys in selection.items():  #
+            # {source: {}} or {source: None} -> all keys for this source
+            for source, in_keys in selection.items():
                 if source not in self.all_sources:
                     raise SourceNameError(source)
 
-                res[source].update(keys or None)
+                # Keys of the current DataCollection.
+                cur_keys = self.selection[source]
+
+                # Keys input as the new selection.
+                if in_keys:
+                    # If a specific set of keys is selected, make sure
+                    # they are all valid.
+                    for key in in_keys:
+                        if not self._has_source_key(source, key):
+                            raise PropertyNameError(key, source)
+                else:
+                    # Catches both an empty set and None.
+                    # While the public API describes an empty set to
+                    # refer to all keys, the internal API actually uses
+                    # None for this case. This method is supposed to
+                    # accept both cases in order to natively support
+                    # passing a DataCollection as the selector. To keep
+                    # the conditions below clearer, any non-True value
+                    # is converted to None.
+                    in_keys = None
+
+                if cur_keys is None and in_keys is None:
+                    # Both the new and current keys select all.
+                    res[source] = None
+
+                elif cur_keys is not None and in_keys is not None:
+                    # Both the new and current keys are specific, take
+                    # the intersection of both. This should never be
+                    # able to result in an empty set, but to prevent the
+                    # code further below from breaking, assert it.
+                    res[source] = cur_keys & in_keys
+                    assert res[source]
+
+                elif cur_keys is None and in_keys is not None:
+                    # Current keys are unspecific but new ones are, just
+                    # use the new keys.
+                    res[source] = in_keys
+
+                elif cur_keys is not None and in_keys is None:
+                    # The current keys are specific but new ones are
+                    # not, use the current keys.
+                    res[source] = cur_keys
 
         elif isinstance(selection, Iterable):
             # selection = [('src_glob', 'key_glob'), ...]
@@ -644,6 +646,10 @@ class DataCollection:
                 self._select_glob(src_glob, key_glob)
                 for (src_glob, key_glob) in selection
             )
+        elif isinstance(selection, DataCollection):
+            return self._expand_selection(selection.selection)
+        elif isinstance(selection, KeyData):
+            res[selection.source] = {selection.key}
         else:
             raise TypeError("Unknown selection type: {}".format(type(selection)))
 
@@ -666,7 +672,14 @@ class DataCollection:
                 continue
 
             if key_glob == '*':
-                matched[source] = None
+                # When the selection refers to all keys, make sure this
+                # is restricted to the current selection of keys for
+                # this source.
+
+                if self.selection[source] is None:
+                    matched[source] = None
+                else:
+                    matched[source] = self.selection[source]
             else:
                 r = ctrl_key_re if source in self.control_sources else key_re
                 keys = set(filter(r.match, self.keys_for_source(source)))
@@ -678,10 +691,10 @@ class DataCollection:
                              .format((source_glob, key_glob)))
         return matched
 
-    def select(self, seln_or_source_glob, key_glob='*'):
+    def select(self, seln_or_source_glob, key_glob='*', require_all=False):
         """Select a subset of sources and keys from this data.
 
-        There are three possible ways to select data:
+        There are four possible ways to select data:
 
         1. With two glob patterns (see below) for source and key names::
 
@@ -706,6 +719,15 @@ class DataCollection:
            It's a more precise but less convenient option for code that knows
            exactly what sources and keys it needs.
 
+        4. With an existing DataCollection or KeyData object::
+
+             # Select the same data contained in another DataCollection
+             prev_run.select(sel)
+
+        The optional `require_all` argument restricts the trains to those for
+        which all selected sources and keys have at least one data entry. By
+        default, all trains remain selected.
+
         Returns a new :class:`DataCollection` object for the selected data.
 
         .. note::
@@ -728,6 +750,47 @@ class DataCollection:
 
         files = [f for f in self.files
                  if f.all_sources.intersection(selection.keys())]
+
+        if require_all:
+            # Select only those trains for which all selected sources
+            # and keys have data, i.e. have a count > 0 in their
+            # respective INDEX section.
+
+            train_ids = self.train_ids
+
+            for source, keys in selection.items():
+                if source in self.instrument_sources:
+                    # For INSTRUMENT sources, the INDEX is saved by
+                    # key group, which is the first hash component. In
+                    # many cases this is 'data', but not always.
+                    if keys is None:
+                        # All keys are selected.
+                        keys = self.keys_for_source(source)
+
+                    groups = {key.partition('.')[0] for key in keys}
+                else:
+                    # CONTROL data has no key group.
+                    groups = ['']
+
+                for group in groups:
+                    source_tids = []
+
+                    for f in self._source_index[source]:
+                        # Add the trains with data in each file.
+                        source_tids = np.union1d(
+                            f.train_ids[f.get_index(source, group)[1] > 0],
+                            source_tids)
+
+                    # Remove any trains previously selected, for which this
+                    # selected source and key group has no data.
+                    train_ids = np.intersect1d(train_ids, source_tids)
+
+            # Filtering may have eliminated previously selected files.
+            files = [f for f in files
+                     if np.intersect1d(f.train_ids, train_ids).size > 0]
+
+        else:
+            train_ids = self.train_ids
 
         return DataCollection(
             files, selection=selection, train_ids=self.train_ids,
@@ -762,6 +825,10 @@ class DataCollection:
                 keys = self.keys_for_source(source)
 
             selection[source] = keys - desel_keys
+
+            if not selection[source]:
+                # Drop the source if all keys were deselected
+                del selection[source]
 
         files = [f for f in self.files
                  if f.all_sources.intersection(selection.keys())]

@@ -1,6 +1,66 @@
 Release Notes
 =============
 
+1.4.1
+-----
+
+- Fix :meth:`~.LPD1M.get_array` for raw DSSC & LPD data with multiple sequence
+  files per module (:ghpull:`155`).
+- Drop unnecessary dependency on scipy (:ghpull:`147`).
+
+1.4
+---
+
+New features:
+
+- :meth:`.select` has a new option ``require_all=True`` to include only trains
+  where all the selected sources & keys have data (:ghpull:`113`).
+- :meth:`.select` now accepts :class:`DataCollection` and :class:`KeyData`
+  objects, making it easy to re-select the same sources in another run
+  (:ghpull:`114`).
+- New classes for accessing data from :class:`.AGIPD500K` and :class:`.JUNGFRAU`
+  multi-module detectors (:ghpull:`139`, :ghpull:`140`).
+- New options for :func:`.stack_detector_data` to allow it to work with
+  different data formats, including JUNGFRAU detectors (:ghpull:`141`).
+- New option for :class:`.LPD1M` to read data taken in 'parallel gain' mode,
+  giving it useful axis labels (:ghpull:`122`).
+- :meth:`~.LPD1M.get_array` for multi-module detectors has a new option to label
+  frames with memory cell IDs instead of pulse IDs (:ghpull:`101`).
+- :meth:`.DataCollection.trains` can now optionally yield flat, single level
+  dictionaries with ``(source, key)`` keys instead of nested dictionaries
+  (:ghpull:`112`).
+- New method :meth:`.KeyData.data_counts` (:ghpull:`92`).
+- Labelled arrays from :meth:`.KeyData.xarray` and
+  :meth:`.DataCollection.get_array` now have a name made from the source & key
+  names, or as specified by the ``name=`` parameter (:ghpull:`87`).
+
+Deprecations & potentially breaking changes:
+
+- Earlier versions of EXtra-data unintentionally converted integer data from
+  multi-module detectors to floats (in :meth:`~.LPD1M.get_array` and
+  :meth:`~.LPD1M.get_dask_array`) with the special value NaN for missing data.
+  This version preserves the data type, but missing integer data will be filled
+  with 0. If this is not suitable, you can use the ``min_modules`` parameter
+  to get only trains where all modules have data, or pass
+  ``astype=np.float64, fill_value=np.nan`` to convert data to floats and fill
+  gaps with NaN as before.
+- Special handling in :meth:`~.get_series` to label some fast detector data with
+  pulse IDs was deprecated (:ghpull:`131`). We believe no-one is using this.
+  If you are, please contact da-support@xfel.eu to discuss alternatives.
+
+Fixes and improvements
+
+- Prevent :meth:`~.select` from rediscovering things that had previously been
+  excluded from the selection (:ghpull:`128`).
+- Fix default fill value for uint64 data in :func:`stack_detector_data`
+  (:ghpull:`103`).
+- Don't convert integer data to floats in :meth:`~.LPD1M.get_array` and
+  :meth:`~.LPD1M.get_dask_array` methods for multi-module detector data
+  (:ghpull:`98`).
+- Documented the :class:`.KeyData` interface added in 1.3 (:ghpull:`96`)
+- Fix ``extra-data-validate`` when a file cannot be opened (:ghpull:`93`).
+- Fix name of ``extra-data-validate`` in its own help info (:ghpull:`90`).
+
 1.3
 ---
 
