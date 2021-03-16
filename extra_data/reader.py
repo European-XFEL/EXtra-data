@@ -326,7 +326,7 @@ class DataCollection:
         return iter(TrainIterator(dc, require_all=require_all,
                                   flat_keys=flat_keys))
 
-    def train_from_id(self, train_id, devices=None):
+    def train_from_id(self, train_id, devices=None, *, flat_keys=False):
         """Get train data for specified train ID.
 
         Parameters
@@ -337,6 +337,9 @@ class DataCollection:
         devices: dict or list, optional
             Filter data by sources and keys.
             Refer to :meth:`select` for how to use this.
+        flat_keys: bool
+            False (default) returns a nested dict indexed by source and then key.
+            True returns a flat dictionary indexed by (source, key) tuples.
 
         Returns
         -------
@@ -391,9 +394,14 @@ class DataCollection:
                 else:
                     source_data[key] = file.file[path][first : first + count]
 
+        if flat_keys:
+            # {src: {key: data}} -> {(src, key): data}
+            res = {(src, key): v for src, source_data in res.items()
+                   for (key, v) in source_data.items()}
+
         return train_id, res
 
-    def train_from_index(self, train_index, devices=None):
+    def train_from_index(self, train_index, devices=None, *, flat_keys=False):
         """Get train data of the nth train in this data.
 
         Parameters
@@ -403,6 +411,9 @@ class DataCollection:
         devices: dict or list, optional
             Filter data by sources and keys.
             Refer to :meth:`select` for how to use this.
+        flat_keys: bool
+            False (default) returns a nested dict indexed by source and then key.
+            True returns a flat dictionary indexed by (source, key) tuples.
 
         Returns
         -------
@@ -413,7 +424,7 @@ class DataCollection:
             The data for this train, keyed by device name
         """
         train_id = self.train_ids[train_index]
-        return self.train_from_id(int(train_id), devices=devices)
+        return self.train_from_id(int(train_id), devices=devices, flat_keys=flat_keys)
 
     def get_data_counts(self, source, key):
         """Get a count of data points in each train for the given data field.
