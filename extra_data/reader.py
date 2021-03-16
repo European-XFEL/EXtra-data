@@ -1236,10 +1236,9 @@ def H5File(path, *, inc_suspect_trains=False):
         Path to the HDF5 file
     inc_suspect_trains: bool
         If False (default), suspect train IDs within a file are skipped.
-        In newer files (format >= 1.0), trains where INDEX/flag are 0 are
-        suspect. For older files which don't have this flag, it will try to
-        eliminate out of sequence train IDs so that the remaining IDs are
-        strictly increasing. If True, it tries to include these trains.
+        In newer files, trains where INDEX/flag are 0 are suspect. For older
+        files which don't have this flag, out-of-sequence train IDs are suspect.
+        If True, it tries to include these trains.
     """
     return DataCollection.from_path(path, inc_suspect_trains=inc_suspect_trains)
 
@@ -1269,10 +1268,9 @@ def RunDirectory(
         Meant to be used with functions in the extra_data.locality module.
     inc_suspect_trains: bool
         If False (default), suspect train IDs within a file are skipped.
-        In newer files (format >= 1.0), trains where INDEX/flag are 0 are
-        suspect. For older files which don't have this flag, it will try to
-        eliminate out of sequence train IDs so that the remaining IDs are
-        strictly increasing. If True, it tries to include these trains.
+        In newer files, trains where INDEX/flag are 0 are suspect. For older
+        files which don't have this flag, out-of-sequence train IDs are suspect.
+        If True, it tries to include these trains.
     """
     files = [f for f in os.listdir(path) if f.endswith('.h5')]
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
@@ -1296,7 +1294,10 @@ def RunDirectory(
 RunHandler = RunDirectory
 
 
-def open_run(proposal, run, data='raw', include='*', file_filter=locality.lc_any):
+def open_run(
+        proposal, run, data='raw', include='*', file_filter=locality.lc_any, *,
+        inc_suspect_trains=False
+):
     """Access EuXFEL data on the Maxwell cluster by proposal and run number.
 
     ::
@@ -1320,6 +1321,11 @@ def open_run(proposal, run, data='raw', include='*', file_filter=locality.lc_any
     file_filter: callable
         Function to subset the list of filenames to open.
         Meant to be used with functions in the extra_data.locality module.
+    inc_suspect_trains: bool
+        If False (default), suspect train IDs within a file are skipped.
+        In newer files, trains where INDEX/flag are 0 are suspect. For older
+        files which don't have this flag, out-of-sequence train IDs are suspect.
+        If True, it tries to include these trains.
     """
     if isinstance(proposal, str):
         if ('/' not in proposal) and not proposal.startswith('p'):
@@ -1338,5 +1344,6 @@ def open_run(proposal, run, data='raw', include='*', file_filter=locality.lc_any
     run = 'r' + str(run).zfill(4)
 
     return RunDirectory(
-        osp.join(prop_dir, data, run), include=include, file_filter=file_filter
+        osp.join(prop_dir, data, run), include=include, file_filter=file_filter,
+        inc_suspect_trains=inc_suspect_trains,
     )
