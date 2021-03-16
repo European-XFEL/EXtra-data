@@ -622,7 +622,10 @@ class DataCollection:
         selection = union_selections([self.selection] +
                                      [o.selection for o in others])
 
-        return DataCollection(files, selection=selection, train_ids=train_ids)
+        return DataCollection(
+            files, selection=selection, train_ids=train_ids,
+            inc_suspect_trains=self.inc_suspect_trains,
+        )
 
     def _expand_selection(self, selection):
         res = defaultdict(set)
@@ -726,7 +729,10 @@ class DataCollection:
         files = [f for f in self.files
                  if f.all_sources.intersection(selection.keys())]
 
-        return DataCollection(files, selection=selection, train_ids=self.train_ids)
+        return DataCollection(
+            files, selection=selection, train_ids=self.train_ids,
+            inc_suspect_trains=self.inc_suspect_trains,
+        )
 
     def deselect(self, seln_or_source_glob, key_glob='*'):
         """Select everything except the specified sources and keys.
@@ -760,7 +766,10 @@ class DataCollection:
         files = [f for f in self.files
                  if f.all_sources.intersection(selection.keys())]
 
-        return DataCollection(files, selection=selection, train_ids=self.train_ids)
+        return DataCollection(
+            files, selection=selection, train_ids=self.train_ids,
+            inc_suspect_trains=self.inc_suspect_trains,
+        )
 
     def select_trains(self, train_range):
         """Select a subset of trains from this data.
@@ -790,7 +799,10 @@ class DataCollection:
         files = [f for f in self.files
                  if np.intersect1d(f.train_ids, new_train_ids).size > 0]
 
-        return DataCollection(files, selection=self.selection, train_ids=new_train_ids)
+        return DataCollection(
+            files, selection=self.selection, train_ids=new_train_ids,
+            inc_suspect_trains=self.inc_suspect_trains,
+        )
 
     def _check_source_conflicts(self):
         """Check for data with the same source and train ID in different files.
