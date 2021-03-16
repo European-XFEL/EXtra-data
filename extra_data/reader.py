@@ -793,7 +793,7 @@ class DataCollection:
             train_ids = self.train_ids
 
         return DataCollection(
-            files, selection=selection, train_ids=self.train_ids,
+            files, selection=selection, train_ids=train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
         )
 
