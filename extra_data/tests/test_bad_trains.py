@@ -117,6 +117,15 @@ def test_keydata_interface(agipd_file_tid_very_high):
     assert len(kd.train_ids) == 250
     assert kd.shape == (250 * 64, 512, 128)
 
+def test_data_counts(agipd_file_flag0):
+    f = H5File(agipd_file_flag0)
+    kd = f['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.data']
+    assert 10030 not in kd.data_counts().index
+
+    f = H5File(agipd_file_flag0, inc_suspect_trains=True)
+    kd = f['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.data']
+    assert 10030 in kd.data_counts().index
+
 def test_array(agipd_file_tid_low):
     f = H5File(agipd_file_tid_low)
     arr = f['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId'].xarray()

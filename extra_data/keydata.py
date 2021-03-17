@@ -119,13 +119,16 @@ class KeyData:
                 counts = np.ones(len(f.train_ids), dtype=np.uint64)
             else:
                 _, counts = f.get_index(self.source, self._key_group)
-            seq_series.append(pd.Series(
-                counts[f.validity_flag], index=f.valid_train_ids
-            ))
+
+            if self.inc_suspect_trains:
+                s = pd.Series(counts, index=f.train_ids)
+            else:
+                s = pd.Series(counts[f.validity_flag], index=f.valid_train_ids)
+            seq_series.append(s)
 
         ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
         # Select out only the train IDs of interest
-        train_ids = ser.index.intersection(self.train_ids)
+        train_ids = ser.index.intersection(np.asarray(self.train_ids))
         return ser.loc[train_ids]
 
     # Getting data as different kinds of array: -------------------------------
