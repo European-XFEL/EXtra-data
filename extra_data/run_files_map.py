@@ -183,9 +183,9 @@ class RunFilesMap:
                     'train_ids': [int(t) for t in file_access.train_ids],
                     'control_sources': sorted(file_access.control_sources),
                     'instrument_sources': sorted(file_access.instrument_sources),
-                    'suspect_train_indices': list(
-                        (~file_access.validity_flag).nonzero()[0]
-                    ),
+                    'suspect_train_indices': [
+                        int(i) for i in (~file_access.validity_flag).nonzero()[0]
+                    ],
                 }
 
         if need_save:
