@@ -216,11 +216,6 @@ def test_write_virtual_cxi_dup(agipd_file_tid_high, tmp_path, caplog):
     with h5py.File(cxi_path, 'r') as f:
         assert f['entry_1/data_1/data'].shape == (485 * 64, 16, 2, 512, 128)
 
-    f = H5File(agipd_file_tid_high, inc_suspect_trains=True)
-    agipd = AGIPD1M(f, modules=[0])
-    with pytest.raises(AssertionError):
-        agipd.write_virtual_cxi(str(tmp_path / 'inc_suspect.cxi'))
-
 def test_still_valid_elsewhere(agipd_file_tid_very_high, mock_sa3_control_data):
     dc = H5File(agipd_file_tid_very_high).union(H5File(mock_sa3_control_data))
     assert dc.train_ids == list(range(10000, 10500))
