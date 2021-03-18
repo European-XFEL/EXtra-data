@@ -130,13 +130,25 @@ class RunFilesMap:
         dirname, fname = osp.split(osp.abspath(path))
         if self.is_my_directory(dirname) and (fname in self.files_data):
             d = self.files_data[fname]
-            return {
+            res = {
                 'train_ids': np.array(d['train_ids'], dtype=np.uint64),
                 'control_sources': frozenset(d['control_sources']),
                 'instrument_sources': frozenset(d['instrument_sources'])
             }
+            # Older cache files don't contain info on 'suspect' trains.
+            if 'suspect_train_indices' in d:
+                res['flag'] = flag = np.ones_like(d['train_ids'], dtype=np.bool_)
+                flag[d['suspect_train_indices']] = 0
+            return res
 
         return None
+
+    def _cache_valid(self, fname):
+        # The cache is invalid (needs to be written out) if the file is not in
+        # files_data (which it won't be if the size or mtime don't match - see
+        # load()), or if suspect_train_indices is missing. This was added after
+        # we started making cache files, so we want to add it to existing caches.
+        return 'suspect_train_indices' in self.files_data.get(fname, {})
 
     def save(self, files):
         """Save the cache if needed
@@ -149,7 +161,7 @@ class RunFilesMap:
 
         for file_access in files:
             dirname, fname = osp.split(osp.abspath(file_access.filename))
-            if self.is_my_directory(dirname) and (fname not in self.files_data):
+            if self.is_my_directory(dirname) and not self._cache_valid(fname):
                 log.debug("Will save cached data for %s", fname)
                 need_save = True
 
@@ -171,6 +183,9 @@ class RunFilesMap:
                     'train_ids': [int(t) for t in file_access.train_ids],
                     'control_sources': sorted(file_access.control_sources),
                     'instrument_sources': sorted(file_access.instrument_sources),
+                    'suspect_train_indices': list(
+                        (~file_access.validity_flag).nonzero()[0]
+                    ),
                 }
 
         if need_save:
