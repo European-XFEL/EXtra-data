@@ -131,9 +131,6 @@ class FileAccess:
 
             self.control_sources, self.instrument_sources = self._read_data_sources()
 
-            # Store the stat of the file as it was when we read the metadata.
-            # This is used by the run files map.
-            self.metadata_fstat = os.stat(self.file.id.get_vfd_handle())
             self.validity_flag = None
 
         if self.validity_flag is None:
@@ -141,6 +138,11 @@ class FileAccess:
                 self.validity_flag = self._guess_valid_trains()
             else:
                 self.validity_flag = self.file['INDEX/flag'][:len(self.train_ids)].astype(bool)
+
+        if self._file is not None:
+            # Store the stat of the file as it was when we read the metadata.
+            # This is used by the run files map.
+            self.metadata_fstat = os.stat(self.file.id.get_vfd_handle())
 
         # {(file, source, group): (firsts, counts)}
         self._index_cache = {}
