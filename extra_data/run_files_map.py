@@ -173,7 +173,7 @@ class RunFilesMap:
                     st = file_access.metadata_fstat
                 else:
                     log.warning("No fstat for %r, will stat name instead",
-                                fname, exc_info=True)
+                                fname)
                     st = os.stat(file_access.filename)
 
                 self.files_data[fname] = {
