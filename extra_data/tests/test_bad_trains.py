@@ -216,6 +216,21 @@ def test_write_virtual_cxi_dup(agipd_file_tid_high, tmp_path, caplog):
     with h5py.File(cxi_path, 'r') as f:
         assert f['entry_1/data_1/data'].shape == (485 * 64, 16, 2, 512, 128)
 
+def test_write_virtual(agipd_file_tid_low, agipd_file_tid_high, tmp_path):
+    f = H5File(agipd_file_tid_low)
+    f.write_virtual(tmp_path / 'low.h5')
+    with h5py.File(tmp_path / 'low.h5', 'r') as vf:
+        assert 9000 not in vf['INDEX/trainId'][:]
+        ds = vf['INSTRUMENT/SPB_DET_AGIPD1M-1/DET/7CH0:xtdf/image/pulseId']
+        assert ds.shape == (249 * 64, 1)
+
+    f = H5File(agipd_file_tid_high)
+    f.write_virtual(tmp_path / 'high.h5')
+    with h5py.File(tmp_path / 'high.h5', 'r') as vf:
+        ds = vf['INSTRUMENT/SPB_DET_AGIPD1M-1/DET/0CH0:xtdf/image/trainId']
+        assert ds.shape == (485 * 64, 1)
+        assert list(ds[(9*64):(11*64):64]) == [10009, 10011]
+
 def test_still_valid_elsewhere(agipd_file_tid_very_high, mock_sa3_control_data):
     dc = H5File(agipd_file_tid_very_high).union(H5File(mock_sa3_control_data))
     assert dc.train_ids == list(range(10000, 10500))
