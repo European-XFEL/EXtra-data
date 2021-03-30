@@ -376,9 +376,9 @@ access them by passing ``inc_suspect_trains=True`` when :ref:`opening a file
 or run <opening-files>`. Some features may not work correctly if you do this.
 
 In newer files (format version 1.0 or above), trains are considered suspect
-where their ``INDEX/flag`` entry is 0. This indicates that the DAQ did not
-receive the train ID from a time server. This appears to be a reliable indicator
-of erroneous train IDs.
+where their ``INDEX/flag`` entry is 0. This indicates that the DAQ received the train ID
+from a device before it received it from a time server. This appears to be a reliable
+indicator of erroneous train IDs.
 
 In older files without ``INDEX/flag``, EXtra-data tries to guess which trains
 are suspect. The good trains should make an increasing sequence, and it tries to
