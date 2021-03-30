@@ -759,7 +759,8 @@ class DataCollection:
                     groups = ['']
 
                 for group in groups:
-                    source_tids = []
+                    # Empty list would be converted to np.float64 array.
+                    source_tids = np.empty(0, dtype=np.uint64)
 
                     for f in self._source_index[source]:
                         # Add the trains with data in each file.
@@ -774,6 +775,8 @@ class DataCollection:
             # Filtering may have eliminated previously selected files.
             files = [f for f in files
                      if np.intersect1d(f.train_ids, train_ids).size > 0]
+
+            train_ids = list(train_ids)  # Convert back to a list.
 
         else:
             train_ids = self.train_ids
