@@ -530,6 +530,11 @@ def test_select_require_all(mock_sa3_control_data, select_str):
     subrun = run.select(select_str, require_all=True)
     np.testing.assert_array_equal(subrun.train_ids, run.train_ids[1::2])
 
+    # The train IDs are held by ndarrays during this operation, make
+    # sure it's a list of np.uint64 again.
+    assert isinstance(subrun.train_ids, list)
+    assert all([isinstance(x, np.uint64) for x in subrun.train_ids])
+
 
 def test_deselect(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
