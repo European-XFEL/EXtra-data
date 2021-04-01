@@ -24,6 +24,9 @@ a run or a single file.
 
 .. autofunction:: H5File
 
+See :ref:`suspect-trains` for more details about the ``inc_suspect_trains``
+parameter.
+
 Data structure
 --------------
 
@@ -360,3 +363,25 @@ Use it only as a last resort.**
 If you find any files which are located only on tape or unavailable, please let know to
 `ITDM <mailto:it-support@xfel.eu>`_. If you need these files for analysis mentioned
 that explicitly.
+
+.. _suspect-trains:
+
+'Suspect' train IDs
+-------------------
+
+In some cases (especially with AGIPD data), some train IDs appear to be recorded
+incorrectly, breaking the normal assumption that train IDs are in increasing
+order. EXtra-data will exclude these trains by default, but you can try to
+access them by passing ``inc_suspect_trains=True`` when :ref:`opening a file
+or run <opening-files>`. Some features may not work correctly if you do this.
+
+In newer files (format version 1.0 or above), trains are considered suspect
+where their ``INDEX/flag`` entry is 0. This indicates that the DAQ received the train ID
+from a device before it received it from a time server. This appears to be a reliable
+indicator of erroneous train IDs.
+
+In older files without ``INDEX/flag``, EXtra-data tries to guess which trains
+are suspect. The good trains should make an increasing sequence, and it tries to
+exclude as few trains as possible to achieve this. If something goes wrong with
+this guessing, try using ``inc_suspect_trains=True`` to avoid it.
+Please let us know (da-support@xfel.eu) if you need to do this.

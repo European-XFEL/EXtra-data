@@ -11,7 +11,10 @@ class KeyData:
 
     Don't create this directly; get it from ``run[source, key]``.
     """
-    def __init__(self, source, key, *, train_ids, files, section, dtype, eshape):
+    def __init__(
+            self, source, key, *, train_ids, files, section, dtype, eshape,
+            inc_suspect_trains=False,
+    ):
         self.source = source
         self.key = key
         self.train_ids = train_ids
@@ -20,6 +23,7 @@ class KeyData:
         self.dtype = dtype
         self.entry_shape = eshape
         self.ndim = len(eshape) + 1
+        self.inc_suspect_trains = inc_suspect_trains
 
     def _find_chunks(self):
         """Find contiguous chunks of data for this key, in any order."""
@@ -27,10 +31,12 @@ class KeyData:
             firsts, counts = file.get_index(self.source, self._key_group)
 
             # Of trains in this file, which are in selection
-            selected = np.isin(file.train_ids, self.train_ids)
+            include = np.isin(file.train_ids, self.train_ids)
+            if not self.inc_suspect_trains:
+                include &= file.validity_flag
 
             # Assemble contiguous chunks of data from this file
-            for _from, _to in contiguous_regions(selected):
+            for _from, _to in contiguous_regions(include):
                 yield DataChunk(
                     file, self.hdf5_data_path,
                     first=firsts[_from],
@@ -113,11 +119,16 @@ class KeyData:
                 counts = np.ones(len(f.train_ids), dtype=np.uint64)
             else:
                 _, counts = f.get_index(self.source, self._key_group)
-            seq_series.append(pd.Series(counts, index=f.train_ids))
+
+            if self.inc_suspect_trains:
+                s = pd.Series(counts, index=f.train_ids)
+            else:
+                s = pd.Series(counts[f.validity_flag], index=f.valid_train_ids)
+            seq_series.append(s)
 
         ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
         # Select out only the train IDs of interest
-        train_ids = ser.index.intersection(self.train_ids)
+        train_ids = ser.index.intersection(np.asarray(self.train_ids))
         return ser.loc[train_ids]
 
     # Getting data as different kinds of array: -------------------------------

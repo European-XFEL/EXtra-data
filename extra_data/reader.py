@@ -73,9 +73,13 @@ class DataCollection:
     You normally get an instance of this class by calling :func:`H5File`
     for a single file or :func:`RunDirectory` for a directory.
     """
-    def __init__(self, files, selection=None, train_ids=None, ctx_closes=False):
+    def __init__(
+            self, files, selection=None, train_ids=None, ctx_closes=False, *,
+            inc_suspect_trains=False,
+    ):
         self.files = list(files)
         self.ctx_closes = ctx_closes
+        self.inc_suspect_trains = inc_suspect_trains
 
         # selection: {source: set(keys)}
         # None as value -> all keys for this source
@@ -102,7 +106,11 @@ class DataCollection:
         self.instrument_sources = frozenset(self.instrument_sources)
 
         if train_ids is None:
-            train_ids = sorted(set().union(*(f.train_ids for f in files)))
+            if inc_suspect_trains:
+                tid_sets = [f.train_ids for f in files]
+            else:
+                tid_sets = [f.valid_train_ids for f in files]
+            train_ids = sorted(set().union(*tid_sets))
         self.train_ids = train_ids
 
     @staticmethod
@@ -115,7 +123,7 @@ class DataCollection:
             return osp.basename(path), fa
 
     @classmethod
-    def from_paths(cls, paths, _files_map=None):
+    def from_paths(cls, paths, _files_map=None, *, inc_suspect_trains=False):
         files = []
         uncached = []
         for path in paths:
@@ -149,12 +157,14 @@ class DataCollection:
         if not files:
             raise Exception("All HDF5 files specified are unusable")
 
-        return cls(files, ctx_closes=True)
+        return cls(
+            files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains
+        )
 
     @classmethod
-    def from_path(cls, path):
+    def from_path(cls, path, *, inc_suspect_trains=False):
         files = [FileAccess(path)]
-        return cls(files, ctx_closes=True)
+        return cls(files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains)
 
     def __enter__(self):
         if not self.ctx_closes:
@@ -231,6 +241,7 @@ class DataCollection:
             section=section,
             dtype=ds0.dtype,
             eshape=ds0.shape[1:],
+            inc_suspect_trains=self.inc_suspect_trains,
         )
 
     def __getitem__(self, item):
@@ -315,7 +326,7 @@ class DataCollection:
         return iter(TrainIterator(dc, require_all=require_all,
                                   flat_keys=flat_keys))
 
-    def train_from_id(self, train_id, devices=None):
+    def train_from_id(self, train_id, devices=None, *, flat_keys=False):
         """Get train data for specified train ID.
 
         Parameters
@@ -326,6 +337,9 @@ class DataCollection:
         devices: dict or list, optional
             Filter data by sources and keys.
             Refer to :meth:`select` for how to use this.
+        flat_keys: bool
+            False (default) returns a nested dict indexed by source and then key.
+            True returns a flat dictionary indexed by (source, key) tuples.
 
         Returns
         -------
@@ -380,9 +394,14 @@ class DataCollection:
                 else:
                     source_data[key] = file.file[path][first : first + count]
 
+        if flat_keys:
+            # {src: {key: data}} -> {(src, key): data}
+            res = {(src, key): v for src, source_data in res.items()
+                   for (key, v) in source_data.items()}
+
         return train_id, res
 
-    def train_from_index(self, train_index, devices=None):
+    def train_from_index(self, train_index, devices=None, *, flat_keys=False):
         """Get train data of the nth train in this data.
 
         Parameters
@@ -392,6 +411,9 @@ class DataCollection:
         devices: dict or list, optional
             Filter data by sources and keys.
             Refer to :meth:`select` for how to use this.
+        flat_keys: bool
+            False (default) returns a nested dict indexed by source and then key.
+            True returns a flat dictionary indexed by (source, key) tuples.
 
         Returns
         -------
@@ -402,7 +424,7 @@ class DataCollection:
             The data for this train, keyed by device name
         """
         train_id = self.train_ids[train_index]
-        return self.train_from_id(int(train_id), devices=devices)
+        return self.train_from_id(int(train_id), devices=devices, flat_keys=flat_keys)
 
     def get_data_counts(self, source, key):
         """Get a count of data points in each train for the given data field.
@@ -572,7 +594,10 @@ class DataCollection:
         selection = union_selections([self.selection] +
                                      [o.selection for o in others])
 
-        return DataCollection(files, selection=selection, train_ids=train_ids)
+        return DataCollection(
+            files, selection=selection, train_ids=train_ids,
+            inc_suspect_trains=self.inc_suspect_trains,
+        )
 
     def _expand_selection(self, selection):
         res = defaultdict(set)
@@ -778,7 +803,10 @@ class DataCollection:
         else:
             train_ids = self.train_ids
 
-        return DataCollection(files, selection=selection, train_ids=train_ids)
+        return DataCollection(
+            files, selection=selection, train_ids=train_ids,
+            inc_suspect_trains=self.inc_suspect_trains,
+        )
 
     def deselect(self, seln_or_source_glob, key_glob='*'):
         """Select everything except the specified sources and keys.
@@ -816,7 +844,10 @@ class DataCollection:
         files = [f for f in self.files
                  if f.all_sources.intersection(selection.keys())]
 
-        return DataCollection(files, selection=selection, train_ids=self.train_ids)
+        return DataCollection(
+            files, selection=selection, train_ids=self.train_ids,
+            inc_suspect_trains=self.inc_suspect_trains,
+        )
 
     def select_trains(self, train_range):
         """Select a subset of trains from this data.
@@ -846,7 +877,10 @@ class DataCollection:
         files = [f for f in self.files
                  if np.intersect1d(f.train_ids, new_train_ids).size > 0]
 
-        return DataCollection(files, selection=self.selection, train_ids=new_train_ids)
+        return DataCollection(
+            files, selection=self.selection, train_ids=new_train_ids,
+            inc_suspect_trains=self.inc_suspect_trains,
+        )
 
     def _check_source_conflicts(self):
         """Check for data with the same source and train ID in different files.
@@ -880,8 +914,12 @@ class DataCollection:
     def _find_data(self, source, train_id) -> (FileAccess, int):
         for f in self._source_index[source]:
             ixs = (f.train_ids == train_id).nonzero()[0]
-            if ixs.size > 0:
+            if self.inc_suspect_trains and ixs.size > 0:
                 return f, ixs[0]
+
+            for ix in ixs:
+                if f.validity_flag[ix]:
+                    return f, ix
 
         return None, None
 
@@ -1145,8 +1183,12 @@ class TrainIterator:
         file, ds = self._datasets_cache.get((source, key), (None, None))
         if ds:
             ixs = (file.train_ids == tid).nonzero()[0]
-            if ixs.size > 0:
+            if self.data.inc_suspect_trains and ixs.size > 0:
                 return file, ixs[0], ds
+
+            for ix in ixs:
+                if file.validity_flag[ix]:
+                    return file, ix, ds
 
         data = self.data
         section = 'CONTROL' if source in data.control_sources else 'INSTRUMENT'
@@ -1198,7 +1240,7 @@ class TrainIterator:
             yield tid, self._assemble_data(tid)
 
 
-def H5File(path):
+def H5File(path, *, inc_suspect_trains=False):
     """Open a single HDF5 file generated at European XFEL.
 
     ::
@@ -1211,11 +1253,18 @@ def H5File(path):
     ----------
     path: str
         Path to the HDF5 file
+    inc_suspect_trains: bool
+        If False (default), suspect train IDs within a file are skipped.
+        In newer files, trains where INDEX/flag are 0 are suspect. For older
+        files which don't have this flag, out-of-sequence train IDs are suspect.
+        If True, it tries to include these trains.
     """
-    return DataCollection.from_path(path)
+    return DataCollection.from_path(path, inc_suspect_trains=inc_suspect_trains)
 
 
-def RunDirectory(path, include='*', file_filter=locality.lc_any):
+def RunDirectory(
+        path, include='*', file_filter=locality.lc_any, *, inc_suspect_trains=False
+):
     """Open data files from a 'run' at European XFEL.
 
     ::
@@ -1236,6 +1285,11 @@ def RunDirectory(path, include='*', file_filter=locality.lc_any):
     file_filter: callable
         Function to subset the list of filenames to open.
         Meant to be used with functions in the extra_data.locality module.
+    inc_suspect_trains: bool
+        If False (default), suspect train IDs within a file are skipped.
+        In newer files, trains where INDEX/flag are 0 are suspect. For older
+        files which don't have this flag, out-of-sequence train IDs are suspect.
+        If True, it tries to include these trains.
     """
     files = [f for f in os.listdir(path) if f.endswith('.h5')]
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
@@ -1245,7 +1299,9 @@ def RunDirectory(path, include='*', file_filter=locality.lc_any):
 
     files_map = RunFilesMap(path)
     t0 = time.monotonic()
-    d = DataCollection.from_paths(files, files_map)
+    d = DataCollection.from_paths(
+        files, files_map, inc_suspect_trains=inc_suspect_trains
+    )
     log.debug("Opened run with %d files in %.2g s",
               len(d.files), time.monotonic() - t0)
     files_map.save(d.files)
@@ -1257,7 +1313,10 @@ def RunDirectory(path, include='*', file_filter=locality.lc_any):
 RunHandler = RunDirectory
 
 
-def open_run(proposal, run, data='raw', include='*', file_filter=locality.lc_any):
+def open_run(
+        proposal, run, data='raw', include='*', file_filter=locality.lc_any, *,
+        inc_suspect_trains=False
+):
     """Access EuXFEL data on the Maxwell cluster by proposal and run number.
 
     ::
@@ -1281,6 +1340,11 @@ def open_run(proposal, run, data='raw', include='*', file_filter=locality.lc_any
     file_filter: callable
         Function to subset the list of filenames to open.
         Meant to be used with functions in the extra_data.locality module.
+    inc_suspect_trains: bool
+        If False (default), suspect train IDs within a file are skipped.
+        In newer files, trains where INDEX/flag are 0 are suspect. For older
+        files which don't have this flag, out-of-sequence train IDs are suspect.
+        If True, it tries to include these trains.
     """
     if isinstance(proposal, str):
         if ('/' not in proposal) and not proposal.startswith('p'):
@@ -1299,5 +1363,6 @@ def open_run(proposal, run, data='raw', include='*', file_filter=locality.lc_any
     run = 'r' + str(run).zfill(4)
 
     return RunDirectory(
-        osp.join(prop_dir, data, run), include=include, file_filter=file_filter
+        osp.join(prop_dir, data, run), include=include, file_filter=file_filter,
+        inc_suspect_trains=inc_suspect_trains,
     )

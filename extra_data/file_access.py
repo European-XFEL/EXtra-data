@@ -124,12 +124,22 @@ class FileAccess:
             self.train_ids = _cache_info['train_ids']
             self.control_sources = _cache_info['control_sources']
             self.instrument_sources = _cache_info['instrument_sources']
+            self.validity_flag = _cache_info.get('flag', None)
         else:
             tid_data = self.file['INDEX/trainId'][:]
             self.train_ids = tid_data[tid_data != 0]
 
             self.control_sources, self.instrument_sources = self._read_data_sources()
 
+            self.validity_flag = None
+
+        if self.validity_flag is None:
+            if self.format_version == '0.5':
+                self.validity_flag = self._guess_valid_trains()
+            else:
+                self.validity_flag = self.file['INDEX/flag'][:len(self.train_ids)].astype(bool)
+
+        if self._file is not None:
             # Store the stat of the file as it was when we read the metadata.
             # This is used by the run files map.
             self.metadata_fstat = os.stat(self.file.id.get_vfd_handle())
@@ -148,6 +158,10 @@ class FileAccess:
             self._file = h5py.File(self.filename, 'r')
 
         return self._file
+
+    @property
+    def valid_train_ids(self):
+        return self.train_ids[self.validity_flag]
 
     def close(self):
         """Close* the HDF5 file this refers to.
@@ -199,6 +213,29 @@ class FileAccess:
                 raise ValueError("Unknown data category %r" % category)
 
         return frozenset(control_sources), frozenset(instrument_sources)
+
+    def _guess_valid_trains(self):
+        # File format version 1.0 includes a flag which is 0 if a train ID
+        # didn't come from the time server. We use this to skip bad trains,
+        # especially for AGIPD.
+        # Older files don't have this flag, so this tries to estimate validity.
+        # The goal is to have a monotonic sequence within the file with the
+        # fewest trains skipped.
+        train_ids = self.train_ids
+        flag = np.ones_like(train_ids, dtype=bool)
+
+        for ix in np.nonzero(train_ids[1:] <= train_ids[:-1])[0]:
+            # train_ids[ix] >= train_ids[ix + 1]
+            invalid_before = train_ids[:ix+1] >= train_ids[ix+1]
+            invalid_after = train_ids[ix+1:] <= train_ids[ix]
+            # Which side of the downward jump in train IDs would need fewer
+            # train IDs invalidated?
+            if np.count_nonzero(invalid_before) < np.count_nonzero(invalid_after):
+                flag[:ix+1] &= ~invalid_before
+            else:
+                flag[ix+1:] &= ~invalid_after
+
+        return flag
 
     def __hash__(self):
         return hash(self.filename)
