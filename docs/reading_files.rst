@@ -67,6 +67,8 @@ to refer to all data associated with that 0.1 second window.
 
    .. automethod:: get_data_counts
 
+   .. automethod:: train_timestamps
+
    .. automethod:: info
 
 .. _data-by-source-and-key:
