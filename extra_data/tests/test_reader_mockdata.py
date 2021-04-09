@@ -613,7 +613,7 @@ def test_train_timestamps(mock_scs_run):
 def test_train_timestamps_nat(mock_fxe_control_data):
     f = H5File(mock_fxe_control_data)
     tss = f.train_timestamps()
-    assert f.train_timestamps().shape == (len(f.train_ids),)
+    assert tss.shape == (len(f.train_ids),)
     if f.files[0].format_version == '0.5':
         assert np.all(np.isnat(tss))
     else:
