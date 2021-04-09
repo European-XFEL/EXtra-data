@@ -705,3 +705,17 @@ def test_get_data_counts(mock_spb_raw_run):
     count = run.get_data_counts('SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value')
     assert count.index.tolist() == run.train_ids
     assert (count.values == 1).all()
+
+
+def test_get_run_value(mock_fxe_control_data):
+    f = H5File(mock_fxe_control_data)
+    src = 'FXE_XAD_GEC/CAM/CAMERA'
+    val = f.get_run_value(src, 'firmwareVersion')
+    assert isinstance(val, np.int32)
+    assert f.get_run_value(src, 'firmwareVersion.value') == val
+
+    with pytest.raises(SourceNameError):
+        f.get_run_value(src + '_NONEXIST', 'firmwareVersion')
+
+    with pytest.raises(PropertyNameError):
+        f.get_run_value(src, 'non.existant')
