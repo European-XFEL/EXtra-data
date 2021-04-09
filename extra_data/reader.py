@@ -574,6 +574,42 @@ class DataCollection:
         """
         return self._get_key_data(source, key).dask_array(labelled=labelled)
 
+    def get_run_value(self, source, key):
+        """Get a single value from the RUN section of data files.
+
+        RUN records each property of control devices as a snapshot at the
+        beginning of the run. This includes properties which are not saved
+        continuously in CONTROL data.
+
+        This method is intended for use with data from a single run. If you
+        combine data from multiple runs, it will return a single value from
+        an arbitrary one of those runs.
+
+        Parameters
+        ----------
+
+        source: str
+            Control device name, e.g. "HED_OPT_PAM/CAM/SAMPLE_CAM_4".
+        key: str
+            Key of parameter within that device, e.g. "triggerMode".
+        """
+        if source not in self.control_sources:
+            raise SourceNameError(source)
+
+        # Arbitrary file - should be the same across a run
+        fa = self._source_index[source][0]
+        ds = fa.file['RUN'][source].get(key.replace('.', '/'))
+        if isinstance(ds, h5py.Group):
+            # Allow for the .value suffix being omitted
+            ds = ds.get('value')
+        if not isinstance(ds, h5py.Dataset):
+            raise PropertyNameError(key, source)
+
+        val = ds[0]
+        if isinstance(val, bytes):  # bytes -> str
+            return val.decode('utf-8', 'surrogateescape')
+        return val
+
     def union(self, *others):
         """Join the data in this collection with one or more others.
 
