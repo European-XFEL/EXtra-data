@@ -70,7 +70,7 @@ class OpenFilesLimiter(object):
         will be closed.
         
         For use of the file cache, FileAccess should use `touch(filename)` every time 
-        it provides the underying instance of `h5py.File` for reading.
+        it provides the underlying instance of `h5py.File` for reading.
         """
         if filename in self._cache:
             self._cache.move_to_end(filename)
@@ -124,12 +124,22 @@ class FileAccess:
             self.train_ids = _cache_info['train_ids']
             self.control_sources = _cache_info['control_sources']
             self.instrument_sources = _cache_info['instrument_sources']
+            self.validity_flag = _cache_info.get('flag', None)
         else:
             tid_data = self.file['INDEX/trainId'][:]
             self.train_ids = tid_data[tid_data != 0]
 
             self.control_sources, self.instrument_sources = self._read_data_sources()
 
+            self.validity_flag = None
+
+        if self.validity_flag is None:
+            if self.format_version == '0.5':
+                self.validity_flag = self._guess_valid_trains()
+            else:
+                self.validity_flag = self.file['INDEX/flag'][:len(self.train_ids)].astype(bool)
+
+        if self._file is not None:
             # Store the stat of the file as it was when we read the metadata.
             # This is used by the run files map.
             self.metadata_fstat = os.stat(self.file.id.get_vfd_handle())
@@ -148,6 +158,10 @@ class FileAccess:
             self._file = h5py.File(self.filename, 'r')
 
         return self._file
+
+    @property
+    def valid_train_ids(self):
+        return self.train_ids[self.validity_flag]
 
     def close(self):
         """Close* the HDF5 file this refers to.
@@ -199,6 +213,29 @@ class FileAccess:
                 raise ValueError("Unknown data category %r" % category)
 
         return frozenset(control_sources), frozenset(instrument_sources)
+
+    def _guess_valid_trains(self):
+        # File format version 1.0 includes a flag which is 0 if a train ID
+        # didn't come from the time server. We use this to skip bad trains,
+        # especially for AGIPD.
+        # Older files don't have this flag, so this tries to estimate validity.
+        # The goal is to have a monotonic sequence within the file with the
+        # fewest trains skipped.
+        train_ids = self.train_ids
+        flag = np.ones_like(train_ids, dtype=bool)
+
+        for ix in np.nonzero(train_ids[1:] <= train_ids[:-1])[0]:
+            # train_ids[ix] >= train_ids[ix + 1]
+            invalid_before = train_ids[:ix+1] >= train_ids[ix+1]
+            invalid_after = train_ids[ix+1:] <= train_ids[ix]
+            # Which side of the downward jump in train IDs would need fewer
+            # train IDs invalidated?
+            if np.count_nonzero(invalid_before) < np.count_nonzero(invalid_after):
+                flag[:ix+1] &= ~invalid_before
+            else:
+                flag[ix+1:] &= ~invalid_after
+
+        return flag
 
     def __hash__(self):
         return hash(self.filename)
@@ -297,7 +334,36 @@ class FileAccess:
         else:
             raise SourceNameError(source)
 
-        if path in self.file:
+        if self.file.get(path, getclass=True) is h5py.Dataset:
             self._known_keys[source].add(key)
             return True
         return False
+
+    def dset_proxy(self, ds_path: str):
+        return DatasetProxy(self, ds_path)
+
+
+class DatasetProxy:
+    """A picklable reference to an HDF5 dataset, suitable for dask.array
+
+    Dask tries to do this automatically for h5py Dataset objects, but with
+    some limitations:
+
+    - It only works with Dask distributed, not Dask's local schedulers.
+    - Dask storing references to h5py Datasets keeps the files open, breaking
+      our attempts to manage the number of open files.
+    """
+    def __init__(self, file_acc: FileAccess, ds_path: str):
+        # We could just store the file name and use h5py on demand, but storing
+        # our FileAccess object lets it use our cache of open files.
+        self.file_acc = file_acc
+        self.ds_path = ds_path
+        ds = file_acc.file[ds_path]
+
+        # dask.array expects these three array-like attributes:
+        self.shape = ds.shape
+        self.ndim = ds.ndim
+        self.dtype = ds.dtype
+
+    def __getitem__(self, item):
+        return self.file_acc.file[self.ds_path][item]

@@ -42,6 +42,13 @@ def test_stack_detector_data_missing(mock_fxe_raw_run):
     assert (comb[:, :, 7] == 22).all()  # Key missing
     assert (comb[:, :, 5] == 22).all()  # Empty array
 
+    # default fillvalue for int is 0
+    comb = stack_detector_data(data, 'image.data')
+    assert (comb[:, :, 3] == 0).all()
+
+    with pytest.raises(ValueError):
+        comb = stack_detector_data(data, 'image.data', fillvalue=np.nan)
+
 
 def test_stack_detector_data_stackview(mock_fxe_raw_run):
     test_run = RunDirectory(mock_fxe_raw_run)
@@ -129,6 +136,17 @@ def test_stack_detector_data_extra_mods(mock_fxe_raw_run):
     with pytest.raises(IndexError) as excinfo:
         comb = stack_detector_data(data, 'image.data')
     assert "16" in str(excinfo.value)
+
+
+def test_stack_detector_data_jungfrau(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    _, data = run.select('*JF4M/DET/*', 'data.adc').train_from_index(0)
+
+    comb = stack_detector_data(
+        data, 'data.adc', modules=8, pattern=r'/DET/JNGFR(\d+)', starts_at=1
+    )
+    assert comb.shape == (16, 8, 512, 1024)
+
 
 def test_stackview_squeeze():
     # Squeeze not dropping stacking dim

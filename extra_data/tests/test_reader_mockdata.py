@@ -25,6 +25,13 @@ def test_iterate_trains(mock_agipd_data):
             assert 'image.data' in data['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf']
 
 
+def test_iterate_trains_flat_keys(mock_agipd_data):
+    with H5File(mock_agipd_data) as f:
+        for train_id, data in islice(f.trains(flat_keys=True), 10):
+            assert train_id in range(10000, 10250)
+            assert ('SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.data') in data
+
+
 def test_get_train_bad_device_name(mock_spb_control_data_badname):
     # Check that we can handle devices which don't have the standard Karabo
     # name structure A/B/C.
@@ -68,6 +75,8 @@ def test_iterate_trains_fxe(mock_fxe_control_data):
             assert train_id in range(10000, 10400)
             assert 'SA1_XTD2_XGM/DOOCS/MAIN' in data.keys()
             assert 'beamPosition.ixPos.value' in data['SA1_XTD2_XGM/DOOCS/MAIN']
+            assert 'data.image.pixels' in data['FXE_XAD_GEC/CAM/CAMERA:daqOutput']
+            assert 'data.image.pixels' not in data['FXE_XAD_GEC/CAM/CAMERA_NODATA:daqOutput']
 
 
 def test_iterate_file_select_trains(mock_fxe_control_data):
@@ -335,16 +344,22 @@ def test_file_get_array_control_roi(mock_sa3_control_data):
     assert arr.coords['trainId'][0] == 10000
 
 
-def test_run_get_array(mock_fxe_raw_run):
+@pytest.mark.parametrize('name_in, name_out', [
+    (None, 'SA1_XTD2_XGM/DOOCS/MAIN:output.data.intensityTD'),
+    ('SA1_XGM', 'SA1_XGM')
+], ids=['defaultName', 'explicitName'])
+def test_run_get_array(mock_fxe_raw_run, name_in, name_out):
     run = RunDirectory(mock_fxe_raw_run)
     arr = run.get_array(
-        'SA1_XTD2_XGM/DOOCS/MAIN:output', 'data.intensityTD', extra_dims=['pulse']
+        'SA1_XTD2_XGM/DOOCS/MAIN:output', 'data.intensityTD',
+        extra_dims=['pulse'], name=name_in
     )
 
     assert isinstance(arr, DataArray)
     assert arr.dims == ('trainId', 'pulse')
     assert arr.shape == (480, 1000)
     assert arr.coords['trainId'][0] == 10000
+    assert arr.name == name_out
 
 
 def test_run_get_array_empty(mock_fxe_raw_run):
@@ -392,9 +407,9 @@ def test_run_get_array_roi(mock_fxe_raw_run):
 
 def test_run_get_array_multiple_per_train(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
-    sel = run.select_trains(by_index[:2])
+    sel = run.select_trains(np.s_[:2])
     arr = sel.get_array(
-        'FXE_DET_LPD1M-1/DET/6CH0:xtdf', 'image.data', roi=by_index[:, 10:20, 20:40]
+        'FXE_DET_LPD1M-1/DET/6CH0:xtdf', 'image.data', roi=np.s_[:, 10:20, 20:40]
     )
     assert isinstance(arr, DataArray)
     assert arr.shape == (256, 1, 10, 20)
@@ -461,13 +476,64 @@ def test_select(mock_fxe_raw_run):
 
     assert 'SPB_XTD9_XGM/DOOCS/MAIN' in run.control_sources
 
+    # Basic selection machinery, glob API
     sel = run.select('*/DET/*', 'image.pulseId')
     assert 'SPB_XTD9_XGM/DOOCS/MAIN' not in sel.control_sources
     assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in sel.instrument_sources
     _, data = sel.train_from_id(10000)
     for source, source_data in data.items():
-        print(source)
         assert set(source_data.keys()) == {'image.pulseId', 'metadata'}
+
+    # Basic selection machinery, dict-based API
+    sel_by_dict = run.select({
+        'SA1_XTD2_XGM/DOOCS/MAIN': None,
+        'FXE_DET_LPD1M-1/DET/0CH0:xtdf': {'image.pulseId'}
+    })
+    assert sel_by_dict.control_sources == {'SA1_XTD2_XGM/DOOCS/MAIN'}
+    assert sel_by_dict.instrument_sources == {'FXE_DET_LPD1M-1/DET/0CH0:xtdf'}
+    assert sel_by_dict.keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf') == \
+        sel.keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf')
+
+    # Re-select using * selection, should yield the same keys.
+    assert sel.keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf') == \
+        sel.select('FXE_DET_LPD1M-1/DET/0CH0:xtdf', '*') \
+           .keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf')
+    assert sel.keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf') == \
+        sel.select({'FXE_DET_LPD1M-1/DET/0CH0:xtdf': {}}) \
+           .keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf')
+
+    # Re-select a different but originally valid key, should fail.
+    with pytest.raises(ValueError):
+        # ValueError due to globbing.
+        sel.select('FXE_DET_LPD1M-1/DET/0CH0:xtdf', 'image.trainId')
+
+    with pytest.raises(PropertyNameError):
+        # PropertyNameError via explicit key.
+        sel.select({'FXE_DET_LPD1M-1/DET/0CH0:xtdf': {'image.trainId'}})
+
+    # Select by another DataCollection.
+    sel_by_dc = run.select(sel)
+    assert sel_by_dc.control_sources == sel.control_sources
+    assert sel_by_dc.instrument_sources == sel.instrument_sources
+    assert sel_by_dc.train_ids == sel.train_ids
+
+
+@pytest.mark.parametrize('select_str',
+                         ['*/BEAMVIEW2:daqOutput', '*/BEAMVIEW2*', '*'])
+def test_select_require_all(mock_sa3_control_data, select_str):
+    # De-select two sources in this example set, which have no trains
+    # at all, to allow matching trains across all sources with the same
+    # result.
+    run = H5File(mock_sa3_control_data) \
+        .deselect([('SA3_XTD10_MCP/ADC/1:*', '*'),
+                   ('SA3_XTD10_IMGFEL/CAM/BEAMVIEW:*', '*')])
+    subrun = run.select(select_str, require_all=True)
+    np.testing.assert_array_equal(subrun.train_ids, run.train_ids[1::2])
+
+    # The train IDs are held by ndarrays during this operation, make
+    # sure it's a list of np.uint64 again.
+    assert isinstance(subrun.train_ids, list)
+    assert all([isinstance(x, np.uint64) for x in subrun.train_ids])
 
 
 def test_deselect(mock_fxe_raw_run):
@@ -484,6 +550,10 @@ def test_deselect(mock_fxe_raw_run):
     assert xtd9_xgm in sel.control_sources
     assert 'beamPosition.ixPos.value' not in sel.selection[xtd9_xgm]
     assert 'beamPosition.iyPos.value' in sel.selection[xtd9_xgm]
+
+    sel = run.deselect(run.select('*_XGM/DOOCS*'))
+    assert xtd9_xgm not in sel.control_sources
+    assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in sel.instrument_sources
 
 
 def test_select_trains(mock_fxe_raw_run):
@@ -614,6 +684,8 @@ def test_open_file(mock_sa3_control_data):
         assert 'METADATA/dataSources/dataSourceId' in file_access.file
 
 
+@pytest.mark.skipif(hasattr(os, 'geteuid') and os.geteuid() == 0,
+                    reason="cannot run permission tests as root")
 def test_permission():
     d = mkdtemp()
     os.chmod(d, not stat.S_IRUSR)
@@ -626,3 +698,10 @@ def test_permission():
 def test_empty_file_info(mock_empty_file, capsys):
     f = H5File(mock_empty_file)
     f.info()  # smoke test
+
+
+def test_get_data_counts(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    count = run.get_data_counts('SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value')
+    assert count.index.tolist() == run.train_ids
+    assert (count.values == 1).all()

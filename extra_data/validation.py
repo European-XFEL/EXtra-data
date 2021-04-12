@@ -169,12 +169,13 @@ def progress_bar(done, total, suffix=' '):
 
 def _check_file(args):
     runpath, filename = args
+    filepath = osp.join(runpath, filename)
     problems = []
     try:
-        fa = FileAccess(osp.join(runpath, filename))
+        fa = FileAccess(filepath)
     except Exception as e:
         problems.append(
-            dict(msg="Could not open file", file=path, error=e)
+            dict(msg="Could not open file", file=filepath, error=e)
         )
         return filename, None, problems
     else:
@@ -272,7 +273,7 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
 
-    ap = ArgumentParser(prog='karabo-data-validate')
+    ap = ArgumentParser(prog='extra-data-validate')
     ap.add_argument('path', help="HDF5 file or run directory of HDF5 files.")
     args = ap.parse_args(argv)
 

@@ -55,6 +55,14 @@ class _SliceConstructable(metaclass=_SliceConstructor):
         return repr(value)
 
 
+class by_id(_SliceConstructable):
+    pass
+
+
+class by_index(_SliceConstructable):
+    pass
+
+
 def _tid_to_slice_ix(tid, train_ids, stop=False):
     """Convert a train ID to an integer index for slicing the dataset
 
@@ -87,13 +95,41 @@ def _tid_to_slice_ix(tid, train_ids, stop=False):
         return (train_ids > tid).nonzero()[0][0]
 
 
+def select_train_ids(train_ids, sel):
+    if isinstance(sel, by_index):
+        sel = sel.value
+    elif isinstance(sel, int):
+        sel = slice(sel, sel+1, None)
+
+    if isinstance(sel, by_id) and isinstance(sel.value, slice):
+        # Slice by train IDs
+        start_ix = _tid_to_slice_ix(sel.value.start, train_ids, stop=False)
+        stop_ix = _tid_to_slice_ix(sel.value.stop, train_ids, stop=True)
+        return train_ids[start_ix: stop_ix: sel.value.step]
+    elif isinstance(sel, by_id) and isinstance(sel.value, (list, np.ndarray)):
+        # Select a list of trains by train ID
+        new_train_ids = sorted(set(train_ids).intersection(sel.value))
+        if not new_train_ids:
+            raise ValueError(
+                "Given train IDs not found among {} trains in "
+                "collection".format(len(train_ids))
+            )
+        return new_train_ids
+    elif isinstance(sel, slice):
+        # Slice by indexes in this collection
+        return train_ids[sel]
+    elif isinstance(sel, (list, np.ndarray)):
+        # Select a list of trains by index in this collection
+        return sorted(np.asarray(train_ids)[sel])
+    else:
+        raise TypeError(type(sel))
+
+
 class DataChunk:
     """Reference to a contiguous chunk of data for one or more trains."""
-
-    def __init__(self, file, source, key, first, train_ids, counts):
+    def __init__(self, file, dataset_path, first, train_ids, counts):
         self.file = file
-        self.source = source
-        self.key = key
+        self.dataset_path = dataset_path
         self.first = first
         self.train_ids = train_ids
         self.counts = counts
@@ -103,17 +139,12 @@ class DataChunk:
         return slice(self.first, self.first + np.sum(self.counts))
 
     @property
-    def dataset(self):
-        if self.source in self.file.instrument_sources:
-            group = 'INSTRUMENT'
-        elif self.source in self.file.control_sources:
-            group = 'CONTROL'
-        else:
-            raise SourceNameError(self.source)
+    def total_count(self):
+        return int(np.sum(self.counts, dtype=np.uint64))
 
-        return self.file.file[
-            '/{}/{}/{}'.format(group, self.source, self.key.replace('.', '/'))
-        ]
+    @property
+    def dataset(self):
+        return self.file.file[self.dataset_path]
 
 
 # contiguous_regions() by Joe Kington on Stackoverflow
@@ -124,7 +155,7 @@ def contiguous_regions(condition):
     a 2D array where the first column is the start index of the region and the
     second column is the end index."""
 
-    # Find the indicies of changes in "condition"
+    # Find the indices of changes in "condition"
     d = np.diff(condition)
     idx, = d.nonzero()
 

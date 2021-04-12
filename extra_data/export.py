@@ -15,10 +15,14 @@ import os.path as osp
 from warnings import warn
 
 from karabo_bridge import ServerInThread
+from karabo_bridge.server import Sender
 
+from .components import XtdfDetectorBase
+from .exceptions import SourceNameError
 from .reader import RunDirectory, H5File
 from .stacking import stack_detector_data
 from .utils import find_infiniband_ip
+
 
 __all__ = ['ZMQStreamer', 'serve_files']
 
@@ -35,9 +39,64 @@ class ZMQStreamer(ServerInThread):
                          dummy_timestamps=dummy_timestamps)
 
 
+def _iter_trains(data, merge_detector=False):
+    """Iterate over trains in data and merge detector tiles in a single source
+
+    :data: DataCollection
+    :merge_detector: bool
+        if True and data contains detector data (e.g. AGIPD) individual sources
+        for each detector tiles are merged in a single source. The new source
+        name keep the original prefix, but replace the last 2 part with
+        '/DET/APPEND'. Individual sources are removed from the train data
+
+    :yield: dict
+        train data
+    """
+    det, source_name = None, ''
+    if merge_detector:
+        for detector in XtdfDetectorBase.__subclasses__():
+            try:
+                det = detector(data)
+                source_name = f'{det.detector_name}/DET/APPEND'
+            except SourceNameError:
+                continue
+            else:
+                break
+
+    for tid, train_data in data.trains():
+        if not train_data:
+            continue
+
+        if det is not None:
+            det_data = {
+                k: v for k, v in train_data.items()
+                if k in det.data.detector_sources
+            }
+
+            # get one of the module to reference other datasets
+            train_data[source_name] = mod_data = next(iter(det_data.values()))
+
+            stacked = stack_detector_data(det_data, 'image.data')
+            mod_data['image.data'] = stacked
+            mod_data['metadata']['source'] = source_name
+
+            if 'image.gain' in mod_data:
+                stacked = stack_detector_data(det_data, 'image.gain')
+                mod_data['image.gain'] = stacked
+            if 'image.mask' in mod_data:
+                stacked = stack_detector_data(det_data, 'image.mask')
+                mod_data['image.mask'] = stacked
+
+            # remove individual module sources
+            for src in det.data.detector_sources:
+                del train_data[src]
+
+        yield tid, train_data
+
+
 def serve_files(path, port, source_glob='*', key_glob='*',
                 append_detector_modules=False, dummy_timestamps=False,
-                use_infiniband=False):
+                use_infiniband=False, sock='REP'):
     """Stream data from files through a TCP socket.
 
     Parameters
@@ -52,11 +111,18 @@ def serve_files(path, port, source_glob='*', key_glob='*',
     key_glob: str
         Only stream keys matching this glob pattern in the selected sources.
     append_detector_modules: bool
-        Whether to combine module sources by stacking.
+        Combine multi-module detector data in a single data source (sources for
+        individual modules are removed). The last section of the source name is
+        replaces with 'APPEND', example:
+            'SPB_DET_AGIPD1M-1/DET/#CH0:xtdf' -> 'SPB_DET_AGIPD1M-1/DET/APPEND'
+
+        Supported detectors: AGIPD, DSSC, LPD
     dummy_timestamps: bool
         Whether to add mock timestamps if the metadata lacks them.
     use_infiniband: bool
         Use infiniband interface if available
+    sock: str
+        socket type - supported: REP, PUB, PUSH (default REP).
     """
     if osp.isdir(path):
         data = RunDirectory(path)
@@ -66,33 +132,17 @@ def serve_files(path, port, source_glob='*', key_glob='*',
     data = data.select(source_glob, key_glob)
 
     endpoint = f'tcp://{find_infiniband_ip() if use_infiniband else "*"}:{port}'
-    streamer = ServerInThread(endpoint, dummy_timestamps=dummy_timestamps)
-    streamer.start()
-    print(f'Streamer started on: {streamer.endpoint}')
-    for tid, train_data in data.trains():
-        if train_data:
-            if append_detector_modules:
-                if source_glob == '*':
-                    warn("You are trying to stack detector-module sources"
-                         "with a global wildcard (\'*\'). If there are non-"
-                         "detector sources in your run, this will fail.")
-                stacked = stack_detector_data(train_data, 'image.data')
-                merged_data = {}
-                # the data key pretends this is online data from SPB
-                merged_data['SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED'] = {
-                    'image.data': stacked
-                }
-                # sec, frac = gen_time() # use time-stamps from file data?
-                metadata = {}
-                metadata['SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED'] = {
-                    'source': 'SPB_DET_AGIPD1M-1/CAL/APPEND_CORRECTED',
-                    'timestamp.tid': tid
-                }
-                streamer.feed(merged_data, metadata)
-            else:
-                streamer.feed(train_data)
+    sender = Sender(endpoint, sock=sock, dummy_timestamps=dummy_timestamps)
+    print(f'Streamer started on: {sender.endpoint}')
+    for tid, data in _iter_trains(data, merge_detector=append_detector_modules):
+        sender.send(data)
 
-    streamer.stop()
+    # The karabo-bridge code sets linger to 0 so that it doesn't get stuck if
+    # the client goes away. But this would also mean that we close the socket
+    # when the last messages have been queued but not sent. So if we've
+    # successfully queued all the messages, set linger -1 (i.e. infinite) to
+    # wait until ZMQ has finished transferring them before the socket is closed.
+    sender.server_socket.close(linger=-1)
 
 
 def main(argv=None):
@@ -121,11 +171,19 @@ def main(argv=None):
         "--use-infiniband", help="Use infiniband interface if available",
         action='store_true'
     )
+    ap.add_argument(
+        "-z", "--socket-type", help="ZeroMQ socket type",
+        choices=['PUB', 'PUSH', 'REP'], default='REP'
+    )
     args = ap.parse_args(argv)
 
-    serve_files(
-        args.path, args.port, source_glob=args.source, key_glob=args.key,
-        append_detector_modules=args.append_detector_modules,
-        dummy_timestamps=args.dummy_timestamps,
-        use_infiniband=args.use_infiniband
-    )
+    try:
+        serve_files(
+            args.path, args.port, source_glob=args.source, key_glob=args.key,
+            append_detector_modules=args.append_detector_modules,
+            dummy_timestamps=args.dummy_timestamps,
+            use_infiniband=args.use_infiniband, sock=args.socket_type
+        )
+    except KeyboardInterrupt:
+        pass
+    print('\nStopped.')

@@ -8,10 +8,13 @@ from .mockdata.adc import ADC
 from .mockdata.base import write_base_index
 from .mockdata.basler_camera import BaslerCamera as BaslerCam
 from .mockdata.dctrl import DCtrl
-from .mockdata.detectors import AGIPDModule, LPDModule
+from .mockdata.detectors import AGIPDModule, DSSCModule, LPDModule
 from .mockdata.gauge import Gauge
 from .mockdata.gec_camera import GECCamera
 from .mockdata.imgfel import IMGFELCamera, IMGFELMotor
+from .mockdata.jungfrau import (
+    JUNGFRAUModule, JUNGFRAUControl, JUNGFRAUMonitor, JUNGFRAUPower,
+)
 from .mockdata.motor import Motor
 from .mockdata.mpod import MPOD
 from .mockdata.tsens import TemperatureSensor
@@ -150,6 +153,7 @@ def make_fxe_da_file(path, format_version='0.5'):
         XGM('SA1_XTD2_XGM/DOOCS/MAIN'),
         XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
         GECCamera('FXE_XAD_GEC/CAM/CAMERA'),
+        GECCamera('FXE_XAD_GEC/CAM/CAMERA_NODATA', nsamples=0)
     ], ntrains=400, chunksize=200, format_version=format_version)
 
 def make_sa3_da_file(path, ntrains=500, format_version='0.5'):
@@ -229,6 +233,17 @@ def make_fxe_run(dir_path, raw=True, format_version='0.5'):
         GECCamera('FXE_XAD_GEC/CAM/CAMERA_NODATA', nsamples=0),
     ], ntrains=80, firsttrain=10400, chunksize=200, format_version=format_version)
 
+def make_lpd_parallelgain_run(dir_path, raw=True, format_version='0.5'):
+    prefix = 'RAW' if raw else 'CORR'
+    for modno in range(16):
+        path = osp.join(dir_path,
+                        '{}-R0450-LPD{:0>2}-S00000.h5'.format(prefix,
+                                                              modno))
+        write_file(path, [
+            LPDModule('FXE_DET_LPD1M-1/DET/{}CH0'.format(modno), raw=raw,
+                      frames_per_train=300)
+        ], ntrains=100, chunksize=32, format_version=format_version)
+
 def make_spb_run(dir_path, raw=True, sensor_size=(1024, 768), format_version='0.5'):
     prefix = 'RAW' if raw else 'CORR'
     for modno in range(16):
@@ -268,8 +283,7 @@ def make_reduced_spb_run(dir_path, raw=True, rng=None, format_version='0.5'):
             AGIPDModule('SPB_DET_AGIPD1M-1/DET/{}CH0'.format(modno), raw=raw,
                          frames_per_train=frame_counts)
             ], ntrains=64, chunksize=32, format_version=format_version)
-    if not raw:
-        return
+
     write_file(osp.join(dir_path, '{}-R0238-DA01-S00000.h5'.format(prefix)),
                [ XGM('SA1_XTD2_XGM/DOOCS/MAIN'),
                  XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
@@ -282,6 +296,29 @@ def make_reduced_spb_run(dir_path, raw=True, rng=None, format_version='0.5'):
                  BaslerCam('SPB_IRU_CAM/CAM/SIDEMIC', sensor_size=(1024, 768))
                ], ntrains=32, firsttrain=10032, chunksize=32,
                format_version=format_version)
+
+def make_jungfrau_run(dir_path):
+    # Naming based on /gpfs/exfel/exp/SPB/202022/p002732/raw/r0012
+    for modno in range(1, 9):
+        path = osp.join(dir_path, f'RAW-R0012-JNGFR{modno:02}-S00000.h5')
+        write_file(path, [
+            JUNGFRAUModule(f'SPB_IRDA_JF4M/DET/JNGFR{modno:02}')
+        ], ntrains=100, chunksize=1, format_version='1.0')
+
+    write_file(osp.join(dir_path, f'RAW-R0012-JNGFRCTRL00-S00000.h5'), [
+        JUNGFRAUControl('SPB_IRDA_JF4M/DET/CONTROL'),
+        JUNGFRAUMonitor('SPB_IRDA_JF4M/MDL/MONITOR'),
+        JUNGFRAUPower('SPB_IRDA_JF4M/MDL/POWER'),
+    ], ntrains=100, chunksize=1, format_version='1.0')
+
+def make_scs_run(dir_path):
+    # Multiple sequence files for detector modules
+    for modno in range(16):
+        mod = DSSCModule(f'SCS_DET_DSSC1M-1/DET/{modno}CH0', frames_per_train=64)
+        for seq in range(2):
+            path = osp.join(dir_path, f'RAW-R0163-DSSC{modno:0>2}-S{seq:0>5}.h5')
+            write_file(path, [mod], ntrains=64, firsttrain=(10000 + seq * 64),
+                       chunksize=32, format_version='1.0')
 
 if __name__ == '__main__':
     make_agipd_example_file('agipd_example.h5')

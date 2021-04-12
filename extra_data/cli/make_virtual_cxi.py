@@ -7,14 +7,14 @@ import sys
 from textwrap import dedent
 
 from extra_data import RunDirectory
-from extra_data.components import MPxDetectorBase
+from extra_data.components import XtdfDetectorBase
 from extra_data.exceptions import SourceNameError
 
 log = logging.getLogger(__name__)
 
 
 def _get_detector(data, min_modules):
-    for cls in MPxDetectorBase.__subclasses__():
+    for cls in XtdfDetectorBase.__subclasses__():
         try:
             return cls(data, min_modules=min_modules)
         except SourceNameError:
@@ -24,7 +24,14 @@ def _get_detector(data, min_modules):
 def _detectors():
     """returns a list of names for all detector components available
     """
-    return [d.__name__ for d in MPxDetectorBase.__subclasses__()]
+    return [d.__name__ for d in XtdfDetectorBase.__subclasses__()]
+
+
+def parse_number(number:str):
+    try:
+        return float(number)
+    except ValueError:
+        return int(number, 0)
 
 
 def main(argv=None):
@@ -60,7 +67,9 @@ def main(argv=None):
     )
     args = ap.parse_args(argv)
     out_file = args.output
-    fill_values = dict(args.fill_value) if args.fill_value else None
+    fill_values = None
+    if args.fill_value:
+        fill_values = {ds: parse_number(value) for ds, value in args.fill_value}
 
     logging.basicConfig(level=logging.INFO)
 

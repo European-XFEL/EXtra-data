@@ -28,20 +28,22 @@ import signal
 import sys
 import tempfile
 import time
+from typing import Tuple
 from warnings import warn
 
 from .exceptions import SourceNameError, PropertyNameError, TrainIDError
+from .keydata import KeyData
 from .read_machinery import (
     DETECTOR_SOURCE_RE,
-    DataChunk,
     FilenameInfo,
-    _SliceConstructable,
-    _tid_to_slice_ix,
+    by_id,
+    by_index,
+    select_train_ids,
     union_selections,
-    contiguous_regions,
     find_proposal,
 )
 from .run_files_map import RunFilesMap
+from . import locality
 from .file_access import FileAccess
 
 __all__ = [
@@ -63,14 +65,6 @@ INDEX_DATA = 'INDEX'
 METADATA = 'METADATA'
 
 
-class by_id(_SliceConstructable):
-    pass
-
-
-class by_index(_SliceConstructable):
-    pass
-
-
 class DataCollection:
     """An assemblage of data generated at European XFEL
 
@@ -80,9 +74,13 @@ class DataCollection:
     You normally get an instance of this class by calling :func:`H5File`
     for a single file or :func:`RunDirectory` for a directory.
     """
-    def __init__(self, files, selection=None, train_ids=None, ctx_closes=False):
+    def __init__(
+            self, files, selection=None, train_ids=None, ctx_closes=False, *,
+            inc_suspect_trains=False,
+    ):
         self.files = list(files)
         self.ctx_closes = ctx_closes
+        self.inc_suspect_trains = inc_suspect_trains
 
         # selection: {source: set(keys)}
         # None as value -> all keys for this source
@@ -109,7 +107,11 @@ class DataCollection:
         self.instrument_sources = frozenset(self.instrument_sources)
 
         if train_ids is None:
-            train_ids = sorted(set().union(*(f.train_ids for f in files)))
+            if inc_suspect_trains:
+                tid_sets = [f.train_ids for f in files]
+            else:
+                tid_sets = [f.valid_train_ids for f in files]
+            train_ids = sorted(set().union(*tid_sets))
         self.train_ids = train_ids
 
     @staticmethod
@@ -122,7 +124,7 @@ class DataCollection:
             return osp.basename(path), fa
 
     @classmethod
-    def from_paths(cls, paths, _files_map=None):
+    def from_paths(cls, paths, _files_map=None, *, inc_suspect_trains=False):
         files = []
         uncached = []
         for path in paths:
@@ -156,12 +158,14 @@ class DataCollection:
         if not files:
             raise Exception("All HDF5 files specified are unusable")
 
-        return cls(files, ctx_closes=True)
+        return cls(
+            files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains
+        )
 
     @classmethod
-    def from_path(cls, path):
+    def from_path(cls, path, *, inc_suspect_trains=False):
         files = [FileAccess(path)]
-        return cls(files, ctx_closes=True)
+        return cls(files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains)
 
     def __enter__(self):
         if not self.ctx_closes:
@@ -225,19 +229,35 @@ class DataCollection:
     # Leave old name in case anything external was using it:
     _keys_for_source = keys_for_source
 
+    def _get_key_data(self, source, key):
+        self._check_field(source, key)
+        section = 'INSTRUMENT' if source in self.instrument_sources else 'CONTROL'
+        files = self._source_index[source]
+        ds0 = files[0].file[f"{section}/{source}/{key.replace('.', '/')}"]
+        return KeyData(
+            source,
+            key,
+            train_ids=self.train_ids,
+            files=self._source_index[source],
+            section=section,
+            dtype=ds0.dtype,
+            eshape=ds0.shape[1:],
+            inc_suspect_trains=self.inc_suspect_trains,
+        )
+
+    def __getitem__(self, item):
+        if isinstance(item, tuple) and len(item) == 2:
+            return self._get_key_data(*item)
+
+        raise TypeError("Expected data[source, key]")
+
     def get_entry_shape(self, source, key):
         """Get the shape of a single data entry for the given source & key"""
-        self._check_field(source, key)
-
-        for chunk in self._find_data_chunks(source, key):
-            # First dimension is number of entries
-            return chunk.dataset.shape[1:]
+        return self._get_key_data(source, key).entry_shape
 
     def get_dtype(self, source, key):
         """Get the numpy data type for the given source & key"""
-        self._check_field(source, key)
-        for chunk in self._find_data_chunks(source, key):
-            return chunk.dataset.dtype
+        return self._get_key_data(source, key).dtype
 
     def _check_data_missing(self, tid) -> bool:
         """Return True if a train does not have data for all sources"""
@@ -259,7 +279,8 @@ class DataCollection:
 
         return False
 
-    def trains(self, devices=None, train_range=None, *, require_all=False):
+    def trains(self, devices=None, train_range=None, *, require_all=False,
+               flat_keys=False):
         """Iterate over all trains in the data and gather all sources.
 
         ::
@@ -285,6 +306,11 @@ class DataCollection:
             this only makes sense if you make a selection with *devices*
             or :meth:`select`.
 
+        flat_keys: bool
+            False (default) returns nested dictionaries in each
+            iteration indexed by source and then key. True returns a
+            flat dictionary indexed by (source, key) tuples.
+
         Yields
         ------
 
@@ -298,9 +324,10 @@ class DataCollection:
             dc = dc.select(devices)
         if train_range is not None:
             dc = dc.select_trains(train_range)
-        return iter(TrainIterator(dc, require_all=require_all))
+        return iter(TrainIterator(dc, require_all=require_all,
+                                  flat_keys=flat_keys))
 
-    def train_from_id(self, train_id, devices=None):
+    def train_from_id(self, train_id, devices=None, *, flat_keys=False):
         """Get train data for specified train ID.
 
         Parameters
@@ -311,6 +338,9 @@ class DataCollection:
         devices: dict or list, optional
             Filter data by sources and keys.
             Refer to :meth:`select` for how to use this.
+        flat_keys: bool
+            False (default) returns a nested dict indexed by source and then key.
+            True returns a flat dictionary indexed by (source, key) tuples.
 
         Returns
         -------
@@ -365,9 +395,14 @@ class DataCollection:
                 else:
                     source_data[key] = file.file[path][first : first + count]
 
+        if flat_keys:
+            # {src: {key: data}} -> {(src, key): data}
+            res = {(src, key): v for src, source_data in res.items()
+                   for (key, v) in source_data.items()}
+
         return train_id, res
 
-    def train_from_index(self, train_index, devices=None):
+    def train_from_index(self, train_index, devices=None, *, flat_keys=False):
         """Get train data of the nth train in this data.
 
         Parameters
@@ -377,6 +412,9 @@ class DataCollection:
         devices: dict or list, optional
             Filter data by sources and keys.
             Refer to :meth:`select` for how to use this.
+        flat_keys: bool
+            False (default) returns a nested dict indexed by source and then key.
+            True returns a flat dictionary indexed by (source, key) tuples.
 
         Returns
         -------
@@ -387,7 +425,7 @@ class DataCollection:
             The data for this train, keyed by device name
         """
         train_id = self.train_ids[train_index]
-        return self.train_from_id(int(train_id), devices=devices)
+        return self.train_from_id(int(train_id), devices=devices, flat_keys=flat_keys)
 
     def get_data_counts(self, source, key):
         """Get a count of data points in each train for the given data field.
@@ -401,23 +439,7 @@ class DataCollection:
         key: str
             Key of parameter within that device, e.g. "image.data".
         """
-        import pandas as pd
-
-        self._check_field(source, key)
-        seq_series = []
-
-        for f in self._source_index[source]:
-            if source in self.control_sources:
-                counts = np.ones(f.train_ids, dtype=np.uint64)
-            else:
-                group = key.partition('.')[0]
-                _, counts = f.get_index(source, group)
-            seq_series.append(pd.Series(counts, index=f.train_ids))
-
-        ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
-        # Select out only the train IDs of interest
-        train_ids = ser.index.intersection(self.train_ids)
-        return ser.loc[train_ids]
+        return self._get_key_data(source, key).data_counts()
 
     def get_series(self, source, key):
         """Return a pandas Series for a particular data field.
@@ -473,6 +495,14 @@ class DataCollection:
                     # Does pulse-oriented data always have an extra dimension?
                     assert data.shape[1] == 1
                     data = data[:, 0]
+
+                    warn(
+                        "Getting a series with pulseId labels is deprecated, "
+                        "as it only works in very specific cases. "
+                        "If you still need this, please contact "
+                        "da-support@xfel.eu to discuss it.",
+                        stacklevel=2
+                    )
                 data = data[: len(index)]
 
                 seq_series.append(pd.Series(data, name=name, index=index))
@@ -527,172 +557,23 @@ class DataCollection:
 
         return pd.concat(series, axis=1)
 
-    def get_array(self, source, key, extra_dims=None, roi=by_index[...]):
-        """Return a labelled array for a particular data field.
+    def get_array(self, source, key, extra_dims=None, roi=(), name=None):
+        """Return a labelled array for a data field defined by source and key.
 
-        ::
-
-            arr = run.get_array("SA3_XTD10_PES/ADC/1:network", "digitizers.channel_4_A.raw.samples")
-
-        This should work for any data.
-        The first axis of the returned data will be labelled with the train IDs.
-
-        Parameters
-        ----------
-
-        source: str
-            Device name with optional output channel, e.g.
-            "SA1_XTD2_XGM/DOOCS/MAIN" or "SPB_DET_AGIPD1M-1/DET/7CH0:xtdf"
-        key: str
-            Key of parameter within that device, e.g. "beamPosition.iyPos.value"
-            or "header.linkId".
-        extra_dims: list of str
-            Name extra dimensions in the array. The first dimension is
-            automatically called 'train'. The default for extra dimensions
-            is dim_0, dim_1, ...
-        roi: by_index
-            The region of interest. This expression selects data in all
-            dimensions apart from the first (trains) dimension. If the data
-            holds a 1D array for each entry, roi=by_index[:8] would get the
-            first 8 values from every train. If the data is 2D or more at
-            each entry, selection looks like roi=by_index[:8, 5:10] .
+        see :meth:`.KeyData.xarray` for details.
         """
-        import xarray
-
-        self._check_field(source, key)
-
-        if not isinstance(roi, by_index):
-            raise TypeError("roi parameter must be instance of by_index")
-        else:
+        if isinstance(roi, by_index):
             roi = roi.value
-            if not isinstance(roi, tuple):
-                roi = (roi,)
 
-        chunks = sorted(
-            self._find_data_chunks(source, key),
-            key=lambda x: x.train_ids[0] if x.train_ids.size else 0,
-        )
-
-        # Figure out the shape of the result array, and the slice for each chunk
-        dest_dim0 = 0
-        dest_slices = []
-        shapes = set()
-        dtypes = set()
-
-        for chunk in chunks:
-            n = int(np.sum(chunk.counts, dtype=np.uint64))
-            dest_slices.append(slice(dest_dim0, dest_dim0 + n))
-            dest_dim0 += n
-            shapes.add(chunk.dataset.shape[1:])
-            dtypes.add(chunk.dataset.dtype)
-
-        if len(shapes) > 1:
-            raise Exception("Mismatched data shapes: {}".format(shapes))
-
-        if len(dtypes) > 1:
-            raise Exception("Mismatched dtypes: {}".format(dtypes))
-
-        # Find the shape of the array with the ROI applied
-        roi_dummy = np.zeros((0,) + shapes.pop()) # extra 0 dim: use less memory
-        roi_shape = roi_dummy[np.index_exp[:] + roi].shape[1:]
-
-        chunks_trainids = []
-        res = np.empty((dest_dim0,) + roi_shape, dtype=dtypes.pop())
-
-        # Read the data from each chunk into the result array
-        for chunk, dest_slice in zip(chunks, dest_slices):
-            if dest_slice.start == dest_slice.stop:
-                continue
-
-            chunks_trainids.append(
-                self._expand_trainids(chunk.counts, chunk.train_ids)
-            )
-
-            slices = (chunk.slice,) + roi
-            chunk.dataset.read_direct(res[dest_slice], source_sel=slices)
-
-        # Dimension labels
-        if extra_dims is None:
-            extra_dims = ['dim_%d' % i for i in range(res.ndim - 1)]
-        dims = ['trainId'] + extra_dims
-
-        # Train ID index
-        coords = {}
-        if dest_dim0:
-            coords = {'trainId': np.concatenate(chunks_trainids)}
-
-        return xarray.DataArray(res, dims=dims, coords=coords)
+        return self._get_key_data(source, key).xarray(
+            extra_dims=extra_dims, roi=roi, name=name)
 
     def get_dask_array(self, source, key, labelled=False):
-        """Get a Dask array for the specified data field.
+        """Get a Dask array for a data field defined by source and key.
 
-        Dask is a system for lazy parallel computation. This method doesn't
-        actually load the data, but gives you an array-like object which you
-        can operate on. Dask loads the data and calculates results when you ask
-        it to, e.g. by calling a ``.compute()`` method.
-        See the Dask documentation for more details.
-
-        If your computation depends on reading lots of data, consider creating
-        a dask.distributed.Client before calling this.
-        If you don't do this, Dask uses threads by default, which is not
-        efficient for reading HDF5 files.
-
-        Parameters
-        ----------
-        source: str
-            Source name, e.g. "SPB_DET_AGIPD1M-1/DET/7CH0:xtdf"
-        key: str
-            Key of parameter within that device, e.g. "image.data".
-        labelled: bool
-            If True, label the train IDs for the data, returning an
-            xarray.DataArray object wrapping a Dask array.
+        see :meth:`.KeyData.dask_array` for details.
         """
-        import dask.array as da
-        chunks = sorted(
-            self._find_data_chunks(source, key),
-            key=lambda x: x.train_ids[0] if x.train_ids.size else 0,
-        )
-
-        chunks_darrs = []
-        chunks_trainids = []
-
-        for chunk in chunks:
-            chunk_dim0 = int(np.sum(chunk.counts))
-            chunk_shape = (chunk_dim0,) + chunk.dataset.shape[1:]
-            itemsize = chunk.dataset.dtype.itemsize
-
-            # Find chunk size of maximum 2 GB. This is largely arbitrary:
-            # we want chunks small enough that each worker can have at least
-            # a couple in memory (Maxwell nodes have 256-768 GB in late 2019).
-            # But bigger chunks means less overhead.
-            # Empirically, making chunks 4 times bigger/smaller didn't seem to
-            # affect speed dramatically - but this could depend on many factors.
-            # TODO: optional user control of chunking
-            limit = 2 * 1024 ** 3
-            while np.product(chunk_shape) * itemsize > limit and chunk_dim0 > 1:
-                chunk_dim0 //= 2
-                chunk_shape = (chunk_dim0,) + chunk.dataset.shape[1:]
-
-            chunks_darrs.append(
-                da.from_array(chunk.dataset, chunks=chunk_shape)[chunk.slice]
-            )
-            chunks_trainids.append(
-                self._expand_trainids(chunk.counts, chunk.train_ids)
-            )
-
-        dask_arr = da.concatenate(chunks_darrs, axis=0)
-
-        if labelled:
-            # Dimension labels
-            dims = ['trainId'] + ['dim_%d' % i for i in range(dask_arr.ndim - 1)]
-
-            # Train ID index
-            coords = {'trainId': np.concatenate(chunks_trainids)}
-
-            import xarray
-            return xarray.DataArray(dask_arr, dims=dims, coords=coords)
-        else:
-            return dask_arr
+        return self._get_key_data(source, key).dask_array(labelled=labelled)
 
     def union(self, *others):
         """Join the data in this collection with one or more others.
@@ -714,18 +595,62 @@ class DataCollection:
         selection = union_selections([self.selection] +
                                      [o.selection for o in others])
 
-        return DataCollection(files, selection=selection, train_ids=train_ids)
+        return DataCollection(
+            files, selection=selection, train_ids=train_ids,
+            inc_suspect_trains=self.inc_suspect_trains,
+        )
 
     def _expand_selection(self, selection):
         res = defaultdict(set)
         if isinstance(selection, dict):
             # {source: {key1, key2}}
-            # {source: {}} -> all keys for this source
-            for source, keys in selection.items():  #
+            # {source: {}} or {source: None} -> all keys for this source
+            for source, in_keys in selection.items():
                 if source not in self.all_sources:
                     raise SourceNameError(source)
 
-                res[source].update(keys or None)
+                # Keys of the current DataCollection.
+                cur_keys = self.selection[source]
+
+                # Keys input as the new selection.
+                if in_keys:
+                    # If a specific set of keys is selected, make sure
+                    # they are all valid.
+                    for key in in_keys:
+                        if not self._has_source_key(source, key):
+                            raise PropertyNameError(key, source)
+                else:
+                    # Catches both an empty set and None.
+                    # While the public API describes an empty set to
+                    # refer to all keys, the internal API actually uses
+                    # None for this case. This method is supposed to
+                    # accept both cases in order to natively support
+                    # passing a DataCollection as the selector. To keep
+                    # the conditions below clearer, any non-True value
+                    # is converted to None.
+                    in_keys = None
+
+                if cur_keys is None and in_keys is None:
+                    # Both the new and current keys select all.
+                    res[source] = None
+
+                elif cur_keys is not None and in_keys is not None:
+                    # Both the new and current keys are specific, take
+                    # the intersection of both. This should never be
+                    # able to result in an empty set, but to prevent the
+                    # code further below from breaking, assert it.
+                    res[source] = cur_keys & in_keys
+                    assert res[source]
+
+                elif cur_keys is None and in_keys is not None:
+                    # Current keys are unspecific but new ones are, just
+                    # use the new keys.
+                    res[source] = in_keys
+
+                elif cur_keys is not None and in_keys is None:
+                    # The current keys are specific but new ones are
+                    # not, use the current keys.
+                    res[source] = cur_keys
 
         elif isinstance(selection, Iterable):
             # selection = [('src_glob', 'key_glob'), ...]
@@ -733,6 +658,10 @@ class DataCollection:
                 self._select_glob(src_glob, key_glob)
                 for (src_glob, key_glob) in selection
             )
+        elif isinstance(selection, DataCollection):
+            return self._expand_selection(selection.selection)
+        elif isinstance(selection, KeyData):
+            res[selection.source] = {selection.key}
         else:
             raise TypeError("Unknown selection type: {}".format(type(selection)))
 
@@ -755,7 +684,14 @@ class DataCollection:
                 continue
 
             if key_glob == '*':
-                matched[source] = None
+                # When the selection refers to all keys, make sure this
+                # is restricted to the current selection of keys for
+                # this source.
+
+                if self.selection[source] is None:
+                    matched[source] = None
+                else:
+                    matched[source] = self.selection[source]
             else:
                 r = ctrl_key_re if source in self.control_sources else key_re
                 keys = set(filter(r.match, self.keys_for_source(source)))
@@ -767,10 +703,10 @@ class DataCollection:
                              .format((source_glob, key_glob)))
         return matched
 
-    def select(self, seln_or_source_glob, key_glob='*'):
+    def select(self, seln_or_source_glob, key_glob='*', require_all=False):
         """Select a subset of sources and keys from this data.
 
-        There are three possible ways to select data:
+        There are four possible ways to select data:
 
         1. With two glob patterns (see below) for source and key names::
 
@@ -795,6 +731,15 @@ class DataCollection:
            It's a more precise but less convenient option for code that knows
            exactly what sources and keys it needs.
 
+        4. With an existing DataCollection or KeyData object::
+
+             # Select the same data contained in another DataCollection
+             prev_run.select(sel)
+
+        The optional `require_all` argument restricts the trains to those for
+        which all selected sources and keys have at least one data entry. By
+        default, all trains remain selected.
+
         Returns a new :class:`DataCollection` object for the selected data.
 
         .. note::
@@ -818,7 +763,54 @@ class DataCollection:
         files = [f for f in self.files
                  if f.all_sources.intersection(selection.keys())]
 
-        return DataCollection(files, selection=selection, train_ids=self.train_ids)
+        if require_all:
+            # Select only those trains for which all selected sources
+            # and keys have data, i.e. have a count > 0 in their
+            # respective INDEX section.
+
+            train_ids = self.train_ids
+
+            for source, keys in selection.items():
+                if source in self.instrument_sources:
+                    # For INSTRUMENT sources, the INDEX is saved by
+                    # key group, which is the first hash component. In
+                    # many cases this is 'data', but not always.
+                    if keys is None:
+                        # All keys are selected.
+                        keys = self.keys_for_source(source)
+
+                    groups = {key.partition('.')[0] for key in keys}
+                else:
+                    # CONTROL data has no key group.
+                    groups = ['']
+
+                for group in groups:
+                    # Empty list would be converted to np.float64 array.
+                    source_tids = np.empty(0, dtype=np.uint64)
+
+                    for f in self._source_index[source]:
+                        # Add the trains with data in each file.
+                        source_tids = np.union1d(
+                            f.train_ids[f.get_index(source, group)[1] > 0],
+                            source_tids)
+
+                    # Remove any trains previously selected, for which this
+                    # selected source and key group has no data.
+                    train_ids = np.intersect1d(train_ids, source_tids)
+
+            # Filtering may have eliminated previously selected files.
+            files = [f for f in files
+                     if np.intersect1d(f.train_ids, train_ids).size > 0]
+
+            train_ids = list(train_ids)  # Convert back to a list.
+
+        else:
+            train_ids = self.train_ids
+
+        return DataCollection(
+            files, selection=selection, train_ids=train_ids,
+            inc_suspect_trains=self.inc_suspect_trains,
+        )
 
     def deselect(self, seln_or_source_glob, key_glob='*'):
         """Select everything except the specified sources and keys.
@@ -849,10 +841,17 @@ class DataCollection:
 
             selection[source] = keys - desel_keys
 
+            if not selection[source]:
+                # Drop the source if all keys were deselected
+                del selection[source]
+
         files = [f for f in self.files
                  if f.all_sources.intersection(selection.keys())]
 
-        return DataCollection(files, selection=selection, train_ids=self.train_ids)
+        return DataCollection(
+            files, selection=selection, train_ids=self.train_ids,
+            inc_suspect_trains=self.inc_suspect_trains,
+        )
 
     def select_trains(self, train_range):
         """Select a subset of trains from this data.
@@ -868,8 +867,7 @@ class DataCollection:
 
         Or select trains by index within this collection::
 
-            from extra_data import by_index
-            sel = run.select_trains(by_index[:5])
+            sel = run.select_trains(np.s_[:5])
 
         Returns a new :class:`DataCollection` object for the selected trains.
 
@@ -878,33 +876,15 @@ class DataCollection:
         ValueError
             If given train IDs do not overlap with the trains in this data.
         """
-        tr = train_range
-        if isinstance(tr, by_id) and isinstance(tr.value, slice):
-            # Slice by train IDs
-            start_ix = _tid_to_slice_ix(tr.value.start, self.train_ids, stop=False)
-            stop_ix = _tid_to_slice_ix(tr.value.stop, self.train_ids, stop=True)
-            new_train_ids = self.train_ids[start_ix : stop_ix : tr.value.step]
-        elif isinstance(tr, by_index) and isinstance(tr.value, slice):
-            # Slice by indexes in this collection
-            new_train_ids = self.train_ids[tr.value]
-        elif isinstance(tr, by_id) and isinstance(tr.value, (list, np.ndarray)):
-            # Select a list of trains by train ID
-            new_train_ids = sorted(set(self.train_ids).intersection(tr.value))
-            if not new_train_ids:
-                raise ValueError(
-                    "Given train IDs not found among {} trains in "
-                    "collection".format(len(self.train_ids))
-                )
-        elif isinstance(tr, by_index) and isinstance(tr.value, (list, np.ndarray)):
-            # Select a list of trains by index in this collection
-            new_train_ids = sorted([self.train_ids[i] for i in tr.value])
-        else:
-            raise TypeError(type(train_range))
+        new_train_ids = select_train_ids(self.train_ids, train_range)
 
         files = [f for f in self.files
                  if np.intersect1d(f.train_ids, new_train_ids).size > 0]
 
-        return DataCollection(files, selection=self.selection, train_ids=new_train_ids)
+        return DataCollection(
+            files, selection=self.selection, train_ids=new_train_ids,
+            inc_suspect_trains=self.inc_suspect_trains,
+        )
 
     def _check_source_conflicts(self):
         """Check for data with the same source and train ID in different files.
@@ -933,40 +913,17 @@ class DataCollection:
 
         Yields DataChunk objects.
         """
-        if source in self.instrument_sources:
-            key_group = key.partition('.')[0]
-        else:
-            key_group = ''
+        return self._get_key_data(source, key)._data_chunks
 
-        for file in self._source_index[source]:
-            file_has_data = False
-            firsts, counts = file.get_index(source, key_group)
-
-            # Of trains in this file, which are in selection
-            selected = np.isin(file.train_ids, self.train_ids)
-
-            # Assemble contiguous chunks of data from this file
-            for _from, _to in contiguous_regions(selected):
-                file_has_data = True
-                yield DataChunk(file, source, key,
-                                first=firsts[_from],
-                                train_ids=file.train_ids[_from:_to],
-                                counts=counts[_from:_to],
-                                )
-
-            if not file_has_data:
-                # Make an empty chunk to let e.g. get_array find the shape
-                yield DataChunk(file, source, key,
-                                first=np.uint64(0),
-                                train_ids=file.train_ids[:0],
-                                counts=counts[:0],
-                                )
-
-    def _find_data(self, source, train_id) -> (FileAccess, int):
+    def _find_data(self, source, train_id) -> Tuple[FileAccess, int]:
         for f in self._source_index[source]:
             ixs = (f.train_ids == train_id).nonzero()[0]
-            if ixs.size > 0:
+            if self.inc_suspect_trains and ixs.size > 0:
                 return f, ixs[0]
+
+            for ix in ixs:
+                if f.validity_flag[ix]:
+                    return f, ix
 
         return None, None
 
@@ -1041,7 +998,7 @@ class DataCollection:
                 else:
                     entry_info = ""
                 dt = self.get_dtype(s, k)
-                print(f"{prefix}{k}\t[{dt.name}{entry_info}]")
+                print(f"{prefix}{k}\t[{dt}{entry_info}]")
 
         non_detector_inst_srcs = self.instrument_sources - self.detector_sources
         print(len(non_detector_inst_srcs), 'instrument sources (excluding detectors):')
@@ -1190,10 +1147,7 @@ class DataCollection:
 
         vfw.write_train_ids()
 
-        if source in self.control_sources:
-            ds_path = vfw.add_control_dataset(source, key)
-        else:
-            ds_path = vfw.add_instrument_dataset(source, key)
+        ds_path = vfw.add_dataset(source, key)
 
         vfw.write_indexes()
         vfw.write_metadata()
@@ -1209,18 +1163,36 @@ class TrainIterator:
 
     Created by :meth:`DataCollection.trains`.
     """
-    def __init__(self, data, require_all=True):
+    def __init__(self, data, require_all=True, flat_keys=False):
         self.data = data
         self.require_all = require_all
         # {(source, key): (f, dataset)}
         self._datasets_cache = {}
 
+        self._set_result = self._set_result_flat if flat_keys \
+            else self._set_result_nested
+
+    @staticmethod
+    def _set_result_nested(res, source, key, value):
+        try:
+            res[source][key] = value
+        except KeyError:
+            res[source] = {key: value}
+
+    @staticmethod
+    def _set_result_flat(res, source, key, value):
+        res[(source, key)] = value
+
     def _find_data(self, source, key, tid):
         file, ds = self._datasets_cache.get((source, key), (None, None))
         if ds:
             ixs = (file.train_ids == tid).nonzero()[0]
-            if ixs.size > 0:
+            if self.data.inc_suspect_trains and ixs.size > 0:
                 return file, ixs[0], ds
+
+            for ix in ixs:
+                if file.validity_flag[ix]:
+                    return file, ix, ds
 
         data = self.data
         section = 'CONTROL' if source in data.control_sources else 'INSTRUMENT'
@@ -1236,19 +1208,19 @@ class TrainIterator:
     def _assemble_data(self, tid):
         res = {}
         for source in self.data.control_sources:
-            source_data = res[source] = {
-                'metadata': {'source': source, 'timestamp.tid': tid}
-            }
+            self._set_result(res, source, 'metadata',
+                             {'source': source, 'timestamp.tid': tid})
+
+
             for key in self.data.keys_for_source(source):
                 _, pos, ds = self._find_data(source, key, tid)
                 if ds is None:
                     continue
-                source_data[key] = ds[pos]
+                self._set_result(res, source, key, ds[pos])
 
         for source in self.data.instrument_sources:
-            source_data = res[source] = {
-                'metadata': {'source': source, 'timestamp.tid': tid}
-            }
+            self._set_result(res, source, 'metadata',
+                             {'source': source, 'timestamp.tid': tid})
             for key in self.data.keys_for_source(source):
                 file, pos, ds = self._find_data(source, key, tid)
                 if ds is None:
@@ -1257,9 +1229,10 @@ class TrainIterator:
                 firsts, counts = file.get_index(source, group)
                 first, count = firsts[pos], counts[pos]
                 if count == 1:
-                    source_data[key] = ds[first]
-                else:
-                    source_data[key] = ds[first : first + count]
+                    self._set_result(res, source, key, ds[first])
+                elif count > 0:
+                    self._set_result(res, source, key,
+                                     ds[first : first + count])
 
         return res
 
@@ -1271,7 +1244,7 @@ class TrainIterator:
             yield tid, self._assemble_data(tid)
 
 
-def H5File(path):
+def H5File(path, *, inc_suspect_trains=False):
     """Open a single HDF5 file generated at European XFEL.
 
     ::
@@ -1284,11 +1257,18 @@ def H5File(path):
     ----------
     path: str
         Path to the HDF5 file
+    inc_suspect_trains: bool
+        If False (default), suspect train IDs within a file are skipped.
+        In newer files, trains where INDEX/flag are 0 are suspect. For older
+        files which don't have this flag, out-of-sequence train IDs are suspect.
+        If True, it tries to include these trains.
     """
-    return DataCollection.from_path(path)
+    return DataCollection.from_path(path, inc_suspect_trains=inc_suspect_trains)
 
 
-def RunDirectory(path, include='*'):
+def RunDirectory(
+        path, include='*', file_filter=locality.lc_any, *, inc_suspect_trains=False
+):
     """Open data files from a 'run' at European XFEL.
 
     ::
@@ -1306,15 +1286,26 @@ def RunDirectory(path, include='*'):
         Path to the run directory containing HDF5 files.
     include: str
         Wildcard string to filter data files.
+    file_filter: callable
+        Function to subset the list of filenames to open.
+        Meant to be used with functions in the extra_data.locality module.
+    inc_suspect_trains: bool
+        If False (default), suspect train IDs within a file are skipped.
+        In newer files, trains where INDEX/flag are 0 are suspect. For older
+        files which don't have this flag, out-of-sequence train IDs are suspect.
+        If True, it tries to include these trains.
     """
     files = [f for f in os.listdir(path) if f.endswith('.h5')]
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
+    files = file_filter(files)
     if not files:
         raise Exception("No HDF5 files found in {} with glob pattern {}".format(path, include))
 
     files_map = RunFilesMap(path)
     t0 = time.monotonic()
-    d = DataCollection.from_paths(files, files_map)
+    d = DataCollection.from_paths(
+        files, files_map, inc_suspect_trains=inc_suspect_trains
+    )
     log.debug("Opened run with %d files in %.2g s",
               len(d.files), time.monotonic() - t0)
     files_map.save(d.files)
@@ -1326,7 +1317,10 @@ def RunDirectory(path, include='*'):
 RunHandler = RunDirectory
 
 
-def open_run(proposal, run, data='raw', include='*'):
+def open_run(
+        proposal, run, data='raw', include='*', file_filter=locality.lc_any, *,
+        inc_suspect_trains=False
+):
     """Access EuXFEL data on the Maxwell cluster by proposal and run number.
 
     ::
@@ -1347,6 +1341,14 @@ def open_run(proposal, run, data='raw', include='*'):
         The default is 'raw'.
     include: str
         Wildcard string to filter data files.
+    file_filter: callable
+        Function to subset the list of filenames to open.
+        Meant to be used with functions in the extra_data.locality module.
+    inc_suspect_trains: bool
+        If False (default), suspect train IDs within a file are skipped.
+        In newer files, trains where INDEX/flag are 0 are suspect. For older
+        files which don't have this flag, out-of-sequence train IDs are suspect.
+        If True, it tries to include these trains.
     """
     if isinstance(proposal, str):
         if ('/' not in proposal) and not proposal.startswith('p'):
@@ -1364,4 +1366,7 @@ def open_run(proposal, run, data='raw', include='*'):
         run = index(run)  # Allow integers, including numpy integers
     run = 'r' + str(run).zfill(4)
 
-    return RunDirectory(osp.join(prop_dir, data, run), include=include)
+    return RunDirectory(
+        osp.join(prop_dir, data, run), include=include, file_filter=file_filter,
+        inc_suspect_trains=inc_suspect_trains,
+    )

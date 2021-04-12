@@ -99,8 +99,10 @@ class VirtualCXIWriter:
             tgt_start = int(self.train_id_to_ix[chunk_tids[0]])
 
             target_tids = self.train_ids_perframe[tgt_start : tgt_start+len(chunk_tids)]
-            assert target_tids.shape == chunk_tids.shape
-            assert target_tids[0] == chunk_tids[0]
+            assert target_tids.shape == chunk_tids.shape, \
+                f"{target_tids.shape} != {chunk_tids.shape}"
+            assert target_tids[0] == chunk_tids[0], \
+                f"{target_tids[0]} != {chunk_tids[0]}"
 
             # How much of this chunk can be mapped in one go?
             mismatches = (chunk_tids != target_tids).nonzero()[0]
@@ -199,7 +201,8 @@ class VirtualCXIWriter:
         if fillvalues:
             _fillvalues.update(fillvalues)
         # enforce that fill values are compatible with array dtype
-        _fillvalues[self.image_label] = layouts[self.image_label].dtype.type(_fillvalues[self.image_label])
+        _fillvalues[self.image_label] = layouts[self.image_label].dtype.type(
+            _fillvalues[self.image_label])
         if 'gain' in layouts:
             _fillvalues['gain'] = layouts['gain'].dtype.type(_fillvalues['gain'])
         if 'mask' in layouts:

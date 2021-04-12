@@ -63,6 +63,13 @@ def mock_fxe_raw_run(format_version):
 
 
 @pytest.fixture(scope='session')
+def mock_lpd_parallelgain_run():
+    with TemporaryDirectory() as td:
+        make_examples.make_lpd_parallelgain_run(td, format_version='1.0')
+        yield td
+
+
+@pytest.fixture(scope='session')
 def mock_spb_proc_run(format_version):
     with TemporaryDirectory() as td:
         make_examples.make_spb_run(td, raw=False, format_version=format_version)
@@ -83,6 +90,20 @@ def mock_reduced_spb_proc_run(format_version):
 def mock_spb_raw_run(format_version):
     with TemporaryDirectory() as td:
         make_examples.make_spb_run(td, format_version=format_version)
+        yield td
+
+
+@pytest.fixture(scope='session')
+def mock_jungfrau_run():
+    with TemporaryDirectory() as td:
+        make_examples.make_jungfrau_run(td)
+        yield td
+
+
+@pytest.fixture(scope='session')
+def mock_scs_run():
+    with TemporaryDirectory() as td:
+        make_examples.make_scs_run(td)
         yield td
 
 

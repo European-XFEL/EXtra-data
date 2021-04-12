@@ -24,6 +24,9 @@ a run or a single file.
 
 .. autofunction:: H5File
 
+See :ref:`suspect-trains` for more details about the ``inc_suspect_trains``
+parameter.
+
 Data structure
 --------------
 
@@ -71,28 +74,70 @@ to refer to all data associated with that 0.1 second window.
 Getting data by source & key
 ----------------------------
 
-Where data will fit into memory, it's usually quickest and most convenient
-to load it like this.
+Selecting a single source & key in a run gives a :class:`.KeyData` object.
+You can get the data from this in various forms with the methods described
+below, e.g.::
 
-.. class:: DataCollection
+    xgm_intensity = run['SA1_XTD2_XGM/XGM/DOOCS:output', 'data.intensityTD'].xarray()
 
-   .. automethod:: get_array
+.. class:: KeyData
+
+   .. attribute:: dtype
+
+      The NumPy dtype for this data. This indicates whether it contains
+      integers or floating point numbers, and how many bytes of memory each
+      number needs.
+
+   .. attribute:: ndim
+
+      The number of dimensions the data has. All data has at least 1 dimension
+      (time). A sequence of 2D images would have 3 dimensions.
+
+   .. autoattribute:: shape
+
+   .. attribute:: entry_shape
+
+      The shape of a single entry in the data, e.g. a single frame from a
+      camera. This is equivalent to ``key.shape[1:]``, but may be quicker than
+      that.
+
+   .. automethod:: data_counts
+
+   .. automethod:: ndarray
+
+   .. automethod:: series
+
+   .. automethod:: xarray
 
      .. seealso::
        `xarray documentation <http://xarray.pydata.org/en/stable/indexing.html>`__
-         How to use the arrays returned by :meth:`~.get_array`
+         How to use the arrays returned by :meth:`DataCollection.get_array`
 
        :doc:`xpd_examples`
          Examples using xarray & pandas with EuXFEL data
 
-   .. automethod:: get_dask_array
+   .. automethod:: dask_array
 
-     .. seealso::
+    .. seealso::
        `Dask Array documentation <https://docs.dask.org/en/latest/array.html>`__
-         How to use the objects returned by :meth:`~.get_dask_array`
+         How to use the objects returned by :meth:`DataCollection.get_dask_array`
 
        :doc:`dask_averaging`
          An example using Dask with EuXFEL data
+
+   .. automethod:: select_trains
+
+The run or file object (a :class:`DataCollection`) also has methods to load
+data by sources and keys. Some of them are directly equivalent to the options
+above, but :meth:`.get_dataframe` and :meth:`.get_virtual_dataset` offer extra
+capabilities.
+
+.. class:: DataCollection
+   :noindex:
+
+   .. automethod:: get_array
+
+   .. automethod:: get_dask_array
 
    .. automethod:: get_series
 
@@ -121,11 +166,31 @@ Getting data by train
 Some kinds of data, e.g. from AGIPD, are too big to load a whole run into
 memory at once. In these cases, it's convenient to load one train at a time.
 
-When accessing data like this, it's worth selecting which sources you're
-interested in, either using :meth:`~.DataCollection.select`, or the ``devices=``
-parameter. This avoids reading all the other data.
+If you want to do this for just one source & key with :class:`KeyData` methods,
+like this::
+
+    for tid, arr in run['SA1_XTD2_XGM/XGM/DOOCS:output', 'data.intensityTD'].trains():
+        ...
+
+.. class:: KeyData
+   :noindex:
+
+   .. automethod:: trains
+
+   .. automethod:: train_from_id
+
+   .. automethod:: train_from_index
+
+To work with multiple modules of the same detector, see :doc:`agipd_lpd_data`.
+
+You can also get data by train for multiple sources and keys together from a run
+or file object.
+It's always a good idea to select the data you're interested in, either using
+:meth:`~.DataCollection.select`, or the ``devices=`` parameter. If you don't,
+they will read data for all sources in the run, which may be very slow.
 
 .. class:: DataCollection
+   :noindex:
 
    .. automethod:: trains
 
@@ -144,6 +209,7 @@ data, so you use them like this::
     # run still includes all the data
 
 .. class:: DataCollection
+   :noindex:
 
    .. automethod:: select
 
@@ -157,6 +223,7 @@ Writing selected data
 ---------------------
 
 .. class:: DataCollection
+   :noindex:
 
    .. automethod:: write
 
@@ -216,7 +283,7 @@ Here are some problems we've seen, and possible solutions or workarounds:
 
   - In one case, a train ID had the maximum possible value (2\ :sup:`64` - 1),
     causing :meth:`~.info` to fail. You can select everything except this train
-    using :meth:`~.select_trains`::
+    using :meth:`~.DataCollection.select_trains`::
 
         from extra_data import by_id
         sel = run.select_trains(by_id[:2**64-1])
@@ -264,3 +331,57 @@ You only need these details if you think caching may be causing problems.
 
 JSON was chosen as it can be easily inspected manually, and it's reasonably
 efficient to load the entire file.
+
+Issues reading archived data
+----------------------------
+
+Files at European XFEL storage migrate over time from GPFS (designed for fast access) to PNFS (designed for archiving). The data 
+on PNFS is usually always available for reading. But sometimes, this may require
+staging from the tape to disk. If there is a staging queue, the operation can take
+an indefinitely long time (days or even weeks) and any IO operations will be 
+blocked for this time.
+
+To determine the files which require staging or are lost, use the script::
+
+    extra-data-locality <run directory>
+
+It returns a list of files which are currently located only on slow media for some
+reasons and, separately, any which have been lost.
+
+If the files are not essential for analysis, then they can be filtered out using 
+filter :func:`lc_ondisk` from :mod:`extra_data.locality`::
+
+    from extra_data.locality import lc_ondisk
+    run = open_run(proposal=700000, run=1, file_filter=lc_ondisk)
+
+``file_filter`` must be a callable which takes a list as a single argument and
+returns filtered list.
+
+**Note: Reading the file locality on PNFS is an expensive operation.
+Use it only as a last resort.**
+
+If you find any files which are located only on tape or unavailable, please let know to
+`ITDM <mailto:it-support@xfel.eu>`_. If you need these files for analysis mentioned
+that explicitly.
+
+.. _suspect-trains:
+
+'Suspect' train IDs
+-------------------
+
+In some cases (especially with AGIPD data), some train IDs appear to be recorded
+incorrectly, breaking the normal assumption that train IDs are in increasing
+order. EXtra-data will exclude these trains by default, but you can try to
+access them by passing ``inc_suspect_trains=True`` when :ref:`opening a file
+or run <opening-files>`. Some features may not work correctly if you do this.
+
+In newer files (format version 1.0 or above), trains are considered suspect
+where their ``INDEX/flag`` entry is 0. This indicates that the DAQ received the train ID
+from a device before it received it from a time server. This appears to be a reliable
+indicator of erroneous train IDs.
+
+In older files without ``INDEX/flag``, EXtra-data tries to guess which trains
+are suspect. The good trains should make an increasing sequence, and it tries to
+exclude as few trains as possible to achieve this. If something goes wrong with
+this guessing, try using ``inc_suspect_trains=True`` to avoid it.
+Please let us know (da-support@xfel.eu) if you need to do this.

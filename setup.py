@@ -40,7 +40,8 @@ setup(name="EXtra-data",
               "lsxfel = extra_data.lsxfel:main",
               "karabo-bridge-serve-files = extra_data.export:main",
               "extra-data-validate = extra_data.validation:main",
-              "extra-data-make-virtual-cxi = extra_data.cli.make_virtual_cxi:main"
+              "extra-data-make-virtual-cxi = extra_data.cli.make_virtual_cxi:main",
+              "extra-data-locality = extra_data.locality:main",
           ],
       },
       install_requires=[
@@ -51,7 +52,6 @@ setup(name="EXtra-data",
           'numpy',
           'pandas',
           'psutil',
-          'scipy',
           'xarray',
       ],
       extras_require={
