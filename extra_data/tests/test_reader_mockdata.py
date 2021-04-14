@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from itertools import islice
 
 import h5py
@@ -586,6 +587,37 @@ def test_select_trains(mock_fxe_raw_run):
 
     with pytest.raises(IndexError):
         run.select_trains(by_index[[480]])
+
+
+def test_train_timestamps(mock_scs_run):
+    run = RunDirectory(mock_scs_run)
+
+    tss = run.train_timestamps(labelled=False)
+    assert isinstance(tss, np.ndarray)
+    assert tss.shape == (len(run.train_ids),)
+    assert tss.dtype == np.dtype('datetime64[ns]')
+    assert np.all(np.diff(tss).astype(np.uint64) > 0)
+
+    # Convert numpy datetime64[ns] to Python datetime (dropping some precision)
+    dt0 = tss[0].astype('datetime64[ms]').item().replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    assert dt0 > (now - timedelta(days=1))  # assuming tests take < 1 day to run
+    assert dt0 < now
+
+    tss_ser = run.train_timestamps(labelled=True)
+    assert isinstance(tss_ser, pd.Series)
+    np.testing.assert_array_equal(tss_ser.values, tss)
+    np.testing.assert_array_equal(tss_ser.index, run.train_ids)
+
+
+def test_train_timestamps_nat(mock_fxe_control_data):
+    f = H5File(mock_fxe_control_data)
+    tss = f.train_timestamps()
+    assert tss.shape == (len(f.train_ids),)
+    if f.files[0].format_version == '0.5':
+        assert np.all(np.isnat(tss))
+    else:
+        assert not np.any(np.isnat(tss))
 
 
 def test_union(mock_fxe_raw_run):

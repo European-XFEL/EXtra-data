@@ -1084,6 +1084,46 @@ class DataCollection:
         print('\tControls')
         [print('\t-', d) for d in sorted(ctrl)] or print('\t-')
 
+    def train_timestamps(self, labelled=False):
+        """Get approximate timestamps for each train
+
+        Timestamps are stored and returned in UTC (not local time).
+        Older files (before format version 1.0) do not have timestamp data,
+        and the returned data in those cases will have the special value NaT
+        (Not a Time).
+
+        If *labelled* is True, they are returned in a pandas series, labelled
+        with train IDs. If False (default), they are returned in a NumPy array
+        of the same length as data.train_ids.
+        """
+        arr = np.zeros(len(self.train_ids), dtype=np.uint64)
+        id_to_ix = {tid: i for (i, tid) in enumerate(self.train_ids)}
+        missing_tids = np.array(self.train_ids)
+        for fa in self.files:
+            tids, file_ixs, _ = np.intersect1d(
+                fa.train_ids, missing_tids, return_indices=True
+            )
+            if not self.inc_suspect_trains:
+                valid = fa.validity_flag[file_ixs]
+                tids, file_ixs = tids[valid], file_ixs[valid]
+            if tids.size == 0 or 'INDEX/timestamp' not in fa.file:
+                continue
+            file_tss = fa.file['INDEX/timestamp'][:]
+            for tid, ts in zip(tids, file_tss[file_ixs]):
+                arr[id_to_ix[tid]] = ts
+
+            missing_tids = np.setdiff1d(missing_tids, tids)
+            if missing_tids.size == 0:  # We've got a timestamp for every train
+                break
+
+        arr = arr.astype('datetime64[ns]')
+        epoch = np.uint64(0).astype('datetime64[ns]')
+        arr[arr == epoch] = 'NaT'  # Not a Time
+        if labelled:
+            import pandas as pd
+            return pd.Series(arr, index=self.train_ids)
+        return arr
+
     def write(self, filename):
         """Write the selected data to a new HDF5 file
 
