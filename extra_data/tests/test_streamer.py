@@ -58,7 +58,7 @@ def test_serve_files(mock_fxe_raw_run):
         print('interface:', interface)
         assert interface is not None, p.stderr.read().decode()
 
-        with Client(interface, sock='PULL', timeout=5) as c:
+        with Client(interface, sock='PULL', timeout=30) as c:
             data, meta = c.next()
 
         tid = next(m['timestamp.tid'] for m in meta.values())
