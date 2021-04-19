@@ -42,8 +42,9 @@ def test_merge_detector(mock_fxe_raw_run, mock_fxe_control_data, mock_spb_proc_r
 
 
 def test_serve_files(mock_fxe_raw_run):
+    src = 'FXE_XAD_GEC/CAM/CAMERA:daqOutput'
     args = ['karabo-bridge-serve-files', '-z', 'PUSH', str(mock_fxe_raw_run),
-            str(44444)]
+            str(44444), '--source', src]
     interface = None
 
     p = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE,
@@ -62,9 +63,8 @@ def test_serve_files(mock_fxe_raw_run):
             data, meta = c.next()
 
         tid = next(m['timestamp.tid'] for m in meta.values())
-        sources = RunDirectory(
-            mock_fxe_raw_run).select_trains(by_id[[tid]]).all_sources
-        assert frozenset(data) == sources
+        assert tid == 10000
+        assert set(data) == {src}
     finally:
         if p.poll() is None:
             p.kill()
