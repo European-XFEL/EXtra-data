@@ -103,8 +103,9 @@ def serve_files(path, port, source_glob='*', key_glob='*',
     ----------
     path: str
         Path to the HDF5 file or file folder.
-    port: int
-        Local TCP port to bind socket to.
+    port: str or int
+        A ZMQ endpoint (e.g. 'tcp://*:44444') or a TCP port to bind the socket
+        to. Integers or strings of all digits are treated as port numbers.
     source_glob: str
         Only stream sources matching this glob pattern.
         Streaming data selectively is more efficient than streaming everything.
@@ -120,7 +121,7 @@ def serve_files(path, port, source_glob='*', key_glob='*',
     dummy_timestamps: bool
         Whether to add mock timestamps if the metadata lacks them.
     use_infiniband: bool
-        Use infiniband interface if available
+        Use infiniband interface if available (if port specifies a TCP port)
     sock: str
         socket type - supported: REP, PUB, PUSH (default REP).
     """
@@ -131,8 +132,11 @@ def serve_files(path, port, source_glob='*', key_glob='*',
 
     data = data.select(source_glob, key_glob)
 
-    endpoint = f'tcp://{find_infiniband_ip() if use_infiniband else "*"}:{port}'
-    sender = Sender(endpoint, sock=sock, dummy_timestamps=dummy_timestamps)
+    if isinstance(port, int) or port.isdigit():
+        endpt = f'tcp://{find_infiniband_ip() if use_infiniband else "*"}:{port}'
+    else:
+        endpt = port
+    sender = Sender(endpt, sock=sock, dummy_timestamps=dummy_timestamps)
     print(f'Streamer started on: {sender.endpoint}')
     for tid, data in _iter_trains(data, merge_detector=append_detector_modules):
         sender.send(data)
@@ -148,7 +152,7 @@ def serve_files(path, port, source_glob='*', key_glob='*',
 def main(argv=None):
     ap = ArgumentParser(prog="karabo-bridge-serve-files")
     ap.add_argument("path", help="Path of a file or run directory to serve")
-    ap.add_argument("port", help="TCP port to run server on")
+    ap.add_argument("port", help="TCP port or ZMQ endpoint to send data on")
     ap.add_argument(
         "--source", help="Stream only matching sources ('*' is a wildcard)",
         default='*',
@@ -168,7 +172,8 @@ def main(argv=None):
         action='store_true'
     )
     ap.add_argument(
-        "--use-infiniband", help="Use infiniband interface if available",
+        "--use-infiniband", help="Use infiniband interface if available "
+                                 "(if a TCP port is specified)",
         action='store_true'
     )
     ap.add_argument(
