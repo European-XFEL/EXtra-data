@@ -17,7 +17,7 @@ EXtra-data is available on our Anaconda installation on the Maxwell cluster::
     module load exfel exfel_anaconda3
 
 You can also install it `from PyPI <https://pypi.org/project/karabo-data/>`__
-to use in other environments with Python 3.5 or later::
+to use in other environments with Python 3.6 or later::
 
     pip install extra_data
 

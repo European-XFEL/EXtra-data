@@ -13,7 +13,7 @@ Installing
     module load exfel exfel_anaconda3
 
 You can also install it [from PyPI](https://pypi.org/project/extra-data/)
-to use in other environments with Python 3.5 or later:
+to use in other environments with Python 3.6 or later:
 
     pip install extra_data
 
@@ -28,4 +28,6 @@ Tests
 
 Tests can be run as follows:
 
-    python3 -m pytest -v
+    python3 -m pytest -v --pyargs extra_data
+
+In the source directory, you can also omit `--pyargs extra_data`.
