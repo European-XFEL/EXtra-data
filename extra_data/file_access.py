@@ -5,7 +5,7 @@ file, as well as machinery to close less recently accessed files, so we don't
 run into the limit on the number of open files.
 """
 from collections import defaultdict, OrderedDict
-import h5py
+import h5py, h5py.h5o
 import numpy as np
 import os
 import os.path as osp
@@ -334,7 +334,11 @@ class FileAccess:
         else:
             raise SourceNameError(source)
 
-        if self.file.get(path, getclass=True) is h5py.Dataset:
+        # self.file.get(path, getclass=True) works, but is weirdly slow.
+        # Checking like this is much faster.
+        if (path in self.file) and isinstance(
+                h5py.h5o.open(self.file.id, path.encode()), h5py.h5d.DatasetID
+        ):
             self._known_keys[source].add(key)
             return True
         return False
