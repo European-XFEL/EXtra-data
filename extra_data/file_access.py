@@ -5,7 +5,7 @@ file, as well as machinery to close less recently accessed files, so we don't
 run into the limit on the number of open files.
 """
 from collections import defaultdict, OrderedDict
-import h5py
+import h5py, h5py.h5o
 import numpy as np
 import os
 import os.path as osp
