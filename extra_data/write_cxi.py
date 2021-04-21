@@ -202,7 +202,7 @@ class VirtualCXIWriter:
 
         log.info("Writing to %s", filename)
 
-        with h5py.File(filename, 'w', libver='latest') as f:
+        with h5py.File(filename, 'w', libver='v110') as f:
             f.create_dataset('cxi_version', data=[150])
             d = f.create_dataset('entry_1/experiment_identifier',
                                  shape=experiment_ids.shape,
