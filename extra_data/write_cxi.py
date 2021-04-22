@@ -202,7 +202,11 @@ class VirtualCXIWriter:
 
         log.info("Writing to %s", filename)
 
-        with h5py.File(filename, 'w', libver='v110') as f:
+        # Virtual datasets require HDF5 >= 1.10. Specifying this up front should
+        # mean it fails before touching the file if run on an older version.
+        # We also specify this as the maximum version, to ensure we're creating
+        # files that can be read by HDF5 1.10.
+        with h5py.File(filename, 'w', libver=('v110', 'v110')) as f:
             f.create_dataset('cxi_version', data=[150])
             d = f.create_dataset('entry_1/experiment_identifier',
                                  shape=experiment_ids.shape,
