@@ -1087,6 +1087,8 @@ class DataCollection:
                         else:
                             entry_info = ""
                         dt = ds.dtype
+                        if h5py.check_string_dtype(dt):
+                            dt = 'string'
                         print(f"      - {k}\t[{dt}{entry_info}]")
 
         print()
