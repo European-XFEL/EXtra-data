@@ -14,6 +14,7 @@ from xarray import DataArray
 from extra_data import (
     H5File, RunDirectory, by_index, by_id,
     SourceNameError, PropertyNameError, DataCollection, open_run,
+    MultiRunError
 )
 
 def test_iterate_trains(mock_agipd_data):
@@ -719,3 +720,11 @@ def test_get_run_value(mock_fxe_control_data):
 
     with pytest.raises(PropertyNameError):
         f.get_run_value(src, 'non.existant')
+
+
+def test_get_run_value_union(mock_fxe_control_data, mock_sa3_control_data):
+    f = H5File(mock_fxe_control_data)
+    f2 = H5File(mock_sa3_control_data)
+    data = f.union(f2)
+    with pytest.raises(MultiRunError):
+        data.get_run_value('FXE_XAD_GEC/CAM/CAMERA', 'firmwareVersion')

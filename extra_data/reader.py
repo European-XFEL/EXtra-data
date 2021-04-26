@@ -30,7 +30,9 @@ import tempfile
 import time
 from warnings import warn
 
-from .exceptions import SourceNameError, PropertyNameError, TrainIDError
+from .exceptions import (
+    SourceNameError, PropertyNameError, TrainIDError, MultiRunError,
+)
 from .keydata import KeyData
 from .read_machinery import (
     DETECTOR_SOURCE_RE,
@@ -75,11 +77,12 @@ class DataCollection:
     """
     def __init__(
             self, files, selection=None, train_ids=None, ctx_closes=False, *,
-            inc_suspect_trains=False,
+            inc_suspect_trains=False, is_single_run=False,
     ):
         self.files = list(files)
         self.ctx_closes = ctx_closes
         self.inc_suspect_trains = inc_suspect_trains
+        self.is_single_run = is_single_run
 
         # selection: {source: set(keys)}
         # None as value -> all keys for this source
@@ -123,7 +126,10 @@ class DataCollection:
             return osp.basename(path), fa
 
     @classmethod
-    def from_paths(cls, paths, _files_map=None, *, inc_suspect_trains=False):
+    def from_paths(
+            cls, paths, _files_map=None, *, inc_suspect_trains=False,
+            is_single_run=False
+    ):
         files = []
         uncached = []
         for path in paths:
@@ -158,13 +164,17 @@ class DataCollection:
             raise Exception("All HDF5 files specified are unusable")
 
         return cls(
-            files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains
+            files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains,
+            is_single_run=is_single_run,
         )
 
     @classmethod
     def from_path(cls, path, *, inc_suspect_trains=False):
         files = [FileAccess(path)]
-        return cls(files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains)
+        return cls(
+            files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains,
+            is_single_run=True
+        )
 
     def __enter__(self):
         if not self.ctx_closes:
@@ -582,8 +592,7 @@ class DataCollection:
         continuously in CONTROL data.
 
         This method is intended for use with data from a single run. If you
-        combine data from multiple runs, it will return a single value from
-        an arbitrary one of those runs.
+        combine data from multiple runs, it will raise MultiRunError.
 
         Parameters
         ----------
@@ -593,6 +602,9 @@ class DataCollection:
         key: str
             Key of parameter within that device, e.g. "triggerMode".
         """
+        if not self.is_single_run:
+            raise MultiRunError
+
         if source not in self.control_sources:
             raise SourceNameError(source)
 
@@ -845,6 +857,7 @@ class DataCollection:
         return DataCollection(
             files, selection=selection, train_ids=train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=self.is_single_run
         )
 
     def deselect(self, seln_or_source_glob, key_glob='*'):
@@ -886,6 +899,7 @@ class DataCollection:
         return DataCollection(
             files, selection=selection, train_ids=self.train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=self.is_single_run,
         )
 
     def select_trains(self, train_range):
@@ -919,6 +933,7 @@ class DataCollection:
         return DataCollection(
             files, selection=self.selection, train_ids=new_train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=self.is_single_run,
         )
 
     def _check_source_conflicts(self):
@@ -1339,7 +1354,8 @@ def RunDirectory(
     files_map = RunFilesMap(path)
     t0 = time.monotonic()
     d = DataCollection.from_paths(
-        files, files_map, inc_suspect_trains=inc_suspect_trains
+        files, files_map, inc_suspect_trains=inc_suspect_trains,
+        is_single_run=True,
     )
     log.debug("Opened run with %d files in %.2g s",
               len(d.files), time.monotonic() - t0)
