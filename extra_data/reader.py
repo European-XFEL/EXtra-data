@@ -1079,7 +1079,7 @@ class DataCollection:
                 run_only_keys = run_keys - ctrl_keys
                 if run_only_keys:
                     print('    + extra RUN keys (1 entry per run):')
-                    for k in run_only_keys:
+                    for k in sorted(run_only_keys):
                         ds = self._source_index[s][0].file[f"/RUN/{s}/{k.replace('.', '/')}"]
                         entry_shape = ds.shape[1:]
                         if entry_shape:
