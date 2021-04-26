@@ -1087,7 +1087,7 @@ class DataCollection:
                         else:
                             entry_info = ""
                         dt = ds.dtype
-                        print(f"'      - '{k}\t[{dt}{entry_info}]")
+                        print(f"      - {k}\t[{dt}{entry_info}]")
 
         print()
 
