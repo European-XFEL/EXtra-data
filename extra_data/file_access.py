@@ -148,6 +148,7 @@ class FileAccess:
         self._index_cache = {}
         # {source: set(keys)}
         self._keys_cache = {}
+        self._run_keys_cache = {}
         # {source: set(keys)} - including incomplete sets
         self._known_keys = defaultdict(set)
 
@@ -311,6 +312,29 @@ class FileAccess:
                 res.add(key.replace('/', '.'))
 
         self.file[group].visititems(add_key)
+        self._keys_cache[source] = res
+        return res
+
+    def get_run_keys(self, source):
+        """Get the keys in the RUN section for a given control source name
+
+        Keys are found by walking the HDF5 file, and cached for reuse.
+        """
+        try:
+            return self._run_keys_cache[source]
+        except KeyError:
+            pass
+
+        if source not in self.control_sources:
+            raise SourceNameError(source)
+
+        res = set()
+
+        def add_key(key, value):
+            if isinstance(value, h5py.Dataset):
+                res.add(key.replace('/', '.'))
+
+        self.file['/RUN/' + source].visititems(add_key)
         self._keys_cache[source] = res
         return res
 

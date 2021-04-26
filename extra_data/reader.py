@@ -1072,7 +1072,22 @@ class DataCollection:
             print('  -', s)
             if any(p.match(s) for p in details_sources_re):
                 # Detail for control sources: list keys
-                keys_detail(s, sorted(self.keys_for_source(s)), prefix='    - ')
+                ctrl_keys = self.keys_for_source(s)
+                keys_detail(s, sorted(ctrl_keys), prefix='    - ')
+
+                run_keys = self._source_index[s][0].get_run_keys(s)
+                run_only_keys = run_keys - ctrl_keys
+                if run_only_keys:
+                    print('    + extra RUN keys (1 entry per run):')
+                    for k in run_only_keys:
+                        ds = self._source_index[s][0].file[f"/RUN/{s}/{k.replace('.', '/')}"]
+                        entry_shape = ds.shape[1:]
+                        if entry_shape:
+                            entry_info = f", entry shape {entry_shape}"
+                        else:
+                            entry_info = ""
+                        dt = ds.dtype
+                        print(f"'      - '{k}\t[{dt}{entry_info}]")
 
         print()
 
