@@ -1067,18 +1067,19 @@ class DataCollection:
 
 
         print()
-        print(len(self.control_sources), 'control sources: (1 entry per train)')
+        print(len(self.control_sources), 'control sources:')
         for s in sorted(self.control_sources):
             print('  -', s)
             if any(p.match(s) for p in details_sources_re):
                 # Detail for control sources: list keys
                 ctrl_keys = self.keys_for_source(s)
-                keys_detail(s, sorted(ctrl_keys), prefix='    - ')
+                print('    - Control keys (1 entry per train):')
+                keys_detail(s, sorted(ctrl_keys), prefix='      - ')
 
                 run_keys = self._source_index[s][0].get_run_keys(s)
                 run_only_keys = run_keys - ctrl_keys
                 if run_only_keys:
-                    print('    + extra RUN keys (1 entry per run):')
+                    print('    - Additional run keys (1 entry per run):')
                     for k in sorted(run_only_keys):
                         ds = self._source_index[s][0].file[f"/RUN/{s}/{k.replace('.', '/')}"]
                         entry_shape = ds.shape[1:]
