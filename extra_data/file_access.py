@@ -292,6 +292,25 @@ class FileAccess:
             counts = np.uint64((ix_group['last'][:ntrains] - firsts + 1) * status)
         return firsts, counts
 
+    def metadata(self) -> dict:
+        """Get the contents of the METADATA group as a dict
+
+        Not including the lists of data sources
+        """
+        if self.format_version == '0.5':
+            # Pretend this is actually there, like format version 1.0
+            return {'dataFormatVersion': '0.5'}
+
+        r = {}
+        for k, ds in self.file['METADATA'].items():
+            if not isinstance(ds, h5py.Dataset):
+                continue
+            v = ds[0]
+            if isinstance(v, bytes):
+                v = v.decode('utf-8', 'surrogateescape')
+            r[k] = v
+        return r
+
     def get_keys(self, source):
         """Get keys for a given source name
 
