@@ -100,6 +100,7 @@ class KeyData:
             section=self.section,
             dtype=self.dtype,
             eshape=self.entry_shape,
+            inc_suspect_trains=self.inc_suspect_trains,
         )
 
     def __getitem__(self, item):

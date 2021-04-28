@@ -117,6 +117,9 @@ def test_keydata_interface(agipd_file_tid_very_high):
     assert len(kd.train_ids) == 250
     assert kd.shape == (250 * 64, 512, 128)
 
+    # Check selecting trains preserves inc_suspect_trains flag
+    assert kd[:].shape == (250 * 64, 512, 128)
+
 def test_data_counts(agipd_file_flag0):
     f = H5File(agipd_file_flag0)
     kd = f['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.data']
