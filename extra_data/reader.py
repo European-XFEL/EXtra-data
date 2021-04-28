@@ -622,6 +622,36 @@ class DataCollection:
             return val.decode('utf-8', 'surrogateescape')
         return val
 
+    def get_run_values(self, source) -> dict:
+        """Get a dict of all RUN values for the given source
+
+        This includes keys which are also in CONTROL.
+
+        Parameters
+        ----------
+
+        source: str
+            Control device name, e.g. "HED_OPT_PAM/CAM/SAMPLE_CAM_4".
+        """
+        if not self.is_single_run:
+            raise MultiRunError
+
+        if source not in self.control_sources:
+            raise SourceNameError(source)
+
+        # Arbitrary file - should be the same across a run
+        fa = self._source_index[source][0]
+        res = {}
+        def visitor(path, obj):
+            if isinstance(obj, h5py.Dataset):
+                val = obj[0]
+                if isinstance(val, bytes):
+                    val = val.decode('utf-8', 'surrogateescape')
+                res[path.replace('/', '.')] = val
+
+        fa.file['RUN'][source].visititems(visitor)
+        return res
+
     def union(self, *others):
         """Join the data in this collection with one or more others.
 
