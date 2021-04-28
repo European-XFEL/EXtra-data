@@ -160,7 +160,11 @@ methods offer extra capabilities.
 
    .. automethod:: get_run_value
 
-      .. versionadded:: 1.5
+      .. versionadded:: 1.6
+
+   .. automethod:: get_run_values
+
+      .. versionadded:: 1.6
 
 .. _data-by-train:
 
