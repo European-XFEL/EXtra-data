@@ -788,10 +788,12 @@ class DataCollection:
                     source_tids = np.empty(0, dtype=np.uint64)
 
                     for f in self._source_index[source]:
+                        valid = True if self.inc_suspect_trains else f.validity_flag
                         # Add the trains with data in each file.
+                        _, counts = f.get_index(source, group)
                         source_tids = np.union1d(
-                            f.train_ids[f.get_index(source, group)[1] > 0],
-                            source_tids)
+                            f.train_ids[valid & (counts > 0)], source_tids
+                        )
 
                     # Remove any trains previously selected, for which this
                     # selected source and key group has no data.
