@@ -163,6 +163,10 @@ class FileAccess:
     def valid_train_ids(self):
         return self.train_ids[self.validity_flag]
 
+    def has_train_ids(self, tids: np.ndarray, inc_suspect=False):
+        f_tids = self.train_ids if inc_suspect else self.valid_train_ids
+        return np.intersect1d(tids, f_tids).size > 0
+
     def close(self):
         """Close* the HDF5 file this refers to.
 
