@@ -95,7 +95,7 @@ def test_data_counts(mock_reduced_spb_proc_run):
     assert count.index.tolist() == xgm_beam_x.train_ids
     assert (count.values == 1).all()
 
-    # intrument data
+    # instrument data
     camera = run['SPB_IRU_CAM/CAM/SIDEMIC:daqOutput', 'data.image.pixels']
     count = camera.data_counts()
     assert count.index.tolist() == camera.train_ids

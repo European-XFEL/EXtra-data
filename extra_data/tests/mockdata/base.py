@@ -58,7 +58,7 @@ class DeviceBase:
                              (1,)+dims, datatype, maxshape=((None,)+dims))
 
     def write_instrument(self, f):
-        """Write the INSTRUMENT data, and the relevants parts of INDEX"""
+        """Write the INSTRUMENT data, and the relevant parts of INDEX"""
         train0 = self.firsttrain
 
         if self.nsamples is None:

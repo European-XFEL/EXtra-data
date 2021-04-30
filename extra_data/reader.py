@@ -238,7 +238,7 @@ class DataCollection:
             source,
             key,
             train_ids=self.train_ids,
-            files=self._source_index[source],
+            files=files,
             section=section,
             dtype=ds0.dtype,
             eshape=ds0.shape[1:],

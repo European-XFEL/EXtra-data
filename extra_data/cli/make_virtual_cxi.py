@@ -7,24 +7,18 @@ import sys
 from textwrap import dedent
 
 from extra_data import RunDirectory
-from extra_data.components import XtdfDetectorBase
+from extra_data.components import detectors
 from extra_data.exceptions import SourceNameError
 
 log = logging.getLogger(__name__)
 
 
 def _get_detector(data, min_modules):
-    for cls in XtdfDetectorBase.__subclasses__():
+    for cls in detectors.list:
         try:
             return cls(data, min_modules=min_modules)
         except SourceNameError:
             continue
-
-
-def _detectors():
-    """returns a list of names for all detector components available
-    """
-    return [d.__name__ for d in XtdfDetectorBase.__subclasses__()]
 
 
 def parse_number(number:str):
@@ -104,7 +98,7 @@ def main(argv=None):
     run = RunDirectory(run_dir)
     det = _get_detector(run, args.min_modules)
     if det is None:
-        sys.exit(f"No {_detectors()} sources found in {run_dir}")
+        sys.exit(f"No {detectors.names} sources found in {run_dir}")
 
     det.write_virtual_cxi(out_file, fill_values)
 
