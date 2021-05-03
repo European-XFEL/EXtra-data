@@ -931,6 +931,30 @@ class LPD1M(XtdfDetectorBase):
                     "parallel_gain=True needs the frames in each train to be divisible by 3"
                 )
 
+    def _select_pulse_indices(self, pulses, firsts, counts):
+        if not self.parallel_gain:
+            return super()._select_pulse_indices(pulses, firsts, counts)
+
+        if isinstance(pulses.value, slice):
+            if pulses.value == slice(0, MAX_PULSES, 1):
+                # All pulses included
+                return slice(0, counts.sum())
+            else:
+                s = pulses.value
+                desired = np.arange(s.start, s.stop, step=s.step, dtype=np.uint64)
+        else:
+            desired = pulses.value
+
+        positions = []
+        for ix, frames in zip(firsts, counts):
+            n_per_gain_stage = int(frames // 3)
+            train_desired = desired[desired < n_per_gain_stage]
+            for stage in range(3):
+                start = ix + (stage * n_per_gain_stage)
+                positions.append(start + train_desired)
+
+        return np.concatenate(positions)
+
     def _make_image_index(self, tids, inner_ids, inner_name='pulse'):
         if not self.parallel_gain:
             return super()._make_image_index(tids, inner_ids, inner_name)
