@@ -950,7 +950,7 @@ class LPD1M(XtdfDetectorBase):
             n_per_gain_stage = int(frames // 3)
             train_desired = desired[desired < n_per_gain_stage]
             for stage in range(3):
-                start = ix + (stage * n_per_gain_stage)
+                start = ix + np.uint64(stage * n_per_gain_stage)
                 positions.append(start + train_desired)
 
         return np.concatenate(positions)
