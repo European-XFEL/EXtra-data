@@ -468,15 +468,7 @@ class DataCollection:
 
         seq_series = []
 
-        if source in self.control_sources:
-            data_path = "/CONTROL/{}/{}".format(source, key.replace('.', '/'))
-            for f in self._source_index[source]:
-                data = f.file[data_path][: len(f.train_ids), ...]
-                index = pd.Index(f.train_ids, name='trainId')
-
-                seq_series.append(pd.Series(data, name=name, index=index))
-
-        elif source in self.instrument_sources:
+        if source in self.instrument_sources:
             data_path = "/INSTRUMENT/{}/{}".format(source, key.replace('.', '/'))
             for f in self._source_index[source]:
                 group = key.partition('.')[0]
@@ -506,7 +498,7 @@ class DataCollection:
 
                 seq_series.append(pd.Series(data, name=name, index=index))
         else:
-            raise Exception("Unknown source category")
+            return self._get_key_data(source, key).series()
 
         ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
 
@@ -788,10 +780,12 @@ class DataCollection:
                     source_tids = np.empty(0, dtype=np.uint64)
 
                     for f in self._source_index[source]:
+                        valid = True if self.inc_suspect_trains else f.validity_flag
                         # Add the trains with data in each file.
+                        _, counts = f.get_index(source, group)
                         source_tids = np.union1d(
-                            f.train_ids[f.get_index(source, group)[1] > 0],
-                            source_tids)
+                            f.train_ids[valid & (counts > 0)], source_tids
+                        )
 
                     # Remove any trains previously selected, for which this
                     # selected source and key group has no data.
@@ -799,7 +793,7 @@ class DataCollection:
 
             # Filtering may have eliminated previously selected files.
             files = [f for f in files
-                     if np.intersect1d(f.train_ids, train_ids).size > 0]
+                     if f.has_train_ids(train_ids, self.inc_suspect_trains)]
 
             train_ids = list(train_ids)  # Convert back to a list.
 
@@ -878,7 +872,7 @@ class DataCollection:
         new_train_ids = select_train_ids(self.train_ids, train_range)
 
         files = [f for f in self.files
-                 if np.intersect1d(f.train_ids, new_train_ids).size > 0]
+                 if f.has_train_ids(new_train_ids, self.inc_suspect_trains)]
 
         return DataCollection(
             files, selection=self.selection, train_ids=new_train_ids,
@@ -892,10 +886,12 @@ class DataCollection:
         for source, files in self._source_index.items():
             got_tids = np.array([], dtype=np.uint64)
             for file in files:
-                if np.intersect1d(got_tids, file.train_ids).size > 0:
+                if file.has_train_ids(got_tids, self.inc_suspect_trains):
                     sources_with_conflicts.add(source)
                     break
-                got_tids = np.union1d(got_tids, file.train_ids)
+                f_tids = file.train_ids if self.inc_suspect_trains \
+                            else file.valid_train_ids
+                got_tids = np.union1d(got_tids, f_tids)
 
         if sources_with_conflicts:
             raise ValueError("{} sources have conflicting data "
@@ -1072,7 +1068,8 @@ class DataCollection:
         """
         if train_id not in self.train_ids:
             raise ValueError("train {} not found in run.".format(train_id))
-        files = [f for f in self.files if train_id in f.train_ids]
+        files = [f for f in self.files
+                 if f.has_train_ids([train_id], self.inc_suspect_trains)]
         ctrl = set().union(*[f.control_sources for f in files])
         inst = set().union(*[f.instrument_sources for f in files])
 

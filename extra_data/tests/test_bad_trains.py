@@ -117,6 +117,9 @@ def test_keydata_interface(agipd_file_tid_very_high):
     assert len(kd.train_ids) == 250
     assert kd.shape == (250 * 64, 512, 128)
 
+    # Check selecting trains preserves inc_suspect_trains flag
+    assert kd[:].shape == (250 * 64, 512, 128)
+
 def test_data_counts(agipd_file_flag0):
     f = H5File(agipd_file_flag0)
     kd = f['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.data']
@@ -259,8 +262,15 @@ def test_still_valid_elsewhere(agipd_file_tid_very_high, mock_sa3_control_data):
     assert tids_from_iter == [10200, 10400]
     assert [set(d) for d in data_from_iter] == [set(t1), set(t2)]
 
+    # Check that select with require_all respects the valid train filtering:
+    sel2 = dc.select(agipd_src, require_all=True)
+    assert len(sel2.train_ids) == 249
+
     dc_inc = H5File(agipd_file_tid_very_high, inc_suspect_trains=True)\
                 .union(H5File(mock_sa3_control_data))
     sel_inc = dc_inc.select(sel)
     _, t2_inc = sel_inc.train_from_id(10400, flat_keys=True)
     assert set(t2_inc) == set(t1)
+
+    sel2_inc = dc_inc.select(agipd_src, require_all=True)
+    assert len(sel2_inc.train_ids) == 250

@@ -90,7 +90,7 @@ class KeyData:
         """
         tids = select_train_ids(self.train_ids, trains)
         files = [f for f in self.files
-                 if np.intersect1d(f.train_ids, tids).size > 0]
+                 if f.has_train_ids(tids, self.inc_suspect_trains)]
 
         return KeyData(
             self.source,
@@ -100,6 +100,7 @@ class KeyData:
             section=self.section,
             dtype=self.dtype,
             eshape=self.entry_shape,
+            inc_suspect_trains=self.inc_suspect_trains,
         )
 
     def __getitem__(self, item):
@@ -297,8 +298,12 @@ class KeyData:
     def _find_tid(self, tid) -> (Optional[FileAccess], int):
         for fa in self.files:
             matches = (fa.train_ids == tid).nonzero()[0]
-            if matches.size > 0:
+            if self.inc_suspect_trains and matches.size > 0:
                 return fa, matches[0]
+
+            for ix in matches:
+                if fa.validity_flag[ix]:
+                    return fa, ix
 
         return None, 0
 
