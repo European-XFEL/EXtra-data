@@ -15,6 +15,7 @@ from xarray import DataArray
 from extra_data import (
     H5File, RunDirectory, by_index, by_id,
     SourceNameError, PropertyNameError, DataCollection, open_run,
+    MultiRunError
 )
 
 def test_iterate_trains(mock_agipd_data):
@@ -737,3 +738,35 @@ def test_get_data_counts(mock_spb_raw_run):
     count = run.get_data_counts('SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value')
     assert count.index.tolist() == run.train_ids
     assert (count.values == 1).all()
+
+
+def test_get_run_value(mock_fxe_control_data):
+    f = H5File(mock_fxe_control_data)
+    src = 'FXE_XAD_GEC/CAM/CAMERA'
+    val = f.get_run_value(src, 'firmwareVersion')
+    assert isinstance(val, np.int32)
+    assert f.get_run_value(src, 'firmwareVersion.value') == val
+
+    with pytest.raises(SourceNameError):
+        f.get_run_value(src + '_NONEXIST', 'firmwareVersion')
+
+    with pytest.raises(PropertyNameError):
+        f.get_run_value(src, 'non.existant')
+
+
+def test_get_run_value_union(mock_fxe_control_data, mock_sa3_control_data):
+    f = H5File(mock_fxe_control_data)
+    f2 = H5File(mock_sa3_control_data)
+    data = f.union(f2)
+    with pytest.raises(MultiRunError):
+        data.get_run_value('FXE_XAD_GEC/CAM/CAMERA', 'firmwareVersion')
+
+    with pytest.raises(MultiRunError):
+        data.get_run_values('FXE_XAD_GEC/CAM/CAMERA')
+
+def test_get_run_values(mock_fxe_control_data):
+    f = H5File(mock_fxe_control_data)
+    src = 'FXE_XAD_GEC/CAM/CAMERA'
+    d = f.get_run_values(src, )
+    assert isinstance(d['firmwareVersion.value'], np.int32)
+    assert isinstance(d['enableShutter.value'], np.uint8)

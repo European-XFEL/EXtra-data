@@ -30,7 +30,9 @@ import tempfile
 import time
 from warnings import warn
 
-from .exceptions import SourceNameError, PropertyNameError, TrainIDError
+from .exceptions import (
+    SourceNameError, PropertyNameError, TrainIDError, MultiRunError,
+)
 from .keydata import KeyData
 from .read_machinery import (
     DETECTOR_SOURCE_RE,
@@ -75,11 +77,12 @@ class DataCollection:
     """
     def __init__(
             self, files, selection=None, train_ids=None, ctx_closes=False, *,
-            inc_suspect_trains=False,
+            inc_suspect_trains=False, is_single_run=False,
     ):
         self.files = list(files)
         self.ctx_closes = ctx_closes
         self.inc_suspect_trains = inc_suspect_trains
+        self.is_single_run = is_single_run
 
         # selection: {source: set(keys)}
         # None as value -> all keys for this source
@@ -123,7 +126,10 @@ class DataCollection:
             return osp.basename(path), fa
 
     @classmethod
-    def from_paths(cls, paths, _files_map=None, *, inc_suspect_trains=False):
+    def from_paths(
+            cls, paths, _files_map=None, *, inc_suspect_trains=False,
+            is_single_run=False
+    ):
         files = []
         uncached = []
         for path in paths:
@@ -158,13 +164,17 @@ class DataCollection:
             raise Exception("All HDF5 files specified are unusable")
 
         return cls(
-            files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains
+            files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains,
+            is_single_run=is_single_run,
         )
 
     @classmethod
     def from_path(cls, path, *, inc_suspect_trains=False):
         files = [FileAccess(path)]
-        return cls(files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains)
+        return cls(
+            files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains,
+            is_single_run=True
+        )
 
     def __enter__(self):
         if not self.ctx_closes:
@@ -566,6 +576,74 @@ class DataCollection:
         """
         return self._get_key_data(source, key).dask_array(labelled=labelled)
 
+    def get_run_value(self, source, key):
+        """Get a single value from the RUN section of data files.
+
+        RUN records each property of control devices as a snapshot at the
+        beginning of the run. This includes properties which are not saved
+        continuously in CONTROL data.
+
+        This method is intended for use with data from a single run. If you
+        combine data from multiple runs, it will raise MultiRunError.
+
+        Parameters
+        ----------
+
+        source: str
+            Control device name, e.g. "HED_OPT_PAM/CAM/SAMPLE_CAM_4".
+        key: str
+            Key of parameter within that device, e.g. "triggerMode".
+        """
+        if not self.is_single_run:
+            raise MultiRunError
+
+        if source not in self.control_sources:
+            raise SourceNameError(source)
+
+        # Arbitrary file - should be the same across a run
+        fa = self._source_index[source][0]
+        ds = fa.file['RUN'][source].get(key.replace('.', '/'))
+        if isinstance(ds, h5py.Group):
+            # Allow for the .value suffix being omitted
+            ds = ds.get('value')
+        if not isinstance(ds, h5py.Dataset):
+            raise PropertyNameError(key, source)
+
+        val = ds[0]
+        if isinstance(val, bytes):  # bytes -> str
+            return val.decode('utf-8', 'surrogateescape')
+        return val
+
+    def get_run_values(self, source) -> dict:
+        """Get a dict of all RUN values for the given source
+
+        This includes keys which are also in CONTROL.
+
+        Parameters
+        ----------
+
+        source: str
+            Control device name, e.g. "HED_OPT_PAM/CAM/SAMPLE_CAM_4".
+        """
+        if not self.is_single_run:
+            raise MultiRunError
+
+        if source not in self.control_sources:
+            raise SourceNameError(source)
+
+        # Arbitrary file - should be the same across a run
+        fa = self._source_index[source][0]
+        res = {}
+        def visitor(path, obj):
+            if isinstance(obj, h5py.Dataset):
+                val = obj[0]
+                if isinstance(val, bytes):
+                    val = val.decode('utf-8', 'surrogateescape')
+                res[path.replace('/', '.')] = val
+
+        fa.file['RUN'][source].visititems(visitor)
+        return res
+
     def union(self, *others):
         """Join the data in this collection with one or more others.
 
@@ -803,6 +881,7 @@ class DataCollection:
         return DataCollection(
             files, selection=selection, train_ids=train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=self.is_single_run
         )
 
     def deselect(self, seln_or_source_glob, key_glob='*'):
@@ -844,6 +923,7 @@ class DataCollection:
         return DataCollection(
             files, selection=selection, train_ids=self.train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=self.is_single_run,
         )
 
     def select_trains(self, train_range):
@@ -877,6 +957,7 @@ class DataCollection:
         return DataCollection(
             files, selection=self.selection, train_ids=new_train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=self.is_single_run,
         )
 
     def _check_source_conflicts(self):
@@ -1012,12 +1093,30 @@ class DataCollection:
 
 
         print()
-        print(len(self.control_sources), 'control sources: (1 entry per train)')
+        print(len(self.control_sources), 'control sources:')
         for s in sorted(self.control_sources):
             print('  -', s)
             if any(p.match(s) for p in details_sources_re):
                 # Detail for control sources: list keys
-                keys_detail(s, sorted(self.keys_for_source(s)), prefix='    - ')
+                ctrl_keys = self.keys_for_source(s)
+                print('    - Control keys (1 entry per train):')
+                keys_detail(s, sorted(ctrl_keys), prefix='      - ')
+
+                run_keys = self._source_index[s][0].get_run_keys(s)
+                run_only_keys = run_keys - ctrl_keys
+                if run_only_keys:
+                    print('    - Additional run keys (1 entry per run):')
+                    for k in sorted(run_only_keys):
+                        ds = self._source_index[s][0].file[f"/RUN/{s}/{k.replace('.', '/')}"]
+                        entry_shape = ds.shape[1:]
+                        if entry_shape:
+                            entry_info = f", entry shape {entry_shape}"
+                        else:
+                            entry_info = ""
+                        dt = ds.dtype
+                        if h5py.check_string_dtype(dt):
+                            dt = 'string'
+                        print(f"      - {k}\t[{dt}{entry_info}]")
 
         print()
 
@@ -1340,7 +1439,8 @@ def RunDirectory(
     files_map = RunFilesMap(path)
     t0 = time.monotonic()
     d = DataCollection.from_paths(
-        files, files_map, inc_suspect_trains=inc_suspect_trains
+        files, files_map, inc_suspect_trains=inc_suspect_trains,
+        is_single_run=True,
     )
     log.debug("Opened run with %d files in %.2g s",
               len(d.files), time.monotonic() - t0)

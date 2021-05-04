@@ -130,9 +130,9 @@ below, e.g.::
    .. automethod:: select_trains
 
 The run or file object (a :class:`DataCollection`) also has methods to load
-data by sources and keys. Some of them are directly equivalent to the options
-above, but :meth:`.get_dataframe` and :meth:`.get_virtual_dataset` offer extra
-capabilities.
+data by sources and keys. :meth:`get_array`, :meth:`get_dask_array` and
+:meth:`get_series` are directly equivalent to the options above, but other
+methods offer extra capabilities.
 
 .. class:: DataCollection
    :noindex:
@@ -159,6 +159,14 @@ capabilities.
 
       .. seealso::
         :doc:`parallel_example`
+
+   .. automethod:: get_run_value
+
+      .. versionadded:: 1.6
+
+   .. automethod:: get_run_values
+
+      .. versionadded:: 1.6
 
 .. _data-by-train:
 

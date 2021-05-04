@@ -36,6 +36,9 @@ program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 __version__ = "1.5.0"
 
 
+from .exceptions import (
+    SourceNameError, PropertyNameError, TrainIDError, MultiRunError
+)
 from .keydata import KeyData
 from .reader import *
 from .stacking import *
