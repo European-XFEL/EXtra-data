@@ -694,12 +694,31 @@ def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
         assert {f.filename for f in run.files} == paths
 
         # Proc folder
-        run = open_run(proposal=2012, run=238, data='proc')
+        proc_run = open_run(proposal=2012, run=238, data='proc')
 
-        proc_paths = {f.filename for f in run.files}
+        proc_paths = {f.filename for f in proc_run.files}
         assert proc_paths
         for path in proc_paths:
             assert '/raw/' not in path
+
+        # All folders
+        all_run = open_run(proposal=2012, run=238, data='all')
+
+        # Raw contains all sources.
+        assert run.all_sources == all_run.all_sources
+
+        # Proc is a true subset.
+        assert proc_run.all_sources < all_run.all_sources
+
+        for source, files in all_run._source_index.items():
+            for file in files:
+                if '/DET/' in source:
+                    # AGIPD data is in proc.
+                    assert '/raw/' not in file.filename
+                else:
+                    # Non-AGIPD data is in raw.
+                    # (CAM, XGM)
+                    assert '/proc/' not in file.filename
 
         # Run that doesn't exist
         with pytest.raises(Exception):
