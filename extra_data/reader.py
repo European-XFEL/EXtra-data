@@ -77,7 +77,7 @@ class DataCollection:
     """
     def __init__(
             self, files, selection=None, train_ids=None, ctx_closes=False, *,
-            inc_suspect_trains=False, is_single_run=False,
+            inc_suspect_trains=True, is_single_run=False,
     ):
         self.files = list(files)
         self.ctx_closes = ctx_closes
@@ -127,7 +127,7 @@ class DataCollection:
 
     @classmethod
     def from_paths(
-            cls, paths, _files_map=None, *, inc_suspect_trains=False,
+            cls, paths, _files_map=None, *, inc_suspect_trains=True,
             is_single_run=False
     ):
         files = []
@@ -169,7 +169,7 @@ class DataCollection:
         )
 
     @classmethod
-    def from_path(cls, path, *, inc_suspect_trains=False):
+    def from_path(cls, path, *, inc_suspect_trains=True):
         files = [FileAccess(path)]
         return cls(
             files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains,
@@ -1379,7 +1379,7 @@ class TrainIterator:
             yield tid, self._assemble_data(tid)
 
 
-def H5File(path, *, inc_suspect_trains=False):
+def H5File(path, *, inc_suspect_trains=True):
     """Open a single HDF5 file generated at European XFEL.
 
     ::
@@ -1393,16 +1393,16 @@ def H5File(path, *, inc_suspect_trains=False):
     path: str
         Path to the HDF5 file
     inc_suspect_trains: bool
-        If False (default), suspect train IDs within a file are skipped.
+        If False, suspect train IDs within a file are skipped.
         In newer files, trains where INDEX/flag are 0 are suspect. For older
         files which don't have this flag, out-of-sequence train IDs are suspect.
-        If True, it tries to include these trains.
+        If True (default), it tries to include these trains.
     """
     return DataCollection.from_path(path, inc_suspect_trains=inc_suspect_trains)
 
 
 def RunDirectory(
-        path, include='*', file_filter=locality.lc_any, *, inc_suspect_trains=False
+        path, include='*', file_filter=locality.lc_any, *, inc_suspect_trains=True
 ):
     """Open data files from a 'run' at European XFEL.
 
@@ -1425,10 +1425,10 @@ def RunDirectory(
         Function to subset the list of filenames to open.
         Meant to be used with functions in the extra_data.locality module.
     inc_suspect_trains: bool
-        If False (default), suspect train IDs within a file are skipped.
+        If False, suspect train IDs within a file are skipped.
         In newer files, trains where INDEX/flag are 0 are suspect. For older
         files which don't have this flag, out-of-sequence train IDs are suspect.
-        If True, it tries to include these trains.
+        If True (default), it tries to include these trains.
     """
     files = [f for f in os.listdir(path) if f.endswith('.h5')]
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
@@ -1455,7 +1455,7 @@ RunHandler = RunDirectory
 
 def open_run(
         proposal, run, data='raw', include='*', file_filter=locality.lc_any, *,
-        inc_suspect_trains=False
+        inc_suspect_trains=True
 ):
     """Access EuXFEL data on the Maxwell cluster by proposal and run number.
 
@@ -1481,10 +1481,10 @@ def open_run(
         Function to subset the list of filenames to open.
         Meant to be used with functions in the extra_data.locality module.
     inc_suspect_trains: bool
-        If False (default), suspect train IDs within a file are skipped.
+        If False, suspect train IDs within a file are skipped.
         In newer files, trains where INDEX/flag are 0 are suspect. For older
         files which don't have this flag, out-of-sequence train IDs are suspect.
-        If True, it tries to include these trains.
+        If True (default), it tries to include these trains.
     """
     if isinstance(proposal, str):
         if ('/' not in proposal) and not proposal.startswith('p'):

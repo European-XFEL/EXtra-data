@@ -13,7 +13,7 @@ class KeyData:
     """
     def __init__(
             self, source, key, *, train_ids, files, section, dtype, eshape,
-            inc_suspect_trains=False,
+            inc_suspect_trains=True,
     ):
         self.source = source
         self.key = key

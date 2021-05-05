@@ -70,7 +70,7 @@ def test_validity_flag(agipd_file_flag0):
     assert not fa.validity_flag[30]
 
 def test_exc_trainid(agipd_file_tid_very_high, agipd_file_tid_high, agipd_file_tid_low, agipd_file_flag0):
-    f = H5File(agipd_file_tid_very_high)
+    f = H5File(agipd_file_tid_very_high, inc_suspect_trains=False)
     assert len(f.train_ids) == 249
     assert 10400 not in f.train_ids
 
@@ -78,7 +78,7 @@ def test_exc_trainid(agipd_file_tid_very_high, agipd_file_tid_high, agipd_file_t
     assert len(f.train_ids) == 250
     assert 10400 in f.train_ids
 
-    f = H5File(agipd_file_tid_high)
+    f = H5File(agipd_file_tid_high, inc_suspect_trains=False)
     assert len(f.train_ids) == 485
     assert 10100 in f.train_ids
 
@@ -86,7 +86,7 @@ def test_exc_trainid(agipd_file_tid_very_high, agipd_file_tid_high, agipd_file_t
     assert len(f.train_ids) == 485  # this list is always deduped & sorted
     assert 10100 in f.train_ids
 
-    f = H5File(agipd_file_tid_low)
+    f = H5File(agipd_file_tid_low, inc_suspect_trains=False)
     assert len(f.train_ids) == 249
     assert 9000 not in f.train_ids
 
@@ -94,7 +94,7 @@ def test_exc_trainid(agipd_file_tid_very_high, agipd_file_tid_high, agipd_file_t
     assert len(f.train_ids) == 250
     assert 9000 in f.train_ids
 
-    f = H5File(agipd_file_flag0)
+    f = H5File(agipd_file_flag0, inc_suspect_trains=False)
     assert len(f.train_ids) == 485
     assert 10030 not in f.train_ids
 
@@ -107,7 +107,7 @@ def test_exc_trainid(agipd_file_tid_very_high, agipd_file_tid_high, agipd_file_t
 # each behaviour on just one of the sample files.
 
 def test_keydata_interface(agipd_file_tid_very_high):
-    f = H5File(agipd_file_tid_very_high)
+    f = H5File(agipd_file_tid_very_high, inc_suspect_trains=False)
     kd = f['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.data']
     assert len(kd.train_ids) == 249
     assert kd.shape == (249 * 64, 512, 128)
@@ -121,7 +121,7 @@ def test_keydata_interface(agipd_file_tid_very_high):
     assert kd[:].shape == (250 * 64, 512, 128)
 
 def test_data_counts(agipd_file_flag0):
-    f = H5File(agipd_file_flag0)
+    f = H5File(agipd_file_flag0, inc_suspect_trains=False)
     kd = f['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.data']
     assert 10030 not in kd.data_counts().index
 
@@ -130,7 +130,7 @@ def test_data_counts(agipd_file_flag0):
     assert 10030 in kd.data_counts().index
 
 def test_array(agipd_file_tid_low):
-    f = H5File(agipd_file_tid_low)
+    f = H5File(agipd_file_tid_low, inc_suspect_trains=False)
     arr = f['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId'].xarray()
     assert arr.shape == (249 * 64, 1)
 
@@ -139,7 +139,7 @@ def test_array(agipd_file_tid_low):
     assert arr.shape == (250 * 64, 1)
 
 def test_array_dup(agipd_file_tid_high):
-    f = H5File(agipd_file_tid_high)
+    f = H5File(agipd_file_tid_high, inc_suspect_trains=False)
     arr = f['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.pulseId'].xarray()
     assert arr.shape == (485 * 64, 1)
     assert list(arr.coords['trainId'].values[(9*64):(11*64):64]) == [10009, 10011]
@@ -150,7 +150,7 @@ def test_array_dup(agipd_file_tid_high):
     assert list(arr.coords['trainId'].values[(9 * 64):(11 * 64):64]) == [10009, 10100]
 
 def test_dask_array(agipd_file_flag0):
-    f = H5File(agipd_file_flag0)
+    f = H5File(agipd_file_flag0, inc_suspect_trains=False)
     arr = f['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.pulseId'].dask_array()
     assert arr.shape == (485 * 64, 1)
 
@@ -159,7 +159,7 @@ def test_dask_array(agipd_file_flag0):
     assert arr.shape == (486 * 64, 1)
 
 def test_iterate_keydata(agipd_file_tid_very_high):
-    f = H5File(agipd_file_tid_very_high)
+    f = H5File(agipd_file_tid_very_high, inc_suspect_trains=False)
     kd = f['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId']
     tids = [t for (t, _) in kd.trains()]
     assert len(tids) == 249
@@ -172,7 +172,7 @@ def test_iterate_keydata(agipd_file_tid_very_high):
     assert 10400 in tids
 
 def test_iterate_keydata_dup(agipd_file_tid_high):
-    f = H5File(agipd_file_tid_high)
+    f = H5File(agipd_file_tid_high, inc_suspect_trains=False)
     kd = f['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.pulseId']
     tids = [t for (t, _) in kd.trains()]
     assert len(tids) == 485
@@ -180,13 +180,13 @@ def test_iterate_keydata_dup(agipd_file_tid_high):
     assert tids[9:11] == [10009, 10011]
 
 def test_iterate_datacollection(agipd_file_tid_low):
-    f = H5File(agipd_file_tid_low)
+    f = H5File(agipd_file_tid_low, inc_suspect_trains=False)
     tids = [t for (t, _) in f.trains()]
     assert len(tids) == 249
     assert 9000 not in tids
 
 def test_get_train_keydata(agipd_file_tid_low):
-    f = H5File(agipd_file_tid_low)
+    f = H5File(agipd_file_tid_low, inc_suspect_trains=False)
     kd = f['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId']
     with pytest.raises(TrainIDError):
         kd.train_from_id(9000)
@@ -196,14 +196,14 @@ def test_get_train_keydata(agipd_file_tid_low):
     assert kd.train_from_id(9000)[0] == 9000
 
 def test_components_array(agipd_file_flag0):
-    f = H5File(agipd_file_flag0)
+    f = H5File(agipd_file_flag0, inc_suspect_trains=False)
     agipd = AGIPD1M(f, modules=[0])
     arr = agipd.get_array('image.data', pulses=np.s_[:1])
     assert arr.shape == (1, 485, 1, 2, 512, 128)
     assert arr.dims == ('module', 'train', 'pulse', 'data_gain', 'slow_scan', 'fast_scan')
 
 def test_components_array_dup(agipd_file_tid_high):
-    f = H5File(agipd_file_tid_high)
+    f = H5File(agipd_file_tid_high, inc_suspect_trains=False)
     agipd = AGIPD1M(f, modules=[0])
     arr = agipd.get_array('image.data', pulses=np.s_[:1])
     assert arr.shape == (1, 485, 1, 2, 512, 128)
@@ -211,7 +211,7 @@ def test_components_array_dup(agipd_file_tid_high):
     assert list(arr.coords['train'].values[9:11]) == [10009, 10011]
 
 def test_write_virtual_cxi_dup(agipd_file_tid_high, tmp_path, caplog):
-    f = H5File(agipd_file_tid_high)
+    f = H5File(agipd_file_tid_high, inc_suspect_trains=False)
     agipd = AGIPD1M(f, modules=[0])
     cxi_path = tmp_path / 'exc_suspect.cxi'
     agipd.write_virtual_cxi(str(cxi_path))
@@ -220,14 +220,14 @@ def test_write_virtual_cxi_dup(agipd_file_tid_high, tmp_path, caplog):
         assert f['entry_1/data_1/data'].shape == (485 * 64, 16, 2, 512, 128)
 
 def test_write_virtual(agipd_file_tid_low, agipd_file_tid_high, tmp_path):
-    f = H5File(agipd_file_tid_low)
+    f = H5File(agipd_file_tid_low, inc_suspect_trains=False)
     f.write_virtual(tmp_path / 'low.h5')
     with h5py.File(tmp_path / 'low.h5', 'r') as vf:
         assert 9000 not in vf['INDEX/trainId'][:]
         ds = vf['INSTRUMENT/SPB_DET_AGIPD1M-1/DET/7CH0:xtdf/image/pulseId']
         assert ds.shape == (249 * 64, 1)
 
-    f = H5File(agipd_file_tid_high)
+    f = H5File(agipd_file_tid_high, inc_suspect_trains=False)
     f.write_virtual(tmp_path / 'high.h5')
     with h5py.File(tmp_path / 'high.h5', 'r') as vf:
         ds = vf['INSTRUMENT/SPB_DET_AGIPD1M-1/DET/0CH0:xtdf/image/trainId']
@@ -235,7 +235,9 @@ def test_write_virtual(agipd_file_tid_low, agipd_file_tid_high, tmp_path):
         assert list(ds[(9*64):(11*64):64]) == [10009, 10011]
 
 def test_still_valid_elsewhere(agipd_file_tid_very_high, mock_sa3_control_data):
-    dc = H5File(agipd_file_tid_very_high).union(H5File(mock_sa3_control_data))
+    dc = H5File(
+        agipd_file_tid_very_high, inc_suspect_trains=False
+    ).union(H5File(mock_sa3_control_data))
     assert dc.train_ids == list(range(10000, 10500))
 
     agipd_src = 'SPB_DET_AGIPD1M-1/DET/7CH0:xtdf'
