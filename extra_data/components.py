@@ -372,24 +372,31 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
                 inner_ids = get_inner_ids(f, data_slice, inner_index)
 
-                if isinstance(pulses, by_id):
-                    if inner_index == 'pulseId':
-                        pulse_id = inner_ids
-                    else:
-                        pulse_id = get_inner_ids(f, data_slice, 'pulseId')
-                    positions = self._select_pulse_ids(pulses, pulse_id)
-                else:  # by_index
-                    positions = self._select_pulse_indices(
-                        pulses, chunk_firsts - data_slice.start, chunk_counts
-                    )
-
                 trainids = np.repeat(
                     np.arange(first_tid, last_tid + 1, dtype=np.uint64),
                     chunk_counts.astype(np.intp),
                 )
                 index = self._make_image_index(
                     trainids, inner_ids, inner_index[:-2]
-                )[positions]
+                )
+
+                if isinstance(pulses, by_id):
+                    # Get the pulse ID values out of the MultiIndex rather than
+                    # using inner_ids, because LPD1M in parallel_gain mode
+                    # makes the MultiIndex differently, repeating pulse IDs.
+                    if inner_index == 'pulseId':
+                        pulse_id = index.get_level_values('pulse')
+                    else:
+                        pulse_id = self._make_image_index(
+                            trainids, get_inner_ids(f, data_slice, 'pulseId'),
+                        ).get_level_values('pulse')
+                    positions = self._select_pulse_ids(pulses, pulse_id)
+                else:  # by_index
+                    positions = self._select_pulse_indices(
+                        pulses, chunk_firsts - data_slice.start, chunk_counts
+                    )
+
+                index = index[positions]
 
                 if isinstance(positions, slice):
                     data_positions = slice(
@@ -930,6 +937,30 @@ class LPD1M(XtdfDetectorBase):
                 raise ValueError(
                     "parallel_gain=True needs the frames in each train to be divisible by 3"
                 )
+
+    def _select_pulse_indices(self, pulses, firsts, counts):
+        if not self.parallel_gain:
+            return super()._select_pulse_indices(pulses, firsts, counts)
+
+        if isinstance(pulses.value, slice):
+            if pulses.value == slice(0, MAX_PULSES, 1):
+                # All pulses included
+                return slice(0, counts.sum())
+            else:
+                s = pulses.value
+                desired = np.arange(s.start, s.stop, step=s.step, dtype=np.uint64)
+        else:
+            desired = pulses.value
+
+        positions = []
+        for ix, frames in zip(firsts, counts):
+            n_per_gain_stage = int(frames // 3)
+            train_desired = desired[desired < n_per_gain_stage]
+            for stage in range(3):
+                start = ix + np.uint64(stage * n_per_gain_stage)
+                positions.append(start + train_desired)
+
+        return np.concatenate(positions)
 
     def _make_image_index(self, tids, inner_ids, inner_name='pulse'):
         if not self.parallel_gain:
