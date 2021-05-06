@@ -76,6 +76,11 @@ class MultimodDetectorBase:
 
     # Override in subclass
     _source_re = re.compile(r'')
+    _n_coords = 0       # Number of data coordinates, e.g.:
+                        # 1 - 'train_pulse' as in AGIPD data
+                        # 2 - 'train', 'memory_cell' as in Jungfrau
+    _inner_coord = ''   # Name of the inner coordinate
+    _inner_names = {}   # Dictionary maping subtrain keys to coordinate names
     _main_data_key = '' # Key to check data counts match and to identify
                         # a key group with per-pulse data
     _pulse_id_key = ''  # Key for pulse / memory cell id
@@ -183,7 +188,7 @@ class MultimodDetectorBase:
 
     @property
     def per_pulse_group(self):
-        return self._main_data_key.split('.')[0] + '.'
+        return self._main_data_key.partition('.')[0]
 
     @property
     def frames_per_train(self):
@@ -196,6 +201,80 @@ class MultimodDetectorBase:
         return "<{}: Data interface for detector {!r} with {} modules>".format(
             type(self).__name__, self.detector_name, len(self.source_to_modno),
         )
+
+    @classmethod
+    def _name_inner_index(cls, subtrain_index):
+        if subtrain_index in cls._inner_names:
+            return cls._inner_names[subtrain_index]
+        else:
+            raise ValueError(f"Unexpected subtrain idex: {subtrain_index}.")
+
+    def _get_inner_ids(self, f, source, data_slice, subtrain_index=None):
+        """
+        Get inner dimension ids from file f.
+
+        Args:
+            f (FileAccess): instance for the HD5 file of interest.
+            source (string): path to self.per_pulse_group in the HD5 file.
+            data_slice (slice): data slice for the first dimension.
+            subtrain_index (string, optional): key for the inner dimension ids.
+                In case of None (default) - estimated with
+                self._check_subtrain_index.
+
+        Returns:
+            ndarray: an array with inner dimension id values.
+        """
+        group = self.per_pulse_group
+        subtrain_index = self._check_subtrain_index(subtrain_index)
+        ids = f.file[f'/INSTRUMENT/{source}/{group}/{subtrain_index}'][
+            data_slice
+        ]
+        # Raw files for n_coords = 1 have a spurious extra dimension
+        if self._n_coords == 1 and ids.ndim >= 2 and ids.shape[1] == 1:
+            ids = ids[:, 0]
+        return ids
+
+    @staticmethod
+    def _select_pulse_ids(pulses, data_pulse_ids):
+        """
+        Select pulses by ID.
+
+        Args:
+            pulses (slice/ndarray): pulse ID values to be selected.
+            data_pulse_ids ([type]): array of pulse id values.
+
+        Returns:
+            slice/ndarray: slice or array of the indexes to include.
+        """
+        if isinstance(pulses, slice):
+            if pulses == slice(0, MAX_PULSES, 1):
+                # All pulses included
+                return slice(0, len(data_pulse_ids))
+            else:
+                desired = np.arange(pulses.start, pulses.stop,
+                                    step=pulses.step, dtype=np.uint64)
+        else:
+            desired = pulses
+
+        return np.nonzero(np.isin(data_pulse_ids, desired))[0]
+
+    @staticmethod
+    def _select_pulse_indices(pulses, count):
+        """
+        Select pulses by index.
+
+        Args:
+            pulses (slice/ndarray): pulse indices to be selected.
+            count (int): maximum pulse index.
+
+        Returns:
+            slice/ndarray: indices to include.
+        """
+        if isinstance(pulses, slice):
+            return slice(pulses.start, min(pulses.stop, count), pulses.step)
+
+        # ndarray
+        return pulses[pulses < count]
 
     @staticmethod
     def _concat(arrays, index, fill_value, astype):
@@ -210,77 +289,152 @@ class MultimodDetectorBase:
             fill_value=fill_value
         )
 
-    def get_array(self, key, *, fill_value=None, roi=(), astype=None):
-        """Get a labelled array of detector data
+    def get_array(self, key, pulses=np.s_[:], unstack_pulses=True, *,
+                  fill_value=None, subtrain_index=None, roi=(),
+                  astype=None):
+        """Get a labelled array of detector data.
 
         Parameters
         ----------
 
         key: str
           The data to get, e.g. 'image.data' for pixel values.
+        pulses: slice, array, by_id or by_index, optional
+          Select the pulses to include from each train. by_id selects by pulse
+          ID, by_index by index within the data being read.
+          The default includes all pulses. Only used for per-pulse data.
+        unstack_pulses: bool, optional
+          Whether to separate train and pulse dimensions. True by default.
         fill_value: int or float, optional
-            Value to use for missing values. If None (default) the fill value
-            is 0 for integers and np.nan for floats.
-        roi: tuple
+          Value to use for missing values. If None (default) the fill value
+          is 0 for integers and np.nan for floats.
+        subtrain_index: str, optional
+          Specify 'pulseId'/'cellId' or 'memoryCell' to label the frames
+          recorded within each train. Pulse ID should allow this data to be
+          matched with other devices, but depends on how the detector was
+          manually configured when the data was taken. Cell ID refers to the
+          memory cell used for that frame in the detector hardware.
+        roi: tuple, optional
           Specify e.g. ``np.s_[10:60, 100:200]`` to select pixels within each
           module when reading data. The selection is applied to each individual
           module, so it may only be useful when working with a single module.
-        astype: Type
-          Data type of the output array. If None (default) the dtype matches the
-          input array dtype
+          For AGIPD raw data, each module records a frame as a 3D array with 2
+          entries on the first dimension, for data & gain information, so
+          ``roi=np.s_[0]`` will select only the data part of each frame.
+        astype: Type, optional
+          data type of the output array. If None (default) the dtype matches
+          the input array dtype
         """
+        # Different default value for subtrain_index can be specified
+        # within _check_subtrain_index in subclasses.
+        subtrain_index = self._check_subtrain_index(subtrain_index)
+        if not isinstance(roi, tuple):
+            roi = (roi,)
+
         arrays = []
         modnos = []
         for modno, source in sorted(self.modno_to_source.items()):
-            arrays.append(self.data.get_array(source, key, roi=roi))
+            if key.startswith(self.per_pulse_group  + '.'):
+                pulses = _check_pulse_selection(pulses)
+                arrays.append(self._get_module_pulse_data(
+                    source, key, pulses, unstack_pulses, subtrain_index, roi=roi
+                ))
+            else:
+                arrays.append(self.data.get_array(source, key, roi=roi))
             modnos.append(modno)
 
         return self._concat(arrays, modnos, fill_value, astype)
 
-    def get_dask_array(self, key, fill_value=None, astype=None):
-        """Get a labelled Dask array of detector data
+    def get_dask_array(self, key, *, fill_value=None, subtrain_index=None,
+                       astype=None):
+        """Get a labelled Dask array of detector data.
+
+        Dask does lazy, parallelised computing, and can work with large data
+        volumes. This method doesn't immediately load the data: that only
+        happens once you trigger a computation.
+
         Parameters
         ----------
+
         key: str
           The data to get, e.g. 'image.data' for pixel values.
         fill_value: int or float, optional
-          Value to use for missing values. If None (default) the fill value is 0
-          for integers and np.nan for floats.
-        astype: Type
-          Data type of the output array. If None (default) the dtype matches the
-          input array dtype
+          Value to use for missing values. If None (default) the fill value
+          is 0 for integers and np.nan for floats.
+        subtrain_index: str, optional
+          Specify 'pulseId'/'cellId' or 'memoryCell' to label the frames
+          recorded within each train. Pulse ID should allow this data to be
+          matched with other devices, but depends on how the detector was
+          manually configured when the data was taken. Cell ID refers to the
+          memory cell used for that frame in the detector hardware.
+        astype: Type, optional
+          Data type of the output array. If None (default) the dtype matches
+          the input array dtype.
         """
+        # Different default value for subtrain_index can be specified
+        # within _check_subtrain_index in subclasses.
+        subtrain_index = self._check_subtrain_index(subtrain_index)
+
         arrays = []
         modnos = []
         for modno, source in sorted(self.modno_to_source.items()):
-            modnos.append(modno)
             mod_arr = self.data.get_dask_array(source, key, labelled=True)
+
+            if key.startswith(self.per_pulse_group  + '.'):
+                # Inner coordinate
+                inner_ix = self.data.get_array(
+                    source, self.per_pulse_group + '.' + subtrain_index
+                )
+                mod_arr = self._label_axes(mod_arr)
+                if self._n_coords == 2 and mod_arr.ndim >= 2:
+                    mod_arr = mod_arr.assign_coords({
+                        'pulse': ('pulse', inner_ix[0])
+                    })
+                elif self._n_coords == 1:
+                    # Raw files might have a spurious extra dimension
+                    if inner_ix.ndim >= 2 and inner_ix.shape[1] == 1:
+                        inner_ix = inner_ix[:, 0]
+
+                    mod_arr.coords['train_pulse'] = self._make_image_index(
+                        mod_arr.coords['train_pulse'].values, inner_ix.values,
+                        inner_name=subtrain_index,
+                    ).set_names('trainId', level=0)
+                    # This uses 'trainId' where a concrete array from the same class
+                    # uses 'train'. I didn't notice that inconsistency when I
+                    # introduced it, and now code may be relying on each name.
+
             arrays.append(mod_arr)
+            modnos.append(modno)
 
         return self._concat(arrays, modnos, fill_value, astype)
 
-    def _make_image_index(self, tids, inner_ids, inner_name='pulse'):
+    def _make_image_index(self, tids, inner_ids, inner_name=None):
         """
-        Prepare indices for data per pulse.
+        Prepare indices for data per inner coordinate.
 
         Args:
-            tids (np.array): train id repeated for each pulse.
-            inner_ids (np.array): array of pulse values.
-            inner_name (string): name of the inner (pulse) index.
+            tids (np.array): train id repeated for each inner coordinate.
+            inner_ids (np.array): array of inner coordinate values.
+            inner_name (string): name of the inner coordinate.
 
         Returns:
             pd.MultiIndex: MultiIndex of 'train_ids' x 'inner_ids'.
         """
+        if inner_name is None:
+            inner_name = self._inner_coord
         return pd.MultiIndex.from_arrays(
             [tids, inner_ids], names=['train', inner_name]
         )
 
-    def trains(self, require_all=True):
+    def trains(self, pulses=np.s_[:], require_all=True):
         """Iterate over trains for detector data.
 
         Parameters
         ----------
 
+        pulses: slice, array, by_index or by_id
+          Select which pulses to include for each train.
+          The default is to include all pulses.
         require_all: bool
           If True (default), skip trains where any of the selected detector
           modules are missing data.
@@ -292,7 +446,7 @@ class MultimodDetectorBase:
           A dictionary mapping key names (e.g. ``image.data``) to labelled
           arrays.
         """
-        return MPxDetectorTrainIterator(self, require_all=require_all)
+        return MPxDetectorTrainIterator(self, pulses, require_all=require_all)
 
 
 class XtdfDetectorBase(MultimodDetectorBase):
@@ -304,26 +458,11 @@ class XtdfDetectorBase(MultimodDetectorBase):
     access more complicated.
     """
     n_modules = 16
+    _n_coords = 1
+    _inner_coord = 'pulse'
+    _inner_names = {'pulseId': 'pulse', 'cellId': 'cell'}
     _main_data_key = 'image.data'
     _pulse_id_key = 'pulseId'
-
-    @staticmethod
-    def _select_pulse_ids(pulses, data_pulse_ids):
-        """Select pulses by ID across a chunk of trains
-
-        Returns an array or slice of the indexes to include.
-        """
-        if isinstance(pulses.value, slice):
-            if pulses.value == slice(0, MAX_PULSES, 1):
-                # All pulses included
-                return slice(0, len(data_pulse_ids))
-            else:
-                s = pulses.value
-                desired = np.arange(s.start, s.stop, step=s.step, dtype=np.uint64)
-        else:
-            desired = pulses.value
-
-        return np.nonzero(np.isin(data_pulse_ids, desired))[0]
 
     @staticmethod
     def _select_pulse_indices(pulses, firsts, counts):
@@ -331,15 +470,15 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
         Returns an array or slice of the indexes to include.
         """
-        if isinstance(pulses.value, slice):
-            if pulses.value == slice(0, MAX_PULSES, 1):
+        if isinstance(pulses, slice):
+            if pulses == slice(0, MAX_PULSES, 1):
                 # All pulses included
                 return slice(0, counts.sum())
             else:
-                s = pulses.value
+                s = pulses
                 desired = np.arange(s.start, s.stop, step=s.step, dtype=np.uint64)
         else:
-            desired = pulses.value
+            desired = pulses
 
         positions = []
         for first, count in zip(firsts, counts):
@@ -377,6 +516,19 @@ class XtdfDetectorBase(MultimodDetectorBase):
         return data[data_positions]
 
     @staticmethod
+    def _label_axes(arr):
+        """Label DataArray axes.
+
+        Args:
+            arr (xarray.DataArray): array from HD5 dataset.
+
+        Returns:
+            xarray.DataArray: same array with renamed axes.
+        """
+        arr = arr.rename({'trainId': 'train_pulse'})
+        return arr
+
+    @staticmethod
     def _guess_axes(data, train_pulse_ids, unstack_pulses):
         # Raw files have a spurious extra dimension
         if data.ndim >= 2 and data.shape[1] == 1:
@@ -406,17 +558,17 @@ class XtdfDetectorBase(MultimodDetectorBase):
         else:
             return arr
 
+    @staticmethod
+    def _check_subtrain_index(subtrain_index):
+        if subtrain_index is None:
+            return 'pulseId'
+        elif subtrain_index in {'pulseId', 'cellId'}:
+            return subtrain_index
+        else:
+            raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
+
     def _get_module_pulse_data(self, source, key, pulses, unstack_pulses,
                                inner_index='pulseId', roi=()):
-        def get_inner_ids(f, data_slice, ix_name='pulseId'):
-            ids = f.file[f'/INSTRUMENT/{source}/{group}/{ix_name}'][
-                data_slice
-            ]
-            # Raw files have a spurious extra dimension
-            if ids.ndim >= 2 and ids.shape[1] == 1:
-                ids = ids[:, 0]
-            return ids
-
         seq_arrays = []
         data_path = "/INSTRUMENT/{}/{}".format(source, key.replace('.', '/'))
         for f in self.data._source_index[source]:
@@ -437,25 +589,35 @@ class XtdfDetectorBase(MultimodDetectorBase):
                     chunk_firsts[0], int(chunk_firsts[-1] + chunk_counts[-1])
                 )
 
-                inner_ids = get_inner_ids(f, data_slice, inner_index)
+                inner_ids = self._get_inner_ids(
+                    f, source, data_slice, inner_index
+                )
 
                 if isinstance(pulses, by_id):
                     if inner_index == 'pulseId':
                         pulse_id = inner_ids
                     else:
-                        pulse_id = get_inner_ids(f, data_slice, 'pulseId')
-                    positions = self._select_pulse_ids(pulses, pulse_id)
+                        pulse_id = self._get_inner_ids(
+                            f, source, data_slice,'pulseId'
+                        )
+                    positions = self._select_pulse_ids(
+                        pulses.value,
+                        pulse_id
+                    )
                 else:  # by_index
                     positions = self._select_pulse_indices(
-                        pulses, chunk_firsts - data_slice.start, chunk_counts
+                        pulses.value,
+                        chunk_firsts - data_slice.start,
+                        chunk_counts
                     )
 
                 trainids = np.repeat(
                     np.arange(first_tid, last_tid + 1, dtype=np.uint64),
                     chunk_counts.astype(np.intp),
                 )
+                inner_name = self._name_inner_index(inner_index)
                 index = self._make_image_index(
-                    trainids, inner_ids, inner_index[:-2]
+                    trainids, inner_ids, inner_name
                 )[positions]
 
                 if isinstance(positions, slice):
@@ -465,6 +627,9 @@ class XtdfDetectorBase(MultimodDetectorBase):
                         positions.step
                     )
                 else:  # ndarray
+                    # Not sure this is still needed - now h5py seem to work
+                    # with ndarray as well as indexing a dataset with an
+                    # empty list. Original comment:
                     # h5py fancy indexing needs a list, not an ndarray
                     data_positions = list(data_slice.start + positions)
                     if data_positions == []:
@@ -502,142 +667,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
             sorted(non_empty, key=lambda a: a.coords['train'][0]),
             dim=('train' if unstack_pulses else 'train_pulse'),
         )
-
-    def get_array(self, key, pulses=np.s_[:], unstack_pulses=True, *,
-                  fill_value=None, subtrain_index='pulseId', roi=(),
-                  astype=None):
-        """Get a labelled array of detector data
-
-        Parameters
-        ----------
-
-        key: str
-          The data to get, e.g. 'image.data' for pixel values.
-        pulses: slice, array, by_id or by_index
-          Select the pulses to include from each train. by_id selects by pulse
-          ID, by_index by index within the data being read. The default includes
-          all pulses. Only used for per-pulse data.
-        unstack_pulses: bool
-          Whether to separate train and pulse dimensions.
-        fill_value: int or float, optional
-          Value to use for missing values. If None (default) the fill value is 0
-          for integers and np.nan for floats.
-        subtrain_index: str
-          Specify 'pulseId' (default) or 'cellId' to label the frames recorded
-          within each train. Pulse ID should allow this data to be matched with
-          other devices, but depends on how the detector was manually configured
-          when the data was taken. Cell ID refers to the memory cell used for
-          that frame in the detector hardware.
-        roi: tuple
-          Specify e.g. ``np.s_[10:60, 100:200]`` to select pixels within each
-          module when reading data. The selection is applied to each individual
-          module, so it may only be useful when working with a single module.
-          For AGIPD raw data, each module records a frame as a 3D array with 2
-          entries on the first dimension, for data & gain information, so
-          ``roi=np.s_[0]`` will select only the data part of each frame.
-        astype: Type
-          data type of the output array. If None (default) the dtype matches the
-          input array dtype
-        """
-        if subtrain_index not in {'pulseId', 'cellId'}:
-            raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
-        if not isinstance(roi, tuple):
-            roi = (roi,)
-
-        if key.startswith('image.'):
-            pulses = _check_pulse_selection(pulses)
-
-            arrays, modnos = [], []
-            for modno, source in sorted(self.modno_to_source.items()):
-                arrays.append(self._get_module_pulse_data(
-                    source, key, pulses, unstack_pulses, subtrain_index, roi=roi
-                ))
-                modnos.append(modno)
-
-            return self._concat(arrays, modnos, fill_value, astype)
-        else:
-            return super().get_array(
-                key, fill_value=fill_value, roi=roi, astype=astype
-            )
-
-    def get_dask_array(self, key, subtrain_index='pulseId', fill_value=None,
-                       astype=None):
-        """Get a labelled Dask array of detector data
-
-        Dask does lazy, parallelised computing, and can work with large data
-        volumes. This method doesn't immediately load the data: that only
-        happens once you trigger a computation.
-
-        Parameters
-        ----------
-
-        key: str
-          The data to get, e.g. 'image.data' for pixel values.
-        subtrain_index: str, optional
-          Specify 'pulseId' (default) or 'cellId' to label the frames recorded
-          within each train. Pulse ID should allow this data to be matched with
-          other devices, but depends on how the detector was manually configured
-          when the data was taken. Cell ID refers to the memory cell used for
-          that frame in the detector hardware.
-        fill_value: int or float, optional
-          Value to use for missing values. If None (default) the fill value is 0
-          for integers and np.nan for floats.
-        astype: Type, optional
-          data type of the output array. If None (default) the dtype matches the
-          input array dtype
-        """
-        if subtrain_index not in {'pulseId', 'cellId'}:
-            raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
-        arrays = []
-        modnos = []
-        for modno, source in sorted(self.modno_to_source.items()):
-            modnos.append(modno)
-            mod_arr = self.data.get_dask_array(source, key, labelled=True)
-
-            # At present, all the per-pulse data is stored in the 'image' key.
-            # If that changes, this check will need to change as well.
-            if key.startswith('image.'):
-                # Add pulse IDs to create multi-level index
-                inner_ix = self.data.get_array(source, 'image.' + subtrain_index)
-                # Raw files have a spurious extra dimension
-                if inner_ix.ndim >= 2 and inner_ix.shape[1] == 1:
-                    inner_ix = inner_ix[:, 0]
-
-                mod_arr = mod_arr.rename({'trainId': 'train_pulse'})
-
-                mod_arr.coords['train_pulse'] = self._make_image_index(
-                    mod_arr.coords['train_pulse'].values, inner_ix.values,
-                    inner_name=subtrain_index,
-                ).set_names('trainId', level=0)
-                # This uses 'trainId' where a concrete array from the same class
-                # uses 'train'. I didn't notice that inconsistency when I
-                # introduced it, and now code may be relying on each name.
-
-            arrays.append(mod_arr)
-
-        return self._concat(arrays, modnos, fill_value, astype)
-
-    def trains(self, pulses=np.s_[:], require_all=True):
-        """Iterate over trains for detector data.
-
-        Parameters
-        ----------
-
-        pulses: slice, array, by_index or by_id
-          Select which pulses to include for each train.
-          The default is to include all pulses.
-        require_all: bool
-          If True (default), skip trains where any of the selected detector
-          modules are missing data.
-
-        Yields
-        ------
-
-        train_data: dict
-          A dictionary mapping key names (e.g. ``image.data``) to labelled
-          arrays.
-        """
-        return MPxDetectorTrainIterator(self, pulses, require_all=require_all)
 
     def write_virtual_cxi(self, filename, fillvalues=None):
         """Write a virtual CXI file to access the detector data.
@@ -953,7 +982,7 @@ class MPxDetectorTrainIterator:
                 # 'data' key for Jungfrau, which corresponds to _main_data_key.
                 # If that changes, this check will need to change as well.
 
-                if key.startswith(self.data.per_pulse_group):
+                if key.startswith(self.data.per_pulse_group + '.'):
                     mod_data = self._get_pulse_data(source, key, tid)
                 else:
                     mod_data = self._get_slow_data(source, key, tid)
@@ -1109,7 +1138,7 @@ class LPD1M(XtdfDetectorBase):
         )
 
 
-class TxCDetectorBase(MultimodDetectorBase):
+class JungfrauBase(MultimodDetectorBase):
     """Common machinery for Jungfrau type detectors with similar data format
 
     JNGFR, JF1M, JF4M all store data in a "data" group, with trains along
@@ -1118,29 +1147,11 @@ class TxCDetectorBase(MultimodDetectorBase):
     For convenience 'memoryCell' will be used instead of the 'pulseId'.
     """
     n_modules = 8
+    _n_coords = 2
+    _inner_coord = 'cell'                   # OR 'memory_cell'
+    _inner_names = {'memoryCell': 'cell'}   # OR 'memory_cell'
     _main_data_key = 'data.adc'
     _pulse_id_key = 'memoryCell'
-
-    @staticmethod
-    def _select_pulse_ids(pulses, data_pulse_ids):
-        print("Select pulses.")
-        pass
-
-    def _make_image_index(self, tids, inner_ids, inner_name='memory_cell'):
-        """
-        Prepare indices for data per memory cell.
-        Same as 'MultimodDetectorBase::_make_image_index' but with different
-        default value for inner_name.
-
-        Args:
-            tids (np.array): train id repeated for each memory cell.
-            inner_ids (np.array): array of memory cell values.
-            inner_name (string): name of the inner (memory cell) index.
-
-        Returns:
-            pd.MultiIndex: MultiIndex of 'train_ids' x 'inner_ids'.
-        """
-        return super()._make_image_index(tids, inner_ids, inner_name)
 
     @staticmethod
     def _ds_select_train_pulse(data, train_first, pulse_positions, n_pulses):
@@ -1164,7 +1175,39 @@ class TxCDetectorBase(MultimodDetectorBase):
             return data[train_first, pulse_positions]
 
     @staticmethod
+    def _label_axes(arr):
+        """Label DataArray axes.
+
+        Args:
+            arr (xarray.DataArray): array from HD5 dataset.
+
+        Returns:
+            xarray.DataArray: same array with renamed axes.
+        """
+        arr = arr.rename({'trainId': 'train'})
+        if arr.ndim >= 2:
+            arr = arr.rename({'dim_0': 'pulse'})
+            if arr.ndim == 4:
+                arr = arr.rename({'dim_1': 'd_0', 'dim_2': 'd_1'})
+                arr = arr.rename({'d_0': 'dim_0', 'd_1': 'dim_1'})
+        return arr
+
+    @staticmethod
     def _guess_axes(data, train_pulse_ids, unstack_pulses):
+        """
+        Arrange data into array with labeled axes.
+        Implemented to work with MPxDetectorTrainIterator similar to
+        XtdfDetectorBase.
+
+        Args:
+            data (h5py.Dataset): dataset for 1 train with dimensions
+                [pulse] or [pulse, slow_scan, fast_scan]
+            train_pulse_ids (pd.MultiIndex): MultiIndex of [train, pulse].
+            unstack_pulses (bool): to separate train & pulse dimensions or not.
+
+        Returns:
+            xarray.DataArray: array of data with labeled axes.
+        """
         # In contrast to AGIPD, raw data for Jungfrau does not have
         # a spurious extra dimension
 
@@ -1189,8 +1232,93 @@ class TxCDetectorBase(MultimodDetectorBase):
         else:
             return arr
 
+    @staticmethod
+    def _check_subtrain_index(subtrain_index):
+        if subtrain_index is None:
+            return 'memoryCell'
+        elif subtrain_index in {'memoryCell'}:
+            return subtrain_index
+        else:
+            raise ValueError("subtrain_index must be 'memoryCell'")
 
-class JNGFR(TxCDetectorBase):
+    def _get_module_pulse_data(self, source, key, pulses, unstack_pulses,
+                               inner_index='memoryCell', roi=()):
+        seq_arrays = []
+        data_path = "/INSTRUMENT/{}/{}".format(source, key.replace('.', '/'))
+        for f in self.data._source_index[source]:
+            group = key.partition('.')[0]
+            firsts, counts = f.get_index(source, group)
+            # counts should be an array of ones
+            assert np.ndarray.max(counts) == 1
+
+            for chunk_tids in self.train_id_chunks:
+                if (chunk_tids[-1] < f.train_ids[0]
+                    or chunk_tids[0] > f.train_ids[-1]):
+                    # No overlap
+                    continue
+                first_tid = max(chunk_tids[0], f.train_ids[0])
+                first_train_idx = np.nonzero(f.train_ids == first_tid)[0][0]
+                last_tid = min(chunk_tids[-1], f.train_ids[-1])
+                last_train_idx = np.nonzero(f.train_ids == last_tid)[0][0]
+                chunk_firsts = firsts[first_train_idx : last_train_idx + 1]
+                chunk_counts = counts[first_train_idx : last_train_idx + 1]
+                train_slice = slice(
+                    chunk_firsts[0], int(chunk_firsts[-1] + chunk_counts[-1])
+                )
+                train_ids_sel = np.arange(first_tid, last_tid + 1, dtype=np.uint64)
+
+                inner_ids = self._get_inner_ids(
+                    f, source, train_slice, inner_index
+                )
+                inner_ids = inner_ids[0]
+                pulse_count = len(inner_ids)
+
+                if isinstance(pulses, by_id):
+                    if inner_index == 'memoryCell':
+                        pulse_id = inner_ids
+                    else:
+                        pulse_id = self._get_inner_ids(
+                            f, source, train_slice,'memoryCell'
+                        )
+                    pulse_slice = self._select_pulse_ids(
+                        pulses.value,
+                        pulse_id
+                    )
+                else:  # by_index
+                    pulse_slice = self._select_pulse_indices(
+                        pulses.value,
+                        pulse_count
+                    )
+
+                # Not sure this is still needed - now h5py seem to work with
+                # ndarray as well as with indexing a dataset with an empty list
+                if not isinstance(pulse_slice, slice):
+                    pulse_slice = list(pulse_slice)
+                    if pulse_slice == []:
+                        pulse_slice = slice(0, 0)
+
+                data = f.file[data_path][(train_slice, pulse_slice) + roi]
+                inner_ids_sel = inner_ids[pulse_slice]
+
+                if unstack_pulses:
+                    ndims = len(data.shape)
+                    inner_name = self._name_inner_index(inner_index)
+                    dims = [
+                        'train', inner_name, 'slow_scan', 'fast_scan'
+                    ][:ndims]
+                    coords = dict(zip(dims,(train_ids_sel,inner_ids_sel)))
+
+                    arr = xarray.DataArray(data, coords=coords, dims=dims)
+                else:
+                    # TODO: Implement
+                    pass
+
+                seq_arrays.append(arr)
+
+
+
+
+class JNGFR(JungfrauBase):
     """An interface to JNGFR detector data.
 
     Parameters
@@ -1210,8 +1338,8 @@ class JNGFR(TxCDetectorBase):
     _source_re = re.compile(r'(?P<detname>.+_JNGFR)/DET/MODULE_(?P<modno>\d+)')
     module_shape = (512, 1024)
 
-class JF4M(TxCDetectorBase):
-    """An interface to JF4M data
+class JF4M(JungfrauBase):
+    """An interface to JF4M data.
 
     Detector names are like 'SPB_IRDA_JF4M', otherwise this is identical
     to :class:`JNGFR`.
@@ -1219,6 +1347,17 @@ class JF4M(TxCDetectorBase):
     _source_re = re.compile(r'(?P<detname>.+_JF4M)/DET/JNGFR(?P<modno>\d+)')
     module_shape = (512, 1024)
 
+class JF1M(JungfrauBase):
+    """An interface to JF1M data.
+
+    Detector names are like 'FXE_XAD_JF1M' and just 2 modules, otherwise this
+    is similar to :class:`JNGFR`.
+    """
+    n_modules = 2
+    _source_re = re.compile(
+        r'(?P<detname>.+_JF1M)/DET/(RECEIVER-|JNGFR)(?P<modno>\d+)'
+    )
+    module_shape = (512, 1024)
 
 class JUNGFRAU(MultimodDetectorBase):
     """An interface to JUNGFRAU data.
