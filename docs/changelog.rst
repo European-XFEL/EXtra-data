@@ -1,6 +1,23 @@
 Release Notes
 =============
 
+1.5
+---
+
+- Avoid converting train IDs to floats when using
+  ``run.select(..., require_all=True)`` (:ghpull:`159`).
+- New method :meth:`.train_timestamps` to get approximate timestamps for each
+  train in the data (:ghpull:`165`)
+- Checking whether a given source & key is present is now much faster in some
+  cases (:ghpull:`170`).
+- :ref:`cmd-lsxfel` can display structured datatypes nicely (:ghpull:`160`).
+- :ref:`cmd-serve-files` can now send data on any ZMQ endpoint,
+  not only ``tcp://`` sockets (:ghpull:`169`).
+- Ensure :ref:`virtual CXI files <cmd-make-virtual-cxi>` created with EXtra-data
+  can be read using HDF5 1.10 (:ghpull:`171`).
+- Some fixes to make the test suite more robust (:ghpull:`156`, :ghpull:`167`,
+  :ghpull:`169`).
+
 1.4.1
 -----
 

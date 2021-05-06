@@ -41,13 +41,16 @@ def test_merge_detector(mock_fxe_raw_run, mock_fxe_control_data, mock_spb_proc_r
             break
 
 
-def test_serve_files(mock_fxe_raw_run):
+@pytest.mark.skipif(os.name != 'posix', reason="Test uses Unix socket")
+def test_serve_files(mock_fxe_raw_run, tmp_path):
+    src = 'FXE_XAD_GEC/CAM/CAMERA:daqOutput'
     args = ['karabo-bridge-serve-files', '-z', 'PUSH', str(mock_fxe_raw_run),
-            str(44444)]
+            f'ipc://{tmp_path}/socket', '--source', src]
     interface = None
 
-    with Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE,
-               env=dict(os.environ, PYTHONUNBUFFERED='1')) as p:
+    p = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE,
+               env=dict(os.environ, PYTHONUNBUFFERED='1'))
+    try:
         for line in p.stdout:
             line = line.decode('utf-8')
             if line.startswith('Streamer started on:'):
@@ -57,17 +60,17 @@ def test_serve_files(mock_fxe_raw_run):
         print('interface:', interface)
         assert interface is not None, p.stderr.read().decode()
 
-        with Client(interface, sock='PULL', timeout=5) as c:
+        with Client(interface, sock='PULL', timeout=30) as c:
             data, meta = c.next()
 
         tid = next(m['timestamp.tid'] for m in meta.values())
-        sources = RunDirectory(
-            mock_fxe_raw_run).select_trains(by_id[[tid]]).all_sources
-        assert frozenset(data) == sources
-
-        p.kill()
-        rc = p.wait(timeout=2)
-        assert rc == -9  # process terminated by kill signal
+        assert tid == 10000
+        assert set(data) == {src}
+    finally:
+        if p.poll() is None:
+            p.kill()
+            rc = p.wait(timeout=2)
+            assert rc == -9  # process terminated by kill signal
 
 
 def test_deprecated_server():

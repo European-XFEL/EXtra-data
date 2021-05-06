@@ -5,7 +5,7 @@ file, as well as machinery to close less recently accessed files, so we don't
 run into the limit on the number of open files.
 """
 from collections import defaultdict, OrderedDict
-import h5py
+import h5py, h5py.h5o
 import numpy as np
 import os
 import os.path as osp
@@ -148,6 +148,7 @@ class FileAccess:
         self._index_cache = {}
         # {source: set(keys)}
         self._keys_cache = {}
+        self._run_keys_cache = {}
         # {source: set(keys)} - including incomplete sets
         self._known_keys = defaultdict(set)
 
@@ -162,6 +163,10 @@ class FileAccess:
     @property
     def valid_train_ids(self):
         return self.train_ids[self.validity_flag]
+
+    def has_train_ids(self, tids: np.ndarray, inc_suspect=False):
+        f_tids = self.train_ids if inc_suspect else self.valid_train_ids
+        return np.intersect1d(tids, f_tids).size > 0
 
     def close(self):
         """Close* the HDF5 file this refers to.
@@ -314,6 +319,29 @@ class FileAccess:
         self._keys_cache[source] = res
         return res
 
+    def get_run_keys(self, source):
+        """Get the keys in the RUN section for a given control source name
+
+        Keys are found by walking the HDF5 file, and cached for reuse.
+        """
+        try:
+            return self._run_keys_cache[source]
+        except KeyError:
+            pass
+
+        if source not in self.control_sources:
+            raise SourceNameError(source)
+
+        res = set()
+
+        def add_key(key, value):
+            if isinstance(value, h5py.Dataset):
+                res.add(key.replace('/', '.'))
+
+        self.file['/RUN/' + source].visititems(add_key)
+        self._keys_cache[source] = res
+        return res
+
     def has_source_key(self, source, key):
         """Check if the given source and key exist in this file
 
@@ -334,7 +362,11 @@ class FileAccess:
         else:
             raise SourceNameError(source)
 
-        if self.file.get(path, getclass=True) is h5py.Dataset:
+        # self.file.get(path, getclass=True) works, but is weirdly slow.
+        # Checking like this is much faster.
+        if (path in self.file) and isinstance(
+                h5py.h5o.open(self.file.id, path.encode()), h5py.h5d.DatasetID
+        ):
             self._known_keys[source].add(key)
             return True
         return False

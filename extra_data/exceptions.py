@@ -27,3 +27,13 @@ class TrainIDError(KeyError):
 
     def __str__(self):
         return "Train ID {!r} not found in this data".format(self.train_id)
+
+
+class MultiRunError(ValueError):
+    def __str__(self):
+        return (
+            "The requested data is only available for a single run. This "
+            "EXtra-data DataCollection may have data from multiple runs, e.g. "
+            "because you have used .union() to combine data. Please retrieve "
+            "this information before combining."
+        )

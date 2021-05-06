@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from itertools import islice
 
 import h5py
@@ -14,6 +15,7 @@ from xarray import DataArray
 from extra_data import (
     H5File, RunDirectory, by_index, by_id,
     SourceNameError, PropertyNameError, DataCollection, open_run,
+    MultiRunError
 )
 
 def test_iterate_trains(mock_agipd_data):
@@ -588,6 +590,37 @@ def test_select_trains(mock_fxe_raw_run):
         run.select_trains(by_index[[480]])
 
 
+def test_train_timestamps(mock_scs_run):
+    run = RunDirectory(mock_scs_run)
+
+    tss = run.train_timestamps(labelled=False)
+    assert isinstance(tss, np.ndarray)
+    assert tss.shape == (len(run.train_ids),)
+    assert tss.dtype == np.dtype('datetime64[ns]')
+    assert np.all(np.diff(tss).astype(np.uint64) > 0)
+
+    # Convert numpy datetime64[ns] to Python datetime (dropping some precision)
+    dt0 = tss[0].astype('datetime64[ms]').item().replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    assert dt0 > (now - timedelta(days=1))  # assuming tests take < 1 day to run
+    assert dt0 < now
+
+    tss_ser = run.train_timestamps(labelled=True)
+    assert isinstance(tss_ser, pd.Series)
+    np.testing.assert_array_equal(tss_ser.values, tss)
+    np.testing.assert_array_equal(tss_ser.index, run.train_ids)
+
+
+def test_train_timestamps_nat(mock_fxe_control_data):
+    f = H5File(mock_fxe_control_data)
+    tss = f.train_timestamps()
+    assert tss.shape == (len(f.train_ids),)
+    if f.files[0].format_version == '0.5':
+        assert np.all(np.isnat(tss))
+    else:
+        assert not np.any(np.isnat(tss))
+
+
 def test_union(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
 
@@ -705,3 +738,35 @@ def test_get_data_counts(mock_spb_raw_run):
     count = run.get_data_counts('SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value')
     assert count.index.tolist() == run.train_ids
     assert (count.values == 1).all()
+
+
+def test_get_run_value(mock_fxe_control_data):
+    f = H5File(mock_fxe_control_data)
+    src = 'FXE_XAD_GEC/CAM/CAMERA'
+    val = f.get_run_value(src, 'firmwareVersion')
+    assert isinstance(val, np.int32)
+    assert f.get_run_value(src, 'firmwareVersion.value') == val
+
+    with pytest.raises(SourceNameError):
+        f.get_run_value(src + '_NONEXIST', 'firmwareVersion')
+
+    with pytest.raises(PropertyNameError):
+        f.get_run_value(src, 'non.existant')
+
+
+def test_get_run_value_union(mock_fxe_control_data, mock_sa3_control_data):
+    f = H5File(mock_fxe_control_data)
+    f2 = H5File(mock_sa3_control_data)
+    data = f.union(f2)
+    with pytest.raises(MultiRunError):
+        data.get_run_value('FXE_XAD_GEC/CAM/CAMERA', 'firmwareVersion')
+
+    with pytest.raises(MultiRunError):
+        data.get_run_values('FXE_XAD_GEC/CAM/CAMERA')
+
+def test_get_run_values(mock_fxe_control_data):
+    f = H5File(mock_fxe_control_data)
+    src = 'FXE_XAD_GEC/CAM/CAMERA'
+    d = f.get_run_values(src, )
+    assert isinstance(d['firmwareVersion.value'], np.int32)
+    assert isinstance(d['enableShutter.value'], np.uint8)

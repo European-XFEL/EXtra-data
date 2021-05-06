@@ -31,7 +31,9 @@ import time
 from typing import Tuple
 from warnings import warn
 
-from .exceptions import SourceNameError, PropertyNameError, TrainIDError
+from .exceptions import (
+    SourceNameError, PropertyNameError, TrainIDError, MultiRunError,
+)
 from .keydata import KeyData
 from .read_machinery import (
     DETECTOR_SOURCE_RE,
@@ -76,11 +78,12 @@ class DataCollection:
     """
     def __init__(
             self, files, selection=None, train_ids=None, ctx_closes=False, *,
-            inc_suspect_trains=False,
+            inc_suspect_trains=False, is_single_run=False,
     ):
         self.files = list(files)
         self.ctx_closes = ctx_closes
         self.inc_suspect_trains = inc_suspect_trains
+        self.is_single_run = is_single_run
 
         # selection: {source: set(keys)}
         # None as value -> all keys for this source
@@ -124,7 +127,10 @@ class DataCollection:
             return osp.basename(path), fa
 
     @classmethod
-    def from_paths(cls, paths, _files_map=None, *, inc_suspect_trains=False):
+    def from_paths(
+            cls, paths, _files_map=None, *, inc_suspect_trains=False,
+            is_single_run=False
+    ):
         files = []
         uncached = []
         for path in paths:
@@ -159,13 +165,17 @@ class DataCollection:
             raise Exception("All HDF5 files specified are unusable")
 
         return cls(
-            files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains
+            files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains,
+            is_single_run=is_single_run,
         )
 
     @classmethod
     def from_path(cls, path, *, inc_suspect_trains=False):
         files = [FileAccess(path)]
-        return cls(files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains)
+        return cls(
+            files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains,
+            is_single_run=True
+        )
 
     def __enter__(self):
         if not self.ctx_closes:
@@ -469,15 +479,7 @@ class DataCollection:
 
         seq_series = []
 
-        if source in self.control_sources:
-            data_path = "/CONTROL/{}/{}".format(source, key.replace('.', '/'))
-            for f in self._source_index[source]:
-                data = f.file[data_path][: len(f.train_ids), ...]
-                index = pd.Index(f.train_ids, name='trainId')
-
-                seq_series.append(pd.Series(data, name=name, index=index))
-
-        elif source in self.instrument_sources:
+        if source in self.instrument_sources:
             data_path = "/INSTRUMENT/{}/{}".format(source, key.replace('.', '/'))
             for f in self._source_index[source]:
                 group = key.partition('.')[0]
@@ -507,7 +509,7 @@ class DataCollection:
 
                 seq_series.append(pd.Series(data, name=name, index=index))
         else:
-            raise Exception("Unknown source category")
+            return self._get_key_data(source, key).series()
 
         ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
 
@@ -574,6 +576,74 @@ class DataCollection:
         see :meth:`.KeyData.dask_array` for details.
         """
         return self._get_key_data(source, key).dask_array(labelled=labelled)
+
+    def get_run_value(self, source, key):
+        """Get a single value from the RUN section of data files.
+
+        RUN records each property of control devices as a snapshot at the
+        beginning of the run. This includes properties which are not saved
+        continuously in CONTROL data.
+
+        This method is intended for use with data from a single run. If you
+        combine data from multiple runs, it will raise MultiRunError.
+
+        Parameters
+        ----------
+
+        source: str
+            Control device name, e.g. "HED_OPT_PAM/CAM/SAMPLE_CAM_4".
+        key: str
+            Key of parameter within that device, e.g. "triggerMode".
+        """
+        if not self.is_single_run:
+            raise MultiRunError
+
+        if source not in self.control_sources:
+            raise SourceNameError(source)
+
+        # Arbitrary file - should be the same across a run
+        fa = self._source_index[source][0]
+        ds = fa.file['RUN'][source].get(key.replace('.', '/'))
+        if isinstance(ds, h5py.Group):
+            # Allow for the .value suffix being omitted
+            ds = ds.get('value')
+        if not isinstance(ds, h5py.Dataset):
+            raise PropertyNameError(key, source)
+
+        val = ds[0]
+        if isinstance(val, bytes):  # bytes -> str
+            return val.decode('utf-8', 'surrogateescape')
+        return val
+
+    def get_run_values(self, source) -> dict:
+        """Get a dict of all RUN values for the given source
+
+        This includes keys which are also in CONTROL.
+
+        Parameters
+        ----------
+
+        source: str
+            Control device name, e.g. "HED_OPT_PAM/CAM/SAMPLE_CAM_4".
+        """
+        if not self.is_single_run:
+            raise MultiRunError
+
+        if source not in self.control_sources:
+            raise SourceNameError(source)
+
+        # Arbitrary file - should be the same across a run
+        fa = self._source_index[source][0]
+        res = {}
+        def visitor(path, obj):
+            if isinstance(obj, h5py.Dataset):
+                val = obj[0]
+                if isinstance(val, bytes):
+                    val = val.decode('utf-8', 'surrogateescape')
+                res[path.replace('/', '.')] = val
+
+        fa.file['RUN'][source].visititems(visitor)
+        return res
 
     def union(self, *others):
         """Join the data in this collection with one or more others.
@@ -789,10 +859,12 @@ class DataCollection:
                     source_tids = np.empty(0, dtype=np.uint64)
 
                     for f in self._source_index[source]:
+                        valid = True if self.inc_suspect_trains else f.validity_flag
                         # Add the trains with data in each file.
+                        _, counts = f.get_index(source, group)
                         source_tids = np.union1d(
-                            f.train_ids[f.get_index(source, group)[1] > 0],
-                            source_tids)
+                            f.train_ids[valid & (counts > 0)], source_tids
+                        )
 
                     # Remove any trains previously selected, for which this
                     # selected source and key group has no data.
@@ -800,7 +872,7 @@ class DataCollection:
 
             # Filtering may have eliminated previously selected files.
             files = [f for f in files
-                     if np.intersect1d(f.train_ids, train_ids).size > 0]
+                     if f.has_train_ids(train_ids, self.inc_suspect_trains)]
 
             train_ids = list(train_ids)  # Convert back to a list.
 
@@ -810,6 +882,7 @@ class DataCollection:
         return DataCollection(
             files, selection=selection, train_ids=train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=self.is_single_run
         )
 
     def deselect(self, seln_or_source_glob, key_glob='*'):
@@ -851,6 +924,7 @@ class DataCollection:
         return DataCollection(
             files, selection=selection, train_ids=self.train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=self.is_single_run,
         )
 
     def select_trains(self, train_range):
@@ -879,11 +953,12 @@ class DataCollection:
         new_train_ids = select_train_ids(self.train_ids, train_range)
 
         files = [f for f in self.files
-                 if np.intersect1d(f.train_ids, new_train_ids).size > 0]
+                 if f.has_train_ids(new_train_ids, self.inc_suspect_trains)]
 
         return DataCollection(
             files, selection=self.selection, train_ids=new_train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=self.is_single_run,
         )
 
     def _check_source_conflicts(self):
@@ -893,10 +968,12 @@ class DataCollection:
         for source, files in self._source_index.items():
             got_tids = np.array([], dtype=np.uint64)
             for file in files:
-                if np.intersect1d(got_tids, file.train_ids).size > 0:
+                if file.has_train_ids(got_tids, self.inc_suspect_trains):
                     sources_with_conflicts.add(source)
                     break
-                got_tids = np.union1d(got_tids, file.train_ids)
+                f_tids = file.train_ids if self.inc_suspect_trains \
+                            else file.valid_train_ids
+                got_tids = np.union1d(got_tids, f_tids)
 
         if sources_with_conflicts:
             raise ValueError("{} sources have conflicting data "
@@ -1017,12 +1094,30 @@ class DataCollection:
 
 
         print()
-        print(len(self.control_sources), 'control sources: (1 entry per train)')
+        print(len(self.control_sources), 'control sources:')
         for s in sorted(self.control_sources):
             print('  -', s)
             if any(p.match(s) for p in details_sources_re):
                 # Detail for control sources: list keys
-                keys_detail(s, sorted(self.keys_for_source(s)), prefix='    - ')
+                ctrl_keys = self.keys_for_source(s)
+                print('    - Control keys (1 entry per train):')
+                keys_detail(s, sorted(ctrl_keys), prefix='      - ')
+
+                run_keys = self._source_index[s][0].get_run_keys(s)
+                run_only_keys = run_keys - ctrl_keys
+                if run_only_keys:
+                    print('    - Additional run keys (1 entry per run):')
+                    for k in sorted(run_only_keys):
+                        ds = self._source_index[s][0].file[f"/RUN/{s}/{k.replace('.', '/')}"]
+                        entry_shape = ds.shape[1:]
+                        if entry_shape:
+                            entry_info = f", entry shape {entry_shape}"
+                        else:
+                            entry_info = ""
+                        dt = ds.dtype
+                        if h5py.check_string_dtype(dt):
+                            dt = 'string'
+                        print(f"      - {k}\t[{dt}{entry_info}]")
 
         print()
 
@@ -1073,7 +1168,8 @@ class DataCollection:
         """
         if train_id not in self.train_ids:
             raise ValueError("train {} not found in run.".format(train_id))
-        files = [f for f in self.files if train_id in f.train_ids]
+        files = [f for f in self.files
+                 if f.has_train_ids([train_id], self.inc_suspect_trains)]
         ctrl = set().union(*[f.control_sources for f in files])
         inst = set().union(*[f.instrument_sources for f in files])
 
@@ -1084,6 +1180,46 @@ class DataCollection:
         [print('\t-', d) for d in sorted(inst)] or print('\t-')
         print('\tControls')
         [print('\t-', d) for d in sorted(ctrl)] or print('\t-')
+
+    def train_timestamps(self, labelled=False):
+        """Get approximate timestamps for each train
+
+        Timestamps are stored and returned in UTC (not local time).
+        Older files (before format version 1.0) do not have timestamp data,
+        and the returned data in those cases will have the special value NaT
+        (Not a Time).
+
+        If *labelled* is True, they are returned in a pandas series, labelled
+        with train IDs. If False (default), they are returned in a NumPy array
+        of the same length as data.train_ids.
+        """
+        arr = np.zeros(len(self.train_ids), dtype=np.uint64)
+        id_to_ix = {tid: i for (i, tid) in enumerate(self.train_ids)}
+        missing_tids = np.array(self.train_ids)
+        for fa in self.files:
+            tids, file_ixs, _ = np.intersect1d(
+                fa.train_ids, missing_tids, return_indices=True
+            )
+            if not self.inc_suspect_trains:
+                valid = fa.validity_flag[file_ixs]
+                tids, file_ixs = tids[valid], file_ixs[valid]
+            if tids.size == 0 or 'INDEX/timestamp' not in fa.file:
+                continue
+            file_tss = fa.file['INDEX/timestamp'][:]
+            for tid, ts in zip(tids, file_tss[file_ixs]):
+                arr[id_to_ix[tid]] = ts
+
+            missing_tids = np.setdiff1d(missing_tids, tids)
+            if missing_tids.size == 0:  # We've got a timestamp for every train
+                break
+
+        arr = arr.astype('datetime64[ns]')
+        epoch = np.uint64(0).astype('datetime64[ns]')
+        arr[arr == epoch] = 'NaT'  # Not a Time
+        if labelled:
+            import pandas as pd
+            return pd.Series(arr, index=self.train_ids)
+        return arr
 
     def write(self, filename):
         """Write the selected data to a new HDF5 file
@@ -1304,7 +1440,8 @@ def RunDirectory(
     files_map = RunFilesMap(path)
     t0 = time.monotonic()
     d = DataCollection.from_paths(
-        files, files_map, inc_suspect_trains=inc_suspect_trains
+        files, files_map, inc_suspect_trains=inc_suspect_trains,
+        is_single_run=True,
     )
     log.debug("Opened run with %d files in %.2g s",
               len(d.files), time.monotonic() - t0)
