@@ -510,8 +510,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
                 pulse_positions.step
             )
         else:  # ndarray
-            # h5py fancy indexing needs a list, not an ndarray
-            data_positions = list(train_first + pulse_positions)
+            data_positions = train_first + pulse_positions
 
         return data[data_positions]
 
@@ -640,15 +639,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
                         positions.step
                     )
                 else:  # ndarray
-                    # Not sure this is still needed - now h5py seem to work
-                    # with ndarray as well as indexing a dataset with an
-                    # empty list. Original comment:
-                    # h5py fancy indexing needs a list, not an ndarray
-                    data_positions = list(data_slice.start + positions)
-                    if data_positions == []:
-                        # Work around a limitation of h5py
-                        # https://github.com/h5py/h5py/issues/1169
-                        data_positions = slice(0, 0)
+                    data_positions = data_slice.start + positions
 
                 dset = f.file[data_path]
                 if dset.ndim >= 2 and dset.shape[1] == 1:
@@ -1175,20 +1166,43 @@ class LPD1M(XtdfDetectorBase):
         )
 
 
-class JungfrauBase(MultimodDetectorBase):
-    """Common machinery for Jungfrau type detectors with similar data format
+class JUNGFRAU(MultimodDetectorBase):
+    """An interface to JUNGFRAU data.
 
     JNGFR, JF1M, JF4M all store data in a "data" group, with trains along
     the first and memory cells along the second dimension.
     This allows only a set number of frames to be stored for each train.
     For convenience 'memoryCell' will be used instead of the 'pulseId'.
+
+    Parameters
+    ----------
+
+    data: DataCollection
+      A data collection, e.g. from :func:`.RunDirectory`.
+    detector_name: str, optional
+      Name of a detector, e.g. 'SPB_IRDA_JNGFR'. This is only needed
+      if the dataset includes more than one JUNGFRAU detector.
+    modules: set of ints, optional
+      Detector module numbers to use. By default, all available modules
+      are used.
+    min_modules: int
+      Include trains where at least n modules have data. Default is 1.
     """
     n_modules = 8
     _n_coords = 2
+    # We appear to have a few different formats for source names:
+    # SPB_IRDA_JNGFR/DET/MODULE_1:daqOutput  (e.g. in p 2566, r 61)
+    # SPB_IRDA_JF4M/DET/JNGFR03:daqOutput    (e.g. in p 2732, r 12)
+    # FXE_XAD_JF1M/DET/RECEIVER-1
+    _source_re = re.compile(
+        r'(?P<detname>.+_(JNGFR|JF[14]M))/DET/'
+        r'(MODULE_|RECEIVER-|JNGFR)(?P<modno>\d+)'
+    )
     _inner_coord = 'cell'                   # OR 'memory_cell'
     _inner_names = {'memoryCell': 'cell'}   # OR 'memory_cell'
     _main_data_key = 'data.adc'
     _pulse_id_key = 'memoryCell'
+    module_shape = (512, 1024)
 
     @staticmethod
     def _ds_select_train_pulse(data, train_first, pulse_positions, n_pulses):
@@ -1225,8 +1239,7 @@ class JungfrauBase(MultimodDetectorBase):
         if arr.ndim >= 2:
             arr = arr.rename({'dim_0': 'pulse'})
             if arr.ndim == 4:
-                arr = arr.rename({'dim_1': 'd_0', 'dim_2': 'd_1'})
-                arr = arr.rename({'d_0': 'dim_0', 'd_1': 'dim_1'})
+                arr = arr.rename({'dim_1': 'slow_scan', 'dim_2': 'fast_scan'})
         return arr
 
     @staticmethod
@@ -1245,9 +1258,6 @@ class JungfrauBase(MultimodDetectorBase):
         Returns:
             xarray.DataArray: array of data with labeled axes.
         """
-        # In contrast to AGIPD, raw data for Jungfrau does not have
-        # a spurious extra dimension
-
         # TODO: this assumes we can tell what the axes are just from the
         # number of dimensions. Works for the data we've seen, but we
         # should look for a more reliable way.
@@ -1327,13 +1337,6 @@ class JungfrauBase(MultimodDetectorBase):
                         pulse_count
                     )
 
-                # Not sure this is still needed - now h5py seem to work with
-                # ndarray as well as with indexing a dataset with an empty list
-                if not isinstance(pulse_slice, slice):
-                    pulse_slice = list(pulse_slice)
-                    if pulse_slice == []:
-                        pulse_slice = slice(0, 0)
-
                 data = f.file[data_path][(train_slice, pulse_slice) + roi]
                 inner_ids_sel = inner_ids[pulse_slice]
 
@@ -1352,158 +1355,22 @@ class JungfrauBase(MultimodDetectorBase):
 
                 seq_arrays.append(arr)
 
+        non_empty = [a for a in seq_arrays if (a.size > 0)]
+        if not non_empty:
+            if seq_arrays:
+                # All per-file arrays are empty, so just return the first one.
+                return seq_arrays[0]
 
+            raise Exception(
+                "Unable to get data for source {!r}, key {!r}. "
+                "Please report an issue so we can investigate"
+                    .format(source, key)
+            )
 
-
-class JNGFR(JungfrauBase):
-    """An interface to JNGFR detector data.
-
-    Parameters
-    ----------
-
-    data: DataCollection
-      A data collection, e.g. from :func:`.RunDirectory`.
-    modules: set of ints, optional
-      Detector module numbers to use. By default, all available modules
-      are used.
-    detector_name: str, optional
-      Name of a detector, e.g. 'SPB_IRDA_JNGFR'. This is only needed
-      if the dataset includes more than one JNGFR detector.
-    min_modules: int
-      Include trains where at least n modules have data. Default is 1.
-    """
-    _source_re = re.compile(r'(?P<detname>.+_JNGFR)/DET/MODULE_(?P<modno>\d+)')
-    module_shape = (512, 1024)
-
-class JF4M(JungfrauBase):
-    """An interface to JF4M data.
-
-    Detector names are like 'SPB_IRDA_JF4M', otherwise this is identical
-    to :class:`JNGFR`.
-    """
-    _source_re = re.compile(r'(?P<detname>.+_JF4M)/DET/JNGFR(?P<modno>\d+)')
-    module_shape = (512, 1024)
-
-class JF1M(JungfrauBase):
-    """An interface to JF1M data.
-
-    Detector names are like 'FXE_XAD_JF1M' and just 2 modules, otherwise this
-    is similar to :class:`JNGFR`.
-    """
-    n_modules = 2
-    _source_re = re.compile(
-        r'(?P<detname>.+_JF1M)/DET/(RECEIVER-|JNGFR)(?P<modno>\d+)'
-    )
-    module_shape = (512, 1024)
-
-class JUNGFRAU(MultimodDetectorBase):
-    """An interface to JUNGFRAU data.
-
-    Parameters
-    ----------
-
-    data: DataCollection
-      A data collection, e.g. from :func:`.RunDirectory`.
-    modules: set of ints, optional
-      Detector module numbers to use. By default, all available modules
-      are used.
-    detector_name: str, optional
-      Name of a detector, e.g. 'SPB_IRDA_JNGFR'. This is only needed
-      if the dataset includes more than one JUNGFRAU detector.
-    min_modules: int
-      Include trains where at least n modules have data. Default is 1.
-    """
-    # We appear to have a few different formats for source names:
-    # SPB_IRDA_JNGFR/DET/MODULE_1:daqOutput  (e.g. in p 2566, r 61)
-    # SPB_IRDA_JF4M/DET/JNGFR03:daqOutput    (e.g. in p 2732, r 12)
-    # FXE_XAD_JF1M/DET/RECEIVER-1
-    _source_re = re.compile(
-        r'(?P<detname>.+_(JNGFR|JF[14]M))/DET/(MODULE_|RECEIVER-|JNGFR)(?P<modno>\d+)'
-    )
-    _main_data_key = 'data.adc'
-    module_shape = (512, 1024)
-
-    @staticmethod
-    def _label_dims(arr):
-        # Label dimensions to match the AGIPD/DSSC/LPD data access
-        ndim_pertrain = arr.ndim
-        if 'trainId' in arr.dims:
-            arr = arr.rename({'trainId': 'train'})
-            ndim_pertrain = arr.ndim - 1
-
-        if ndim_pertrain == 4:
-            arr = arr.rename({
-                'dim_0': 'pulse', 'dim_1': 'slow_scan', 'dim_2': 'fast_scan'
-            })
-        elif ndim_pertrain == 2:
-            arr = arr.rename({'dim_0': 'pulse'})
-        return arr
-
-    def get_array(self, key, *, fill_value=None, roi=(), astype=None):
-        """Get a labelled array of detector data
-
-        Parameters
-        ----------
-
-        key: str
-          The data to get, e.g. 'data.adc' for pixel values.
-        fill_value: int or float, optional
-            Value to use for missing values. If None (default) the fill value
-            is 0 for integers and np.nan for floats.
-        roi: tuple
-          Specify e.g. ``np.s_[:, 10:60, 100:200]`` to select data within each
-          module & each train when reading data. The first dimension is pulses,
-          then there are two pixel dimensions. The same selection is applied
-          to data from each module, so selecting pixels may only make sense if
-          you're using a single module.
-        astype: Type
-          data type of the output array. If None (default) the dtype matches the
-          input array dtype
-        """
-        arr = super().get_array(key, fill_value=fill_value, roi=roi, astype=astype)
-        return self._label_dims(arr)
-
-    def get_dask_array(self, key, fill_value=None, astype=None):
-        """Get a labelled Dask array of detector data
-
-        Dask does lazy, parallelised computing, and can work with large data
-        volumes. This method doesn't immediately load the data: that only
-        happens once you trigger a computation.
-
-        Parameters
-        ----------
-
-        key: str
-          The data to get, e.g. 'data.adc' for pixel values.
-        fill_value: int or float, optional
-          Value to use for missing values. If None (default) the fill value
-          is 0 for integers and np.nan for floats.
-        astype: Type
-          data type of the output array. If None (default) the dtype matches the
-          input array dtype
-        """
-        arr = super().get_dask_array(key, fill_value=fill_value, astype=astype)
-        return self._label_dims(arr)
-
-    def trains(self, require_all=True):
-        """Iterate over trains for detector data.
-
-        Parameters
-        ----------
-
-        require_all: bool
-          If True (default), skip trains where any of the selected detector
-          modules are missing data.
-
-        Yields
-        ------
-
-        train_data: dict
-          A dictionary mapping key names (e.g. 'data.adc') to labelled
-          arrays.
-        """
-        for tid, d in super().trains(require_all=require_all):
-            yield tid, {k: self._label_dims(a) for (k, a) in d.items()}
+        return xarray.concat(
+            sorted(non_empty, key=lambda a: a.coords['train'][0]),
+            dim=('train' if unstack_pulses else 'train_pulse'),
+        )
 
 
 def identify_multimod_detectors(
@@ -1522,7 +1389,7 @@ def identify_multimod_detectors(
     *clses* may be a list of acceptable detector classes to check.
     """
     if clses is None:
-        clses = [AGIPD1M, DSSC1M, LPD1M]
+        clses = detectors.list
 
     res = set()
     for cls in clses:
