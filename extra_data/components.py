@@ -20,11 +20,17 @@ def detectors(detector_cls):
     Decorator for detector classes to store them in a list 'detectors.list'
     and their names in 'detectors.names'.
 
-    Args:
-        detector_cls (class): decorated detector class to append to the list.
+    Parameters
+    ----------
 
-    Returns:
-        class: unmodified decorated detector class.
+    detector_cls: class
+      Decorated detector class to append to the list.
+
+    Returns
+    -------
+
+    detector_cls: class
+      Unmodified decorated detector class.
     """
     detectors.list = getattr(detectors, 'list', list())
     detectors.list.append(detector_cls)
@@ -326,13 +332,21 @@ class XtdfDetectorBase(MultimodDetectorBase):
         """
         Prepare indices for data per inner coordinate.
 
-        Args:
-            tids (np.array): train id repeated for each inner coordinate.
-            inner_ids (np.array): array of inner coordinate values.
-            inner_name (string): name of the inner coordinate.
+        Parameters
+        ----------
 
-        Returns:
-            pd.MultiIndex: MultiIndex of 'train_ids' x 'inner_ids'.
+        tids: np.array
+          Train id repeated for each inner coordinate.
+        inner_ids: np.array
+          Array of inner coordinate values.
+        inner_name: string
+          Name of the inner coordinate.
+
+        Returns
+        -------
+
+        pd.MultiIndex
+          MultiIndex of 'train_ids' x 'inner_ids'.
         """
         # Overridden in LPD1M for parallel gain mode
         return pd.MultiIndex.from_arrays(
@@ -718,18 +732,26 @@ class MPxDetectorTrainIterator:
         Find FileAccess instance and dataset corresponding to source, key,
         and train id tid.
 
-        Args:
-            source (string): path to keys in HD5 file, e.g.:
-                'SPB_DET_AGIPD1M-1/DET/5CH0:xtdf'.
-            key (string): key for data at source separated by dot, e.g.:
-                'image.data'.
-            tid (np.int): train id.
+        Parameters
+        ----------
 
-        Returns:
-            Tuple[FileAccess, int, h5py.Dataset]:
-                FileAccess: instance for the HD5 file with requested data.
-                int: starting index for the requested data.
-                h5py.Dataset: h5py dataset with found data.
+        source: string
+          Path to keys in HD5 file, e.g.: 'SPB_DET_AGIPD1M-1/DET/5CH0:xtdf'.
+        key: string
+          Key for data at source separated by dot, e.g.: 'image.data'.
+        tid: np.int
+          Train id.
+
+        Returns
+        -------
+
+        Tuple[FileAccess, int, h5py.Dataset]
+          FileAccess
+            Instance for the HD5 file with requested data.
+          int
+            Starting index for the requested data.
+          h5py.Dataset
+            h5py dataset with found data.
         """
         file, ds = self._datasets_cache.get((source, key), (None, None))
         if ds:
@@ -753,17 +775,23 @@ class MPxDetectorTrainIterator:
         and train id tid. Also used for Jungfrau data with memory cell
         dimension.
 
-        Args:
-            source (string): path to keys in HD5 file, e.g.:
-                'SPB_DET_AGIPD1M-1/DET/5CH0:xtdf'.
-            key (string): key for data at source separated by dot, e.g.:
-                'header.pulseCount'.
-            tid (np.int): train id.
+        Parameters
+        ----------
 
-        Returns:
-            xarray.DataArray: array of selected slow data. In case there are
-                more than one frame for the train id tid - train id dimension
-                is kept indexing frames within tid.
+        source: string
+          Path to keys in HD5 file, e.g.: 'SPB_DET_AGIPD1M-1/DET/5CH0:xtdf'.
+        key: string
+          Key for data at source separated by dot, e.g.: 'header.pulseCount'.
+        tid: np.int
+          Train id.
+
+        Returns
+        -------
+
+        xarray.DataArray
+          Array of selected slow data. In case there are more than one frame
+          for the train id tid - train id dimension is kept indexing frames
+          within tid.
         """
         file, pos, ds = self._find_data(source, key, tid)
         if file is None:
@@ -783,15 +811,21 @@ class MPxDetectorTrainIterator:
         and train id tid. Used only for AGIPD-like detectors, for 
         Jungfrau-like per-cell data '_get_slow_data' is used.
 
-        Args:
-            source (string): path to keys in HD5 file, e.g.:
-                'SPB_DET_AGIPD1M-1/DET/5CH0:xtdf'.
-            key (string): key for data at source separated by dot, e.g.:
-                'image.data'.
-            tid (np.int): train id.
+        Parameters
+        ----------
 
-        Returns:
-            xarray.DataArray: array of selected per pulse data.
+        source: string
+          Path to keys in HD5 file, e.g.: 'SPB_DET_AGIPD1M-1/DET/5CH0:xtdf'.
+        key: string
+          Key for data at source separated by dot, e.g.: 'image.data'.
+        tid: np.int
+          Train id.
+
+        Returns
+        -------
+
+        xarray.DataArray
+          Array of selected per pulse data.
         """
         file, pos, ds = self._find_data(source, key, tid)
         if file is None:
@@ -868,13 +902,20 @@ class MPxDetectorTrainIterator:
         """
         Assemble data for all keys into a dictionary for specified train id.
 
-        Args:
-            tid (int): train id.
+        Parameters
+        ----------
 
-        Returns:
-            Dict[str, xarray]:
-                str: key name.
-                xarray: assembled data array.
+        tid: int
+          Train id.
+
+        Returns
+        -------
+
+        Dict[str, xarray]:
+          str
+            Key name.
+          xarray
+            Assembled data array.
         """
         key_module_arrays = {}
 
