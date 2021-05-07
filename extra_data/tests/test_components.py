@@ -245,7 +245,7 @@ def test_get_dask_array_jungfrau(mock_jungfrau_run):
 
     arr = jf.get_dask_array('data.adc')
     assert arr.shape == (8, 100, 16, 512, 1024)
-    assert arr.dims == ('module', 'train', 'pulse', 'slow_scan', 'fast_scan')
+    assert arr.dims == ('module', 'train', 'cell', 'slow_scan', 'fast_scan')
     np.testing.assert_array_equal(arr.coords['train'], np.arange(10000, 10100))
 
 
@@ -315,7 +315,7 @@ def test_iterate_jungfrau(mock_jungfrau_run):
     tid, d = next(iter(jf.trains()))
     assert tid == 10000
     assert d['data.adc'].shape == (8, 16, 512, 1024)
-    assert d['data.adc'].dims == ('module', 'pulse', 'slow_scan', 'fast_scan')
+    assert d['data.adc'].dims == ('module', 'cell', 'slow_scan', 'fast_scan')
 
 
 def test_write_virtual_cxi(mock_spb_proc_run, tmpdir):
