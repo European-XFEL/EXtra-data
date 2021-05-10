@@ -1,6 +1,27 @@
 Release Notes
 =============
 
+1.6
+---
+
+- :ref:`suspect-trains` are now included by default (:ghpull:`178`). Pass
+  ``inc_suspect_trains=False`` to exclude them (as in 1.5), or the
+  ``--exc-suspect-trains`` option for :ref:`cmd-make-virtual-cxi`.
+- :func:`.open_run` can now combine raw & proc data when called with
+  ``data='all'`` (:ghpull:`174`).
+- Several new methods for accessing different kinds of metadata:
+
+  - :meth:`.DataCollection.run_metadata` - per-run metadata including timestamps
+    and proposal number (:ghpull:`175`)
+  - :meth:`.DataCollection.get_run_value` and
+    :meth:`.DataCollection.get_run_values` - per-run data from the control
+    system (:ghpull:`164`)
+
+- Selecting pulses should work for :meth:`.LPD1M.get_array` in parallel gain
+  mode (:ghpull:`173`)
+- Several fixes for handling 'suspect' train IDs (:ghpull:`172`).
+- h5py >= 2.10 is now required (:ghpull:`177`).
+
 1.5
 ---
 

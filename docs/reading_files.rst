@@ -69,6 +69,10 @@ to refer to all data associated with that 0.1 second window.
 
    .. automethod:: train_timestamps
 
+   .. automethod:: run_metadata
+
+      .. versionadded:: 1.6
+
    .. automethod:: info
 
 .. _data-by-source-and-key:

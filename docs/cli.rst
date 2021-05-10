@@ -122,6 +122,11 @@ Make a virtual CXI file to access AGIPD/LPD detector data from a specified run:
    - gain: 0
    - mask: 0xffffffff
 
+.. option:: --exc-suspect-trains
+
+   Exclude :ref:`suspect-trains` from the data to assemble. This can fix some
+   problems with bad train IDs.
+
 .. _cmd-locality:
 
 ``extra-data-locality``
