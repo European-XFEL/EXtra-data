@@ -1473,8 +1473,9 @@ def open_run(
     run: str, int
         A run number such as 243, '243' or 'r0243'.
     data: str
-        'raw' or 'proc' (processed) to access data from one of those folders.
-        The default is 'raw'.
+        'raw', 'proc' (processed) or 'all' (both 'raw' and 'proc') to access
+        data from either or both of those folders. If 'all' is used, sources
+        present in 'proc' overwrite those in 'raw'. The default is 'raw'.
     include: str
         Wildcard string to filter data files.
     file_filter: callable
@@ -1486,6 +1487,24 @@ def open_run(
         files which don't have this flag, out-of-sequence train IDs are suspect.
         If True, it tries to include these trains.
     """
+    if data == 'all':
+        common_args = dict(
+            proposal=proposal, run=run, include=include,
+            file_filter=file_filter, inc_suspect_trains=inc_suspect_trains)
+
+        # Create separate data collections for raw and proc.
+        raw_dc = open_run(**common_args, data='raw')
+        proc_dc = open_run(**common_args, data='proc')
+
+        # Deselect to those raw sources not present in proc.
+        raw_extra = raw_dc.deselect(
+            [(src, '*') for src in raw_dc.all_sources & proc_dc.all_sources])
+
+        # Merge extra raw sources into proc sources and re-enable is_single_run.
+        dc = proc_dc.union(raw_extra)
+        dc.is_single_run = True
+        return dc
+
     if isinstance(proposal, str):
         if ('/' not in proposal) and not proposal.startswith('p'):
             proposal = 'p' + proposal.rjust(6, '0')
