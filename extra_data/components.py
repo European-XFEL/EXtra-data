@@ -405,12 +405,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
                         positions.step
                     )
                 else:  # ndarray
-                    # h5py fancy indexing needs a list, not an ndarray
-                    data_positions = list(data_slice.start + positions)
-                    if data_positions == []:
-                        # Work around a limitation of h5py
-                        # https://github.com/h5py/h5py/issues/1169
-                        data_positions = slice(0, 0)
+                    data_positions = data_slice.start + positions
 
                 dset = f.file[data_path]
                 if dset.ndim >= 2 and dset.shape[1] == 1:
@@ -772,8 +767,7 @@ class MPxDetectorTrainIterator:
                 positions.step
             )
         else:  # ndarray
-            # h5py fancy indexing needs a list, not an ndarray
-            data_positions = list(first + positions)
+            data_positions = first + positions
 
         return self.data._guess_axes(ds[data_positions], train_pulse_ids, unstack_pulses=True)
 
