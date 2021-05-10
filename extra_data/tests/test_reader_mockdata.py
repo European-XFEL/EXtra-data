@@ -789,3 +789,18 @@ def test_get_run_values(mock_fxe_control_data):
     d = f.get_run_values(src, )
     assert isinstance(d['firmwareVersion.value'], np.int32)
     assert isinstance(d['enableShutter.value'], np.uint8)
+
+
+def test_run_metadata(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    md = run.run_metadata()
+    if run.files[0].format_version == '0.5':
+        assert md == {'dataFormatVersion': '0.5'}
+    else:
+        assert md['dataFormatVersion'] == '1.0'
+        assert set(md) == {
+            'dataFormatVersion', 'creationDate', 'updateDate', 'daqLibrary',
+            'karaboFramework', 'proposalNumber', 'runNumber', 'runType',
+            'sample', 'sequenceNumber',
+        }
+        assert isinstance(md['creationDate'], str)

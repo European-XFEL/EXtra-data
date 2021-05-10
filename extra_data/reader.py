@@ -1220,6 +1220,18 @@ class DataCollection:
             return pd.Series(arr, index=self.train_ids)
         return arr
 
+    def run_metadata(self) -> dict:
+        """Get a dictionary of metadata about the run
+
+        From file format version 1.0, the files capture: creationDate,
+        daqLibrary, dataFormatVersion, karaboFramework, proposalNumber,
+        runNumber, sequenceNumber, updateDate.
+        """
+        if not self.is_single_run:
+            raise MultiRunError()
+
+        return self.files[0].metadata()
+
     def write(self, filename):
         """Write the selected data to a new HDF5 file
 
