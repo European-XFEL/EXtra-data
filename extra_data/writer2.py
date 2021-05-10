@@ -2,6 +2,10 @@ import warnings
 import h5py
 import numpy as np
 
+# compatibility to future numpy features
+from numpy_future import add_future_function_into
+add_future_function_into(np)
+
 
 class DatasetDescriptor:
     """Create datasets and fill the with data"""
@@ -431,13 +435,13 @@ class FileWriter(FileWriterBase, metaclass=FileWriterMeta):
 
     Create a new class inherited from :class:`FileWriter`
     and use :class:`DS` to declare datasets:
-    
+
     .. code-block:: python
-    
+
         ctrl_grp = 'MID_DET_AGIPD1M-1/x/y'
         inst_grp = 'MID_DET_AGIPD1M-1/x/y:output'
         nbin = 1000
-        
+
         class MyFileWriter(FileWriter):
             gv = DS(ctrl_grp, 'geom.fragmentVectors', (10,100), float)
             nb = DS(ctrl_grp, 'param.numberOfBins', (), np.uint64)
@@ -450,14 +454,13 @@ class FileWriter(FileWriterBase, metaclass=FileWriterMeta):
             class Meta:
                 max_train_per_file = 10
                 break_into_sequence = True
-    
 
     Subclass :class:`Meta` is a special class for options.
-    
+
     Use new class to write data in files by trains:
-    
+
     .. code-block:: python
-    
+
         filename = 'mydata-{seq:03d}.h5'
         with MyFileWriter(filename) as wr:
             # add data (funcion kwargs interface)
@@ -473,14 +476,13 @@ class FileWriter(FileWriterBase, metaclass=FileWriterMeta):
                 wr.v = v
                 # write train
                 wr.write_train(tid, 0)
-                
+
     For the sources in 'CONTROL' section, the last added data repeats in
     the following trains. Only one entry is allowed per train in this section.
-    
+
     For the sources in 'INSTRUMENT' section, data is dropped after flushing.
     One train may contain multiple entries. The number of entries may vary
     from train to train. All datasets in one source must have the same number
     of entries in the same train.
-    
     """
     pass
