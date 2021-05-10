@@ -3,7 +3,7 @@ import h5py
 import numpy as np
 
 # compatibility to future numpy features
-from numpy_future import add_future_function_into
+from .numpy_future import add_future_function_into
 add_future_function_into(np)
 
 
