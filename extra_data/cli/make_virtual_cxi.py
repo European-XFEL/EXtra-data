@@ -59,6 +59,11 @@ def main(argv=None):
              ' "data", "gain" and "mask". (defaults: data: nan (proc, float32)'
              ' or 0 (raw, uint16); gain: 0; mask: 0xffffffff)'
     )
+    ap.add_argument(
+        '--exc-suspect-trains', action='store_true',
+        help="Exclude suspect trains. This tries to avoid some issues with incorrect train IDs in the data, "
+             "but may mean less data is available."
+    )
     args = ap.parse_args(argv)
     out_file = args.output
     fill_values = None
@@ -95,7 +100,7 @@ def main(argv=None):
         sys.exit("ERROR: Don't have write access to {}".format(out_dir))
 
     log.info("Reading run directory %s", run_dir)
-    run = RunDirectory(run_dir)
+    run = RunDirectory(run_dir, inc_suspect_trains=(not args.exc_suspect_trains))
     det = _get_detector(run, args.min_modules)
     if det is None:
         sys.exit(f"No {detectors.names} sources found in {run_dir}")

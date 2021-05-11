@@ -78,7 +78,7 @@ class DataCollection:
     """
     def __init__(
             self, files, selection=None, train_ids=None, ctx_closes=False, *,
-            inc_suspect_trains=False, is_single_run=False,
+            inc_suspect_trains=True, is_single_run=False,
     ):
         self.files = list(files)
         self.ctx_closes = ctx_closes
@@ -128,7 +128,7 @@ class DataCollection:
 
     @classmethod
     def from_paths(
-            cls, paths, _files_map=None, *, inc_suspect_trains=False,
+            cls, paths, _files_map=None, *, inc_suspect_trains=True,
             is_single_run=False
     ):
         files = []
@@ -170,7 +170,7 @@ class DataCollection:
         )
 
     @classmethod
-    def from_path(cls, path, *, inc_suspect_trains=False):
+    def from_path(cls, path, *, inc_suspect_trains=True):
         files = [FileAccess(path)]
         return cls(
             files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains,
@@ -1221,6 +1221,18 @@ class DataCollection:
             return pd.Series(arr, index=self.train_ids)
         return arr
 
+    def run_metadata(self) -> dict:
+        """Get a dictionary of metadata about the run
+
+        From file format version 1.0, the files capture: creationDate,
+        daqLibrary, dataFormatVersion, karaboFramework, proposalNumber,
+        runNumber, sequenceNumber, updateDate.
+        """
+        if not self.is_single_run:
+            raise MultiRunError()
+
+        return self.files[0].metadata()
+
     def write(self, filename):
         """Write the selected data to a new HDF5 file
 
@@ -1380,7 +1392,7 @@ class TrainIterator:
             yield tid, self._assemble_data(tid)
 
 
-def H5File(path, *, inc_suspect_trains=False):
+def H5File(path, *, inc_suspect_trains=True):
     """Open a single HDF5 file generated at European XFEL.
 
     ::
@@ -1394,16 +1406,16 @@ def H5File(path, *, inc_suspect_trains=False):
     path: str
         Path to the HDF5 file
     inc_suspect_trains: bool
-        If False (default), suspect train IDs within a file are skipped.
+        If False, suspect train IDs within a file are skipped.
         In newer files, trains where INDEX/flag are 0 are suspect. For older
         files which don't have this flag, out-of-sequence train IDs are suspect.
-        If True, it tries to include these trains.
+        If True (default), it tries to include these trains.
     """
     return DataCollection.from_path(path, inc_suspect_trains=inc_suspect_trains)
 
 
 def RunDirectory(
-        path, include='*', file_filter=locality.lc_any, *, inc_suspect_trains=False
+        path, include='*', file_filter=locality.lc_any, *, inc_suspect_trains=True
 ):
     """Open data files from a 'run' at European XFEL.
 
@@ -1426,10 +1438,10 @@ def RunDirectory(
         Function to subset the list of filenames to open.
         Meant to be used with functions in the extra_data.locality module.
     inc_suspect_trains: bool
-        If False (default), suspect train IDs within a file are skipped.
+        If False, suspect train IDs within a file are skipped.
         In newer files, trains where INDEX/flag are 0 are suspect. For older
         files which don't have this flag, out-of-sequence train IDs are suspect.
-        If True, it tries to include these trains.
+        If True (default), it tries to include these trains.
     """
     files = [f for f in os.listdir(path) if f.endswith('.h5')]
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
@@ -1456,7 +1468,7 @@ RunHandler = RunDirectory
 
 def open_run(
         proposal, run, data='raw', include='*', file_filter=locality.lc_any, *,
-        inc_suspect_trains=False
+        inc_suspect_trains=True
 ):
     """Access EuXFEL data on the Maxwell cluster by proposal and run number.
 
@@ -1474,19 +1486,38 @@ def open_run(
     run: str, int
         A run number such as 243, '243' or 'r0243'.
     data: str
-        'raw' or 'proc' (processed) to access data from one of those folders.
-        The default is 'raw'.
+        'raw', 'proc' (processed) or 'all' (both 'raw' and 'proc') to access
+        data from either or both of those folders. If 'all' is used, sources
+        present in 'proc' overwrite those in 'raw'. The default is 'raw'.
     include: str
         Wildcard string to filter data files.
     file_filter: callable
         Function to subset the list of filenames to open.
         Meant to be used with functions in the extra_data.locality module.
     inc_suspect_trains: bool
-        If False (default), suspect train IDs within a file are skipped.
+        If False, suspect train IDs within a file are skipped.
         In newer files, trains where INDEX/flag are 0 are suspect. For older
         files which don't have this flag, out-of-sequence train IDs are suspect.
-        If True, it tries to include these trains.
+        If True (default), it tries to include these trains.
     """
+    if data == 'all':
+        common_args = dict(
+            proposal=proposal, run=run, include=include,
+            file_filter=file_filter, inc_suspect_trains=inc_suspect_trains)
+
+        # Create separate data collections for raw and proc.
+        raw_dc = open_run(**common_args, data='raw')
+        proc_dc = open_run(**common_args, data='proc')
+
+        # Deselect to those raw sources not present in proc.
+        raw_extra = raw_dc.deselect(
+            [(src, '*') for src in raw_dc.all_sources & proc_dc.all_sources])
+
+        # Merge extra raw sources into proc sources and re-enable is_single_run.
+        dc = proc_dc.union(raw_extra)
+        dc.is_single_run = True
+        return dc
+
     if isinstance(proposal, str):
         if ('/' not in proposal) and not proposal.startswith('p'):
             proposal = 'p' + proposal.rjust(6, '0')

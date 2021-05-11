@@ -46,7 +46,7 @@ setup(name="EXtra-data",
       },
       install_requires=[
           'fabio',
-          'h5py>=2.7.1',
+          'h5py>=2.10',
           'karabo-bridge >=0.6',
           'matplotlib',
           'numpy',

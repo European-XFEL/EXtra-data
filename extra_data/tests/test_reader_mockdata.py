@@ -694,12 +694,31 @@ def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
         assert {f.filename for f in run.files} == paths
 
         # Proc folder
-        run = open_run(proposal=2012, run=238, data='proc')
+        proc_run = open_run(proposal=2012, run=238, data='proc')
 
-        proc_paths = {f.filename for f in run.files}
+        proc_paths = {f.filename for f in proc_run.files}
         assert proc_paths
         for path in proc_paths:
             assert '/raw/' not in path
+
+        # All folders
+        all_run = open_run(proposal=2012, run=238, data='all')
+
+        # Raw contains all sources.
+        assert run.all_sources == all_run.all_sources
+
+        # Proc is a true subset.
+        assert proc_run.all_sources < all_run.all_sources
+
+        for source, files in all_run._source_index.items():
+            for file in files:
+                if '/DET/' in source:
+                    # AGIPD data is in proc.
+                    assert '/raw/' not in file.filename
+                else:
+                    # Non-AGIPD data is in raw.
+                    # (CAM, XGM)
+                    assert '/proc/' not in file.filename
 
         # Run that doesn't exist
         with pytest.raises(Exception):
@@ -770,3 +789,18 @@ def test_get_run_values(mock_fxe_control_data):
     d = f.get_run_values(src, )
     assert isinstance(d['firmwareVersion.value'], np.int32)
     assert isinstance(d['enableShutter.value'], np.uint8)
+
+
+def test_run_metadata(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    md = run.run_metadata()
+    if run.files[0].format_version == '0.5':
+        assert md == {'dataFormatVersion': '0.5'}
+    else:
+        assert md['dataFormatVersion'] == '1.0'
+        assert set(md) == {
+            'dataFormatVersion', 'creationDate', 'updateDate', 'daqLibrary',
+            'karaboFramework', 'proposalNumber', 'runNumber', 'runType',
+            'sample', 'sequenceNumber',
+        }
+        assert isinstance(md['creationDate'], str)
