@@ -964,15 +964,21 @@ class DataCollection:
         """Check for data with the same source and train ID in different files.
         """
         sources_with_conflicts = set()
+        files_conflict_cache = {}
+
+        def files_have_conflict(files):
+            fset = frozenset({f.filename for f in files})
+            if fset not in files_conflict_cache:
+                if self.inc_suspect_trains:
+                    tids = np.concatenate([f.train_ids for f in files])
+                else:
+                    tids = np.concatenate([f.valid_train_ids for f in files])
+                files_conflict_cache[fset] = len(np.unique(tids)) != len(tids)
+            return files_conflict_cache[fset]
+
         for source, files in self._source_index.items():
-            got_tids = np.array([], dtype=np.uint64)
-            for file in files:
-                if file.has_train_ids(got_tids, self.inc_suspect_trains):
-                    sources_with_conflicts.add(source)
-                    break
-                f_tids = file.train_ids if self.inc_suspect_trains \
-                            else file.valid_train_ids
-                got_tids = np.union1d(got_tids, f_tids)
+            if files_have_conflict(files):
+                sources_with_conflicts.add(source)
 
         if sources_with_conflicts:
             raise ValueError("{} sources have conflicting data "
