@@ -1,6 +1,12 @@
 Release Notes
 =============
 
+1.6.1
+-----
+
+- Fix a check which made it very slow to open runs with thousands of files
+  (:ghpull:`183`).
+
 1.6
 ---
 
