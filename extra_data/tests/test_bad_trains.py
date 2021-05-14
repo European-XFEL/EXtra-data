@@ -28,7 +28,7 @@ def agipd_file_tid_high():
         path = osp.join(td, 'CORR-R9999-AGIPD07-S00000.h5')
         make_examples.make_agipd_file(path, format_version='0.5')
         with h5py.File(path, 'r+') as f:
-            # Initial train IDs are np.arange(10000, 10250), this will appear 2x
+            # Initial train IDs are np.arange(10000, 10486), this will appear 2x
             f['INDEX/trainId'][10] = 10100
         yield path
 
@@ -82,9 +82,8 @@ def test_exc_trainid(agipd_file_tid_very_high, agipd_file_tid_high, agipd_file_t
     assert len(f.train_ids) == 485
     assert 10100 in f.train_ids
 
-    f = H5File(agipd_file_tid_high, inc_suspect_trains=True)
-    assert len(f.train_ids) == 485  # this list is always deduped & sorted
-    assert 10100 in f.train_ids
+    with pytest.raises(ValueError):
+        H5File(agipd_file_tid_high, inc_suspect_trains=True)
 
     f = H5File(agipd_file_tid_low, inc_suspect_trains=False)
     assert len(f.train_ids) == 249
@@ -144,10 +143,7 @@ def test_array_dup(agipd_file_tid_high):
     assert arr.shape == (485 * 64, 1)
     assert list(arr.coords['trainId'].values[(9*64):(11*64):64]) == [10009, 10011]
 
-    f = H5File(agipd_file_tid_high, inc_suspect_trains=True)
-    arr = f['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.pulseId'].xarray()
-    assert arr.shape == (486 * 64, 1)
-    assert list(arr.coords['trainId'].values[(9 * 64):(11 * 64):64]) == [10009, 10100]
+    # Can't open files with duplicate train IDs using inc_suspect_trains=True
 
 def test_dask_array(agipd_file_flag0):
     f = H5File(agipd_file_flag0, inc_suspect_trains=False)
