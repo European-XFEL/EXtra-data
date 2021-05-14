@@ -95,6 +95,11 @@ class FileWriter:
         self.file.create_dataset(
             'INDEX/trainId', data=self.data.train_ids, dtype='u8'
         )
+        train_timestamps = self.data.train_timestamps()
+        if not np.all(np.isnat(train_timestamps)):
+            self.file.create_dataset(
+                'INDEX/timestamp', data=train_timestamps.astype(np.uint64)
+            )
 
     def write_indexes(self):
         """Write the INDEX information for all data we've copied"""
