@@ -160,13 +160,15 @@ class Options:
     by ones declared in Meta subclass
     """
     NAMES = (
-        'max_train_per_file', 'break_into_sequence', 'warn_on_missing_data'
+        'max_train_per_file', 'break_into_sequence', 'warn_on_missing_data',
+        'class_attrs_interface'
     )
 
     def __init__(self, meta):
         self.max_train_per_file = 500
         self.break_into_sequence = False
         self.warn_on_missing_data = False
+        self.class_attrs_interface = True
 
         self.override_defaults(meta)
 
@@ -198,6 +200,13 @@ class DataSetter:
         instance.add_value(self.name, value)
 
 
+class BlockedSetter:
+    def __set__(self, instance, value):
+        raise RuntimeError(
+            "Class attributes interface is disabled. Use option "
+            "'class_attrs_interface=True' to enable it.")
+
+
 class FileWriterMeta(type):
     """Constructs writer class"""
     def __new__(cls, name, bases, attrs):
@@ -216,7 +225,6 @@ class FileWriterMeta(type):
                     Source(val.source_name, val.stype)
                 )
                 src.add(val)
-                new_attrs[key] = DataSetter(key)
             else:
                 new_attrs[key] = val
 
@@ -233,8 +241,12 @@ class FileWriterMeta(type):
 
         new_class._meta = Options(meta)
 
-        for ds in datasets.values():
+        for ds_name, ds in datasets.items():
             ds.chunks_autosize(new_class._meta.max_train_per_file)
+            if new_class._meta.class_attrs_interface:
+                setattr(new_class, ds_name, DataSetter(ds_name))
+            else:
+                setattr(new_class, ds_name, BlockedSetter())
 
         return new_class
 
