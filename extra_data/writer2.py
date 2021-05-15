@@ -7,6 +7,11 @@ from .numpy_future import add_future_function_into
 add_future_function_into(np)
 
 
+# Attention! `Dataset` is the descriptor class and its instances are
+# intended to be used as class members of `FileWriter` children. Changing
+# them leads to changes in the host class itself and in all its instances.
+# Therefore, one can change `this` only in the `__init__` method and
+# in methods that are called from the `FileWriterMeta` metaclass.
 class Dataset:
     """Create datasets and fill the with data"""
     def __init__(self, source_name, key, entry_shape, dtype,
@@ -45,22 +50,22 @@ class Dataset:
         self.chunks = (chunk,) + self.entry_shape
 
     def create(self, grp):
-        self._ds = grp.create_dataset(
+        ds = grp.create_dataset(
             self.key.replace('.', '/'), self.chunks[:1] + self.entry_shape,
             dtype=self.dtype, chunks=self.chunks,
             maxshape=(None,) + self.entry_shape, compression=self.compression
         )
-        return self._ds
+        return ds
 
-    def write(self, data, pos, nrec):
+    def write(self, ds, data, pos, nrec):
         end = pos + nrec
-        size = self._ds.shape[0]
+        size = ds.shape[0]
         if size < end:
-            self._ds.resize(size + self.chunks[0], 0)
-        self._ds[pos:end] = data
+            ds.resize(size + self.chunks[0], 0)
+        ds[pos:end] = data
 
-    def resize(self, nrec):
-        self._ds.resize(nrec, 0)
+    def resize(self, ds, nrec):
+        ds.resize(nrec, 0)
 
 
 class DatasetDescr:
@@ -78,6 +83,7 @@ class DatasetDescr:
         )
 
 
+# Attention! Do not instanciate `Source` in the metaclass `FileWriterMeta`
 class Source:
     """Creates data source group and its indexes"""
 
@@ -92,6 +98,7 @@ class Source:
 
         self.section = self.SECTION[self.stype]
         self.datasets = []
+        self.file_ds = []
 
         self.first = []
         self.count = []
@@ -100,11 +107,12 @@ class Source:
 
     def add(self, ds):
         self.datasets.append(ds)
+        self.file_ds.append(None)
 
     def create(self, file):
         grp = file.create_group(self.section + '/' + self.name)
-        for ds in self.datasets:
-            ds.create(grp)
+        for dsno, ds in enumerate(self.datasets):
+            self.file_ds[dsno] = ds.create(grp)
         self._grp = grp
         return grp
 
@@ -132,13 +140,13 @@ class Source:
             self.pos += self.count[t]
 
     def resize_datasets(self):
-        for ds in self.datasets:
-            ds.resize(self.pos)
+        for dsno, ds in enumerate(self.datasets):
+            ds.resize(self.file_ds[dsno], self.pos)
 
     def write_train(self, data):
-        for ds in self.datasets:
+        for dsno, ds in enumerate(self.datasets):
             try:
-                ds.write(data[ds.key], self.pos, self.nrec)
+                ds.write(self.file_ds[dsno], data[ds.key], self.pos, self.nrec)
             except KeyError:
                 pass
 
@@ -220,19 +228,14 @@ class FileWriterMeta(type):
             if isinstance(val, Dataset):
                 datasets[key] = val
                 dataset_names[val.canonical_name] = key
-                src = sources.setdefault(
-                    val.source_name,
-                    Source(val.source_name, val.stype)
-                )
-                src.add(val)
+                sources.setdefault(val.source_name, val.stype)
             else:
                 new_attrs[key] = val
 
         new_attrs['list_of_sources'] = list(
-            (src_inst.section, src_name)
-            for src_name, src_inst in sources.items()
+            (Source.SECTION[src_type], src_name)
+            for src_name, src_type in sources.items()
         )
-        new_attrs['sources'] = sources
         new_attrs['datasets'] = datasets
         new_attrs['dataset_names'] = dataset_names
 
@@ -261,6 +264,15 @@ class FileWriterBase:
         self.flags = []
         self.seq = 0
         self.filename = filename
+
+        self.sources = {}
+        for sect, src_name in self.list_of_sources:
+            stype = Source.SECTION.index(sect)
+            self.sources[src_name] = Source(src_name, stype)
+
+        for ds in self.datasets.values():
+            self.sources[ds.source_name].add(ds)
+
         file = h5py.File(filename.format(seq=self.seq), 'w')
         self.init_file(file)
 
