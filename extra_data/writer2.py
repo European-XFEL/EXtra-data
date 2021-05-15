@@ -7,7 +7,7 @@ from .numpy_future import add_future_function_into
 add_future_function_into(np)
 
 
-class DatasetDescriptor:
+class Dataset:
     """Create datasets and fill the with data"""
     def __init__(self, source_name, key, entry_shape, dtype,
                  chunks=None, compression=None):
@@ -15,6 +15,7 @@ class DatasetDescriptor:
         self.dtype = np.dtype(dtype)
         self.compression = compression
         self.chunks = chunks
+        self.canonical_name = (source_name, key)
 
         # can we really distinguish sources by colons?
         self.stype = int(':' in source_name)
@@ -62,7 +63,19 @@ class DatasetDescriptor:
         self._ds.resize(nrec, 0)
 
 
-DS = DatasetDescriptor
+class DatasetDescr:
+    def __init__(self, name, entry_shape, dtype, chunks=None, compression=None):
+        self.name = name
+        self.dtype = dtype
+        self.entry_shape = entry_shape
+        self.chunks = chunks
+        self.compression = compression
+
+    def get_dataset(this, source, key):
+        return Dataset(
+            source, key, this.entry_shape, this.dtype,
+            chunks=this.chunks, compression=this.compression
+        )
 
 
 class Source:
@@ -192,10 +205,12 @@ class FileWriterMeta(type):
 
         new_attrs = {}
         datasets = {}
+        dataset_names = {}
         sources = {}
         for key, val in attrs.items():
-            if isinstance(val, DatasetDescriptor):
+            if isinstance(val, Dataset):
                 datasets[key] = val
+                dataset_names[val.canonical_name] = key
                 src = sources.setdefault(
                     val.source_name,
                     Source(val.source_name, val.stype)
@@ -211,6 +226,7 @@ class FileWriterMeta(type):
         )
         new_attrs['sources'] = sources
         new_attrs['datasets'] = datasets
+        new_attrs['dataset_names'] = dataset_names
 
         new_class = super().__new__(cls, name, bases, new_attrs)
         meta = attr_meta or getattr(new_class, 'Meta', None)
@@ -375,6 +391,11 @@ class FileWriterBase:
         # store value
         src_data[ds.key] = value
 
+    def add_value_by_key(self, source, key, value):
+        """Fills a single dataset in the current train given by source name"""
+        name = self.dataset_names[source, key]
+        self.add_value(name, value)
+
     def add(self, **kwargs):
         """Adds data to the current train"""
         for name, value in kwargs.items():
@@ -428,6 +449,9 @@ class FileWriterBase:
 
             file = h5py.File(self.filename.format(seq=self.seq), 'w')
             self.init_file(file)
+
+
+DS = Dataset
 
 
 class FileWriter(FileWriterBase, metaclass=FileWriterMeta):
@@ -485,4 +509,22 @@ class FileWriter(FileWriterBase, metaclass=FileWriterMeta):
     from train to train. All datasets in one source must have the same number
     of entries in the same train.
     """
-    pass
+    @classmethod
+    def open(cls, fn, sources, **kwargs):
+        class_name = cls.__name__ + '_' + str(id(sources))
+
+        attrs = {}
+        for source_name, datasets in sources.items():
+            for ds_key, ds in datasets.items():
+                if ds.name in attrs:
+                    warnings.warn(
+                        f"The dataset name '{ds.name}' is duplicated. "
+                        "Only the last entry is actual.", RuntimeWarning)
+
+                attrs[ds.name] = ds.get_dataset(source_name, ds_key)
+
+        if kwargs:
+            attrs['Meta'] = type(class_name + '.Meta', (object,), kwargs)
+
+        newcls = type(class_name, (cls,), attrs)
+        return newcls(fn)
