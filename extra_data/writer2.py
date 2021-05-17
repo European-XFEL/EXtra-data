@@ -10,7 +10,7 @@ add_future_function_into(np)
 # Attention! `Dataset` is the descriptor class and its instances are
 # intended to be used as class members of `FileWriter` children. Changing
 # them leads to changes in the host class itself and in all its instances.
-# Therefore, one can change `this` only in the `__init__` method and
+# Therefore, one can change `self` only in the `__init__` method and
 # in methods that are called from the `FileWriterMeta` metaclass.
 class Dataset:
     """Create datasets and fill the with data"""
@@ -76,10 +76,10 @@ class DatasetDescr:
         self.chunks = chunks
         self.compression = compression
 
-    def get_dataset(this, source, key):
+    def get_dataset(self, source, key):
         return Dataset(
-            source, key, this.entry_shape, this.dtype,
-            chunks=this.chunks, compression=this.compression
+            source, key, self.entry_shape, self.dtype,
+            chunks=self.chunks, compression=self.compression
         )
 
 
