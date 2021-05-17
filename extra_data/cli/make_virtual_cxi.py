@@ -50,8 +50,8 @@ def main(argv=None):
              "By default, it is written in the proposal's scratch directory."
     )
     ap.add_argument(
-        '--min-modules', type=int, default=9, metavar='N',
-        help="Include trains where at least N modules have data (default 9)"
+        '--min-modules', type=int, default=4, metavar='N',
+        help="Include trains where at least N modules have data (default 4)"
     )
     ap.add_argument(
         '--fill-value', action='append', nargs=2, metavar=('DS', 'V'),

@@ -1105,6 +1105,7 @@ class LPD1M(XtdfDetectorBase):
         )
 
 
+@detectors
 class JUNGFRAU(MultimodDetectorBase):
     """An interface to JUNGFRAU data.
 
@@ -1130,6 +1131,7 @@ class JUNGFRAU(MultimodDetectorBase):
     # SPB_IRDA_JNGFR/DET/MODULE_1:daqOutput  (e.g. in p 2566, r 61)
     # SPB_IRDA_JF4M/DET/JNGFR03:daqOutput    (e.g. in p 2732, r 12)
     # FXE_XAD_JF1M/DET/RECEIVER-1
+    n_modules = 8
     _source_re = re.compile(
         r'(?P<detname>.+_(JNGFR|JF[14]M))/DET/'
         r'(MODULE_|RECEIVER-|JNGFR)(?P<modno>\d+)'
@@ -1219,6 +1221,24 @@ class JUNGFRAU(MultimodDetectorBase):
         for tid, d in super().trains(require_all=require_all):
             yield tid, {k: self._label_dims(a) for (k, a) in d.items()}
 
+    def write_virtual_cxi(self, filename, fillvalues=None):
+        """Write a virtual CXI file to access the detector data.
+
+        The virtual datasets in the file provide a view of the detector
+        data as if it was a single huge array, but without copying the data.
+        Creating and using virtual datasets requires HDF5 1.10.
+
+        Parameters
+        ----------
+        filename: str
+          The file to be written. Will be overwritten if it already exists.
+        fillvalues: dict, optional
+            keys are datasets names (one of: data, gain, mask) and associated
+            fill value for missing data  (default is np.nan for float arrays and
+            zero for integer arrays)
+        """
+        from .write_cxi import JungfrauCXIWriter
+        JungfrauCXIWriter(self).write(filename, fillvalues=fillvalues)
 
 def identify_multimod_detectors(
         data, detector_name=None, *, single=False, clses=None
