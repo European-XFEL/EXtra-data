@@ -17,8 +17,6 @@ run number to look up the standard data paths on the Maxwell cluster.
 
 .. autofunction:: open_run
 
-   .. versionadded:: 0.5
-
 You can also open a single file. The methods described below all work for either
 a run or a single file.
 
@@ -162,8 +160,6 @@ methods offer extra capabilities.
           Examples using xarray & pandas with EuXFEL data
 
    .. automethod:: get_virtual_dataset
-
-      .. versionadded:: 0.5
 
       .. seealso::
         :doc:`parallel_example`
