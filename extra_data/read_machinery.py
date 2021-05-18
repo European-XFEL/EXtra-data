@@ -128,10 +128,12 @@ def select_train_ids(train_ids, sel):
 
 def split_trains(n_trains, parts=None, trains_per_part=None) -> [slice]:
     if trains_per_part is not None:
+        assert trains_per_part >= 1
         n_parts = math.ceil(n_trains / trains_per_part)
         if parts is not None:
             n_parts = max(n_parts, min(parts, n_trains))
     elif parts is not None:
+        assert parts >= 1
         n_parts = min(parts, n_trains)
     else:
         raise ValueError("Either parts or trains_per_part must be specified")
