@@ -4,7 +4,9 @@ import numpy as np
 
 from .exceptions import TrainIDError
 from .file_access import FileAccess
-from .read_machinery import contiguous_regions, DataChunk, select_train_ids
+from .read_machinery import (
+    contiguous_regions, DataChunk, select_train_ids, split_trains,
+)
 
 class KeyData:
     """Data for one key in one source
@@ -105,6 +107,28 @@ class KeyData:
 
     def __getitem__(self, item):
         return self.select_trains(item)
+
+    def split_trains(self, parts=None, trains_per_part=None):
+        """Split this data into chunks with a fraction of the trains each.
+
+        Either *parts* or *trains_per_part* must be specified.
+
+        The returned parts will have similar sizes, e.g. splitting 11 trains
+        with ``trains_per_part=8`` will produce 5 & 6 trains, not 8 & 3.
+
+        Parameters
+        ----------
+
+        parts: int
+            How many parts to split the data into. If trains_per_part is also
+            specified, this is a minimum, and it may make more parts.
+            It may also make fewer if there are fewer trains in the data.
+        trains_per_part: int
+            A maximum number of trains in each part. Typically the parts will
+            have fewer trains than this.
+        """
+        for s in split_trains(len(self.train_ids), parts, trains_per_part):
+            yield self.select_trains(s)
 
     def data_counts(self):
         """Get a count of data entries in each train.

@@ -5,6 +5,7 @@ The public API is in extra_data.reader; this is internal code.
 from collections import defaultdict
 from glob import iglob
 import logging
+import math
 import numpy as np
 import os.path as osp
 import re
@@ -124,6 +125,21 @@ def select_train_ids(train_ids, sel):
     else:
         raise TypeError(type(sel))
 
+
+def split_trains(n_trains, parts=None, trains_per_part=None) -> [slice]:
+    if trains_per_part is not None:
+        n_parts = math.ceil(n_trains / trains_per_part)
+        if parts is not None:
+            n_parts = max(n_parts, min(parts, n_trains))
+    elif parts is not None:
+        n_parts = min(parts, n_trains)
+    else:
+        raise ValueError("Either parts or trains_per_part must be specified")
+
+    return [
+        slice(i * n_trains // n_parts, (i + 1) * n_trains // n_parts)
+        for i in range(n_parts)
+    ]
 
 class DataChunk:
     """Reference to a contiguous chunk of data for one or more trains."""
