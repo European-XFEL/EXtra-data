@@ -113,7 +113,8 @@ class KeyData:
 
         Either *parts* or *trains_per_part* must be specified.
 
-        The returned parts will have similar sizes, e.g. splitting 11 trains
+        This returns an iterator yielding new :class:`KeyData` objects.
+        The parts will have similar sizes, e.g. splitting 11 trains
         with ``trains_per_part=8`` will produce 5 & 6 trains, not 8 & 3.
 
         Parameters
@@ -124,8 +125,8 @@ class KeyData:
             specified, this is a minimum, and it may make more parts.
             It may also make fewer if there are fewer trains in the data.
         trains_per_part: int
-            A maximum number of trains in each part. Typically the parts will
-            have fewer trains than this.
+            A maximum number of trains in each part. Parts will often have
+            fewer trains than this.
         """
         for s in split_trains(len(self.train_ids), parts, trains_per_part):
             yield self.select_trains(s)
