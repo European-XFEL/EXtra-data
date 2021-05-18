@@ -41,6 +41,21 @@ def test_select_trains(mock_spb_raw_run):
     assert sel3.shape == (1,)
 
 
+def test_split_trains(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    xgm_beam_x = run['SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value']
+    assert xgm_beam_x.shape == (64,)
+
+    chunks = list(xgm_beam_x.split_trains(3))
+    assert len(chunks) == 3
+    assert {c.shape for c in chunks} == {(21,), (22,)}
+    assert chunks[0].ndarray().shape == chunks[0].shape
+
+    chunks = list(xgm_beam_x.split_trains(3, trains_per_part=20))
+    assert len(chunks) == 4
+    assert {c.shape for c in chunks} == {(16,)}
+
+
 def test_nodata(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     cam_pix = run['FXE_XAD_GEC/CAM/CAMERA_NODATA:daqOutput', 'data.image.pixels']
