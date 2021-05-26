@@ -15,10 +15,11 @@ log = logging.getLogger(__name__)
 MAX_PULSES = 2700
 
 
-def detectors(detector_cls):
+def multimod_detectors(detector_cls):
     """
-    Decorator for detector classes to store them in a list 'detectors.list'
-    and their names in 'detectors.names'.
+    Decorator for multimod detector classes (e.g. AGIPD/LPD/Jungfrau)
+    to store them in a list 'multimod_detectors.list' and their names
+    in 'multimod_detectors.names'.
 
     Parameters
     ----------
@@ -32,10 +33,10 @@ def detectors(detector_cls):
     detector_cls: class
       Unmodified decorated detector class.
     """
-    detectors.list = getattr(detectors, 'list', list())
-    detectors.list.append(detector_cls)
-    detectors.names = getattr(detectors, 'names', list())
-    detectors.names.append(detector_cls.__name__)
+    multimod_detectors.list = getattr(multimod_detectors, 'list', list())
+    multimod_detectors.list.append(detector_cls)
+    multimod_detectors.names = getattr(multimod_detectors, 'names', list())
+    multimod_detectors.names.append(detector_cls.__name__)
     return detector_cls
 
 
@@ -253,15 +254,12 @@ class MultimodDetectorBase:
 
         return self._concat(arrays, modnos, fill_value, astype)
 
-    def trains(self, pulses=np.s_[:], require_all=True):
+    def trains(self, require_all=True):
         """Iterate over trains for detector data.
 
         Parameters
         ----------
 
-        pulses: slice, array, by_index or by_id
-          Select which pulses to include for each train.
-          The default is to include all pulses.
         require_all: bool
           If True (default), skip trains where any of the selected detector
           modules are missing data.
@@ -273,7 +271,7 @@ class MultimodDetectorBase:
           A dictionary mapping key names (e.g. ``image.data``) to labelled
           arrays.
         """
-        return MPxDetectorTrainIterator(self, pulses, require_all=require_all)
+        return MPxDetectorTrainIterator(self, require_all=require_all)
 
 
 class XtdfDetectorBase(MultimodDetectorBase):
@@ -595,6 +593,28 @@ class XtdfDetectorBase(MultimodDetectorBase):
             arrays.append(mod_arr)
 
         return self._concat(arrays, modnos, fill_value, astype)
+
+    def trains(self, pulses=np.s_[:], require_all=True):
+        """Iterate over trains for detector data.
+
+        Parameters
+        ----------
+
+        pulses: slice, array, by_index or by_id
+          Select which pulses to include for each train.
+          The default is to include all pulses.
+        require_all: bool
+          If True (default), skip trains where any of the selected detector
+          modules are missing data.
+
+        Yields
+        ------
+
+        train_data: dict
+          A dictionary mapping key names (e.g. ``image.data``) to labelled
+          arrays.
+        """
+        return MPxDetectorTrainIterator(self, pulses, require_all=require_all)
 
     def write_virtual_cxi(self, filename, fillvalues=None):
         """Write a virtual CXI file to access the detector data.
@@ -961,7 +981,7 @@ class MPxDetectorTrainIterator:
             yield tid, self._assemble_data(tid)
 
 
-@detectors
+@multimod_detectors
 class AGIPD1M(XtdfDetectorBase):
     """An interface to AGIPD-1M data.
 
@@ -983,7 +1003,7 @@ class AGIPD1M(XtdfDetectorBase):
     module_shape = (512, 128)
 
 
-@detectors
+@multimod_detectors
 class AGIPD500K(XtdfDetectorBase):
     """An interface to AGIPD-500K data
 
@@ -995,7 +1015,7 @@ class AGIPD500K(XtdfDetectorBase):
     n_modules = 8
 
 
-@detectors
+@multimod_detectors
 class DSSC1M(XtdfDetectorBase):
     """An interface to DSSC-1M data.
 
@@ -1017,7 +1037,7 @@ class DSSC1M(XtdfDetectorBase):
     module_shape = (128, 512)
 
 
-@detectors
+@multimod_detectors
 class LPD1M(XtdfDetectorBase):
     """An interface to LPD-1M data.
 
@@ -1105,7 +1125,7 @@ class LPD1M(XtdfDetectorBase):
         )
 
 
-@detectors
+@multimod_detectors
 class JUNGFRAU(MultimodDetectorBase):
     """An interface to JUNGFRAU data.
 
@@ -1126,18 +1146,30 @@ class JUNGFRAU(MultimodDetectorBase):
       are used.
     min_modules: int
       Include trains where at least n modules have data. Default is 1.
+    n_modules: int
+      Number of detector modules in the experiment setup. Default is
+      None, in which case it will be estimated from the available data.
     """
     # We appear to have a few different formats for source names:
     # SPB_IRDA_JNGFR/DET/MODULE_1:daqOutput  (e.g. in p 2566, r 61)
     # SPB_IRDA_JF4M/DET/JNGFR03:daqOutput    (e.g. in p 2732, r 12)
     # FXE_XAD_JF1M/DET/RECEIVER-1
-    n_modules = 8
     _source_re = re.compile(
         r'(?P<detname>.+_(JNGFR|JF[14]M))/DET/'
         r'(MODULE_|RECEIVER-|JNGFR)(?P<modno>\d+)'
     )
     _main_data_key = 'data.adc'
     module_shape = (512, 1024)
+
+    def __init__(self, data: DataCollection, detector_name=None, modules=None,
+                 *, min_modules=1, n_modules=None):
+        super().__init__(data, detector_name, modules, min_modules=min_modules)
+
+        if n_modules is not None:
+            self.n_modules = int(n_modules)
+        else:
+            # For Jungfrau modules are indexed from 1
+            self.n_modules = max(self.modno_to_source)
 
     @staticmethod
     def _label_dims(arr):
@@ -1245,9 +1277,10 @@ def identify_multimod_detectors(
 ):
     """Identify multi-module detectors in the data
 
-    Various detectors record data in a similar format, and we often want to
-    process whichever detector was used in a run. This tries to identify the
-    detector, so a user doesn't have to specify it manually.
+    Various detectors record data for individual X-ray pulses within
+    trains, and we often want to process whichever detector was used
+    in a run. This tries to identify the detector, so a user doesn't
+    have to specify it manually.
 
     If ``single=True``, this returns a tuple of (detector_name, access_class),
     throwing ``ValueError`` if there isn't exactly 1 detector found.
@@ -1256,7 +1289,7 @@ def identify_multimod_detectors(
     *clses* may be a list of acceptable detector classes to check.
     """
     if clses is None:
-        clses = detectors.list
+        clses = multimod_detectors.list
 
     res = set()
     for cls in clses:

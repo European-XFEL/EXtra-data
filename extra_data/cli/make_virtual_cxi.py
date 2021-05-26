@@ -7,19 +7,10 @@ import sys
 from textwrap import dedent
 
 from extra_data import RunDirectory
-from extra_data.components import detectors
+from extra_data.components import identify_multimod_detectors
 from extra_data.exceptions import SourceNameError
 
 log = logging.getLogger(__name__)
-
-
-def _get_detector(data, min_modules):
-    for cls in detectors.list:
-        try:
-            return cls(data, min_modules=min_modules)
-        except SourceNameError:
-            continue
-
 
 def parse_number(number:str):
     try:
@@ -50,8 +41,14 @@ def main(argv=None):
              "By default, it is written in the proposal's scratch directory."
     )
     ap.add_argument(
-        '--min-modules', type=int, default=4, metavar='N',
-        help="Include trains where at least N modules have data (default 4)"
+        '--min-modules', type=int, default=None, metavar='N',
+        help='Include trains where at least N modules have data (default'
+             ' 9 for AGIPD1M/DSSC1M/LPD1M, 5 for AGIPD500K and 1 otherwise)'
+    )
+    ap.add_argument(
+        '--n-modules', type=int, default=None, metavar='N',
+        help='Number of detector modules in the experiment setup.'
+             ' Should be used only for Jungfrau data.'
     )
     ap.add_argument(
         '--fill-value', action='append', nargs=2, metavar=('DS', 'V'),
@@ -61,8 +58,9 @@ def main(argv=None):
     )
     ap.add_argument(
         '--exc-suspect-trains', action='store_true',
-        help="Exclude suspect trains. This tries to avoid some issues with incorrect train IDs in the data, "
-             "but may mean less data is available."
+        help='Exclude suspect trains. This tries to avoid some issues with'
+             ' incorrect train IDs in the data, but may mean less data is'
+             ' available.'
     )
     args = ap.parse_args(argv)
     out_file = args.output
@@ -101,9 +99,26 @@ def main(argv=None):
 
     log.info("Reading run directory %s", run_dir)
     run = RunDirectory(run_dir, inc_suspect_trains=(not args.exc_suspect_trains))
-    det = _get_detector(run, args.min_modules)
-    if det is None:
-        sys.exit(f"No {detectors.names} sources found in {run_dir}")
+
+    _, det_class = identify_multimod_detectors(run, single=True)
+    det_name = det_class.__name__
+
+    min_modules = args.min_modules
+    if min_modules is None:
+        if det_name in ['AGIPD1M', 'DSSC1M', 'LPD1M']:
+            min_modules = 9
+        elif det_name in ['AGIPD500K']:
+            min_modules = 5
+        else:
+            min_modules = 1
+
+    if args.n_modules is None:
+        det = det_class(run, min_modules=min_modules)
+    elif det_name == 'JUNGFRAU':
+        det = det_class(run, min_modules=min_modules, n_modules=args.n_modules)
+    else:
+        raise NotImplementedError(
+            '--n-modules option is available only for for Jungfrau data')
 
     det.write_virtual_cxi(out_file, fill_values)
 
