@@ -48,7 +48,7 @@ def main(argv=None):
     ap.add_argument(
         '--n-modules', type=int, default=None, metavar='N',
         help='Number of detector modules in the experiment setup.'
-             ' Should be used only for Jungfrau data.'
+             ' Should be used only for JUNGFRAU data.'
     )
     ap.add_argument(
         '--fill-value', action='append', nargs=2, metavar=('DS', 'V'),
