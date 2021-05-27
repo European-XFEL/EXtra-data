@@ -6,11 +6,14 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 
-class VirtualCXIWriter:
-    """Machinery to write a CXI file containing virtual datasets.
+class VirtualCXIWriterBase:
+    """
+    Base class for machinery to write a CXI file containing virtual
+    datasets.
 
     You don't normally need to use this class directly. Instead,
-    use the write_virtual_cxi() method on an AGIPD/LPD data interface object.
+    use the write_virtual_cxi() method on a multi-module detector
+    data interface object.
 
     CXI specifies a particular layout of data in the HDF5 file format.
     It is documented here:
@@ -26,14 +29,8 @@ class VirtualCXIWriter:
     """
     def __init__(self, detdata):
         self.detdata = detdata
-
         self.modulenos = sorted(detdata.modno_to_source)
-
-        # The following line could be tricky, but there is no pulseId
-        # in Jungfrau data.
-        self.pulse_id_label = 'image.pulseId'
         self.group_label, self.image_label = detdata._main_data_key.split('.')
-        self.cell_id_label = 'cellId'
 
         frame_counts = detdata.frame_counts * self.ncells
         self.nframes = frame_counts.sum()
@@ -53,7 +50,7 @@ class VirtualCXIWriter:
 
     @property
     def ncells(self):
-        return 1
+        return self._n_cells
 
     @property
     def data(self):
@@ -82,10 +79,10 @@ class VirtualCXIWriter:
         pulse_ids = np.full((self.nframes, self.nmodules), NO_PULSE_ID,
                             dtype=np.uint64)
 
+        pulse_key = self.group_label + '.' + self.pulse_id_label
         for source, modno in self.detdata.source_to_modno.items():
-            module_id = self.modulenos.index(modno)
-            for chunk in self.data._find_data_chunks(source,
-                                                     self.pulse_id_label):
+            module_id = self._get_module_id(modno)
+            for chunk in self.data._find_data_chunks(source, pulse_key):
                 chunk_data = chunk.dataset
                 self._map_chunk(chunk, chunk_data, pulse_ids, module_id)
 
@@ -158,7 +155,7 @@ class VirtualCXIWriter:
             matched = chunk_data[chunk_match_start:chunk_match_end]
             if self.ncells == 1:
                 # In some cases, there's an extra dimension of length 1.
-                # E.g. Jungfrau data with 1 memory cell per train or
+                # E.g. JUNGFRAU data with 1 memory cell per train or
                 # AGIPD/LPD raw data.
                 # Also, 'VirtualSource' object has no attribute 'ndim'.
                 if (len(matched.shape) > 1 and matched.shape[1] == 1):
@@ -179,60 +176,29 @@ class VirtualCXIWriter:
             chunk_match_start = chunk_match_end
             chunk_tids = chunk_tids[n_match:]
 
-    def collect_data(self):
+    def _map_layouts(self, layouts):
         """
-        Prepare virtual layouts and map them to the virtual sources in
-        the data chunks.
+        Map virtual layouts to the virtual sources in the data chunks.
+
+        Parameters
+        ----------
+
+        layouts: dict
+          A dictionary of unmapped virtual layouts.
 
         Returns
         -------
 
         layouts: dict
-          A dictionary mapping virtual datasets names (e.g. ``data``)
-          to h5py virtual layouts.
+          A dictionary of virtual layouts mapped to the virtual sources.
         """
-        src = next(iter(self.detdata.source_to_modno))
-        h5file = self.data._source_index[src][0].file
-        image_grp = h5file['INSTRUMENT'][src][self.group_label]
-
-        VLayout = h5py.VirtualLayout
-
-        if 'gain' in image_grp:
-            log.info("Identified calibrated or Jungfrau raw data")
-            shape = (self.nframes, self.nmodules) + self.detdata.module_shape
-            log.info("Virtual data shape: %r", shape)
-
-            layouts = {
-                self.image_label: VLayout(
-                    shape, dtype=image_grp[self.image_label].dtype
-                ),
-                'gain': VLayout(shape, dtype=image_grp['gain'].dtype),
-            }
-
-            if 'mask' in image_grp:
-                layouts['mask'] = VLayout(shape, dtype=image_grp['mask'].dtype)
-        else:
-            log.info("Identified raw data")
-
-            shape = (self.nframes, self.nmodules) + image_grp['data'].shape[1:]
-            log.info("Virtual data shape: %r", shape)
-
-            layouts = {
-                'data': VLayout(shape, dtype=image_grp['data'].dtype),
-            }
-
-        layouts[self.cell_id_label] = VLayout(
-            (self.nframes, self.nmodules),
-            dtype=image_grp[self.cell_id_label].dtype
-        )
-
         for name, layout in layouts.items():
             key = '{}.{}'.format(self.group_label, name)
             have_data = np.zeros((self.nframes, self.nmodules), dtype=bool)
 
             for source, modno in self.detdata.source_to_modno.items():
                 print(f" ### Source: {source}, ModNo: {modno}, Key: {key}")
-                module_id = self.modulenos.index(modno)
+                module_id = self._get_module_id(modno)
                 for chunk in self.data._find_data_chunks(source, key):
                     vsrc = h5py.VirtualSource(chunk.dataset)
                     self._map_chunk(chunk, vsrc, layout, module_id, have_data)
@@ -300,7 +266,7 @@ class VirtualCXIWriter:
 
             # pulseId, trainId, cellId are not part of the CXI standard,
             # but it allows extra data.
-            f.create_dataset('entry_1/pulseId', data=pulse_ids)
+            f.create_dataset(f'entry_1/{self.pulse_id_label}', data=pulse_ids)
             f.create_dataset('entry_1/trainId', data=self.train_ids_perframe)
             cellids = f.create_virtual_dataset('entry_1/cellId',
                                                layouts[self.cell_id_label])
@@ -312,10 +278,10 @@ class VirtualCXIWriter:
             else:
                 # 5D dataset, with extra axis for
                 axes_s = 'experiment_identifier:module_identifier:data_gain:y:x'
-                ndg = layouts['data'].shape[2]
+                ndg = layouts[data_label].shape[2]
                 d = f.create_dataset('entry_1/data_gain', shape=(ndg,),
                                      dtype=h5py.special_dtype(vlen=str))
-                d[:] = (['data', 'gain'] if ndg == 2 else ['data'])
+                d[:] = ([data_label, 'gain'] if ndg == 2 else [data_label])
                 dgrp['data_gain'] = h5py.SoftLink('/entry_1/data_gain')
 
             data = dgrp.create_virtual_dataset(
@@ -346,10 +312,106 @@ class VirtualCXIWriter:
         log.info("Finished writing virtual CXI file")
 
 
-class JungfrauCXIWriter(VirtualCXIWriter):
+class XtdfCXIWriter(VirtualCXIWriterBase):
     """
-    Machinery to write VDS files for Jungfrau data in the same format
+    Machinery to write VDS files for a group of detectors with similar
+    data format - AGIPD, DSSC & LPD.
+
+    You don't normally need to use this class directly. Instead,
+    use the write_virtual_cxi() method on a multi-module detector
+    data interface object.
+
+    CXI specifies a particular layout of data in the HDF5 file format.
+    It is documented here:
+    http://www.cxidb.org/cxi.html
+
+    This code writes version 1.5 CXI files.
+
+    Parameters
+    ----------
+
+    detdata: extra_data.components.XtdfDetectorBase
+      The detector data interface for the data to gather in this file.
+    """
+    def __init__(self, detdata) -> None:
+        self._n_cells = 1
+        self.pulse_id_label = 'pulseId'
+        self.cell_id_label = 'cellId'
+
+        super().__init__(detdata)
+
+    def _get_module_id(self, module):
+        """
+        Returns an ID for specified module.
+        For AGIPD, DSSC & LPD modules are numbered from 0.
+        """
+        return module
+
+    def collect_data(self):
+        """
+        Prepare virtual layouts and map them to the virtual sources in
+        the data chunks.
+
+        Returns
+        -------
+
+        layouts: dict
+          A dictionary mapping virtual datasets names (e.g. ``data``)
+          to h5py virtual layouts.
+        """
+        src = next(iter(self.detdata.source_to_modno))
+        h5file = self.data._source_index[src][0].file
+        image_grp = h5file['INSTRUMENT'][src][self.group_label]
+
+        VLayout = h5py.VirtualLayout
+
+        det_name = type(self.detdata).__name__
+        if 'gain' in image_grp:
+            log.info(f"Identified {det_name} calibrated data")
+            shape = (self.nframes, self.nmodules) + self.detdata.module_shape
+            log.info("Virtual data shape: %r", shape)
+
+            layouts = {
+                self.image_label: VLayout(
+                    shape, dtype=image_grp[self.image_label].dtype),
+                'gain': VLayout(shape, dtype=image_grp['gain'].dtype),
+            }
+
+            if 'mask' in image_grp:
+                layouts['mask'] = VLayout(shape, dtype=image_grp['mask'].dtype)
+        else:
+            log.info(f"Identified {det_name} raw data")
+
+            shape = (self.nframes, self.nmodules) + image_grp['data'].shape[1:]
+            log.info("Virtual data shape: %r", shape)
+
+            layouts = {
+                self.image_label: VLayout(
+                    shape, dtype=image_grp[self.image_label].dtype),
+            }
+
+        layouts[self.cell_id_label] = VLayout(
+            (self.nframes, self.nmodules),
+            dtype=image_grp[self.cell_id_label].dtype
+        )
+
+        return self._map_layouts(layouts)
+
+
+class JUNGFRAUCXIWriter(VirtualCXIWriterBase):
+    """
+    Machinery to write VDS files for JUNGFRAU data in the same format
     as AGIPD/LPD virtual datasets.
+
+    You don't normally need to use this class directly. Instead,
+    use the write_virtual_cxi() method on a multi-module detector
+    data interface object.
+
+    CXI specifies a particular layout of data in the HDF5 file format.
+    It is documented here:
+    http://www.cxidb.org/cxi.html
+
+    This code writes version 1.5 CXI files.
 
     Parameters
     ----------
@@ -360,23 +422,53 @@ class JungfrauCXIWriter(VirtualCXIWriter):
     def __init__(self, detdata) -> None:
         # Check number of cells
         src = next(iter(detdata.source_to_modno))
-        h5file = detdata.data._source_index[src][0].file
-        image = h5file['INSTRUMENT'][src][
-            detdata._main_data_key.replace('.', '/')]
-        self._n_cells = image.shape[1]
+        keydata = detdata.data[src, 'data.adc']
+        self._n_cells = keydata.entry_shape[0]
+        self.pulse_id_label = 'memoryCell'
+        self.cell_id_label = 'memoryCell'
 
         super().__init__(detdata)
 
-        self.pulse_id_label = 'data.memoryCell'
-        self.cell_id_label = 'memoryCell'
+    def _get_module_id(self, module):
+        """
+        Returns an ID for specified module.
+        For JUNGFRAU modules are numbered from 1.
+        """
+        return (module - 1)
 
-        # For Jungfrau number of modules might vary
-        self._n_modules = len(self.modulenos)
+    def collect_data(self):
+        """
+        Prepare virtual layouts and map them to the virtual sources in
+        the data chunks.
 
-    @property
-    def nmodules(self):
-        return self._n_modules
+        Returns
+        -------
 
-    @property
-    def ncells(self):
-        return self._n_cells
+        layouts: dict
+          A dictionary mapping virtual datasets names (e.g. ``data``)
+          to h5py virtual layouts.
+        """
+        src = next(iter(self.detdata.source_to_modno))
+        h5file = self.data._source_index[src][0].file
+        image_grp = h5file['INSTRUMENT'][src][self.group_label]
+
+        VLayout = h5py.VirtualLayout
+
+        det_name = type(self.detdata).__name__
+        log.info(f"Identified {det_name} data")
+        shape = (self.nframes, self.nmodules) + self.detdata.module_shape
+        log.info("Virtual data shape: %r", shape)
+
+        layouts = {
+            self.image_label: VLayout(
+                shape, dtype=image_grp[self.image_label].dtype),
+            'gain': VLayout(shape, dtype=image_grp['gain'].dtype),
+            'mask': VLayout(shape, dtype=image_grp['mask'].dtype)
+        }
+
+        layouts[self.cell_id_label] = VLayout(
+            (self.nframes, self.nmodules),
+            dtype=image_grp[self.cell_id_label].dtype
+        )
+
+        return self._map_layouts(layouts)

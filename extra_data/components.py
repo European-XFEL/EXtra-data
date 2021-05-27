@@ -9,6 +9,7 @@ import xarray
 from .exceptions import SourceNameError
 from .reader import DataCollection, by_id, by_index
 from .writer import FileWriter
+from .write_cxi import XtdfCXIWriter, JUNGFRAUCXIWriter
 
 log = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ MAX_PULSES = 2700
 
 def multimod_detectors(detector_cls):
     """
-    Decorator for multimod detector classes (e.g. AGIPD/LPD/Jungfrau)
+    Decorator for multimod detector classes (e.g. AGIPD/LPD/JUNGFRAU)
     to store them in a list 'multimod_detectors.list' and their names
     in 'multimod_detectors.names'.
 
@@ -632,8 +633,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
             fill value for missing data  (default is np.nan for float arrays and
             zero for integer arrays)
         """
-        from .write_cxi import VirtualCXIWriter
-        VirtualCXIWriter(self).write(filename, fillvalues=fillvalues)
+        XtdfCXIWriter(self).write(filename, fillvalues=fillvalues)
 
     def write_frames(self, filename, trains, pulses):
         """Write selected detector frames to a new EuXFEL HDF5 file
@@ -792,7 +792,7 @@ class MPxDetectorTrainIterator:
     def _get_slow_data(self, source, key, tid):
         """
         Get an array of slow (per train) data corresponding to source, key,
-        and train id tid. Also used for Jungfrau data with memory cell
+        and train id tid. Also used for JUNGFRAU data with memory cell
         dimension.
 
         Parameters
@@ -829,7 +829,7 @@ class MPxDetectorTrainIterator:
         """
         Get an array of per pulse data corresponding to source, key,
         and train id tid. Used only for AGIPD-like detectors, for 
-        Jungfrau-like per-cell data '_get_slow_data' is used.
+        JUNGFRAU-like per-cell data '_get_slow_data' is used.
 
         Parameters
         ----------
@@ -1168,7 +1168,7 @@ class JUNGFRAU(MultimodDetectorBase):
         if n_modules is not None:
             self.n_modules = int(n_modules)
         else:
-            # For Jungfrau modules are indexed from 1
+            # For JUNGFRAU modules are indexed from 1
             self.n_modules = max(self.modno_to_source)
 
     @staticmethod
@@ -1269,8 +1269,7 @@ class JUNGFRAU(MultimodDetectorBase):
             fill value for missing data  (default is np.nan for float arrays and
             zero for integer arrays)
         """
-        from .write_cxi import JungfrauCXIWriter
-        JungfrauCXIWriter(self).write(filename, fillvalues=fillvalues)
+        JUNGFRAUCXIWriter(self).write(filename, fillvalues=fillvalues)
 
 def identify_multimod_detectors(
         data, detector_name=None, *, single=False, clses=None

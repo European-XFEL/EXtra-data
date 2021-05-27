@@ -8,7 +8,6 @@ from textwrap import dedent
 
 from extra_data import RunDirectory
 from extra_data.components import identify_multimod_detectors
-from extra_data.exceptions import SourceNameError
 
 log = logging.getLogger(__name__)
 
@@ -42,8 +41,8 @@ def main(argv=None):
     )
     ap.add_argument(
         '--min-modules', type=int, default=None, metavar='N',
-        help='Include trains where at least N modules have data (default'
-             ' 9 for AGIPD1M/DSSC1M/LPD1M, 5 for AGIPD500K and 1 otherwise)'
+        help='Include trains where at least N modules have data (default:'
+             ' half+1 of all detector modules).'
     )
     ap.add_argument(
         '--n-modules', type=int, default=None, metavar='N',
@@ -105,12 +104,8 @@ def main(argv=None):
 
     min_modules = args.min_modules
     if min_modules is None:
-        if det_name in ['AGIPD1M', 'DSSC1M', 'LPD1M']:
-            min_modules = 9
-        elif det_name in ['AGIPD500K']:
-            min_modules = 5
-        else:
-            min_modules = 1
+        det_n_modules = getattr(det_class, 'n_modules', 0)
+        min_modules = (det_n_modules // 2) + 1
 
     if args.n_modules is None:
         det = det_class(run, min_modules=min_modules)
@@ -118,7 +113,7 @@ def main(argv=None):
         det = det_class(run, min_modules=min_modules, n_modules=args.n_modules)
     else:
         raise NotImplementedError(
-            '--n-modules option is available only for for Jungfrau data')
+            '--n-modules option is available only for for JUNGFRAU data')
 
     det.write_virtual_cxi(out_file, fill_values)
 
