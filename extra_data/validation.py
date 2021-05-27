@@ -103,7 +103,7 @@ class FileValidator:
                     )
                     break  # Recording every key separately can make a *lot* of errors
 
-            self._check_index(f'/INDEX/{src}')
+            self._check_index(f'INDEX/{src}')
 
         for src in self.file.instrument_sources:
             src_groups = set()
@@ -123,7 +123,7 @@ class FileValidator:
                     )
 
             for src, group in src_groups:
-                self._check_index(f'/INDEX/{src}/{group}')
+                self._check_index(f'INDEX/{src}/{group}')
 
     def _check_index(self, path):
         record = partial(self.record, dataset=path)
