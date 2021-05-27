@@ -101,6 +101,7 @@ class FileValidator:
                         ),
                         dataset=ds_path,
                     )
+                    break  # Recording every key separately can make a *lot* of errors
 
             self._check_index(f'/INDEX/{src}')
 
