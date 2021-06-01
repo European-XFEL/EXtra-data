@@ -36,9 +36,9 @@ class Dataset:
             return
 
         MN = (max_trains, 32, 32)
-        SZ = (2**14, 2**19, 2**23)  # 16K, 512K, 8M
+        SZ = (1 << 14, 1 << 19, 1 << 23)  # 16K, 512K, 8M
 
-        size = np.prod(self.entry_shape)
+        size = np.prod(self.entry_shape, dtype=int)
         ndim = len(self.entry_shape)
         nbytes = size * self.dtype.itemsize
 
@@ -47,29 +47,26 @@ class Dataset:
         if self.stype == 0:
             chunk = min(chunk, max_trains)
 
-        self.chunks = (chunk,) + self.entry_shape
+        return (chunk,) + self.entry_shape
 
-    def create(self, grp):
+    def create(self, grp, max_trains, buffering):
+        chunks = self.chunks_autosize(max_trains)
         ds = grp.create_dataset(
-            self.key.replace('.', '/'), self.chunks[:1] + self.entry_shape,
+            self.key.replace('.', '/'), (0,) + self.entry_shape,
             dtype=self.dtype, chunks=self.chunks,
             maxshape=(None,) + self.entry_shape, compression=self.compression
         )
-        return ds
+        if buffering:
+            wrt = DatasetBufferedWriter(self, ds, chunks)
+        else:
+            wrt = DatasetDirectWriter(self, ds, chunks)
 
-    def write(self, ds, data, pos, nrec):
-        end = pos + nrec
-        size = ds.shape[0]
-        if size < end:
-            ds.resize(size + self.chunks[0], 0)
-        ds[pos:end] = data
-
-    def resize(self, ds, nrec):
-        ds.resize(nrec, 0)
+        return wrt
 
 
 class DatasetDescr:
-    def __init__(self, name, entry_shape, dtype, chunks=None, compression=None):
+    def __init__(self, name, entry_shape, dtype,
+                 chunks=None, compression=None):
         self.name = name
         self.dtype = dtype
         self.entry_shape = entry_shape
@@ -81,6 +78,95 @@ class DatasetDescr:
             source, key, self.entry_shape, self.dtype,
             chunks=self.chunks, compression=self.compression
         )
+
+
+class DatasetWriterBase:
+    def __init__(self, ds, file_ds, chunks):
+        self.ds = ds
+        self.file_ds = file_ds
+        self.chunks = chunks
+        self.pos = 0
+
+    def flush(self):
+        pass
+
+    def write(self, data, nrec):
+        pass
+
+
+class DatasetDirectWriter(DatasetWriterBase):
+
+    def write(self, data, nrec):
+        end = self.pos + nrec
+        self.file_ds.resize(end, 0)
+        self.file_ds[self.pos:end] = data
+
+
+class DatasetBufferedWriter(DatasetWriterBase):
+    def __init__(self, ds, file_ds, chunks):
+        super().__init__(ds, file_ds, chunks)
+        self._data = np.empty(chunks, dtype=ds.dtype)
+        self.size = chunks[0]
+        self.nbuf = 0
+
+    def flush(self):
+        # write buffer to disk
+        if self.nbuf:
+            end = self.pos + self.nbuf
+            self.file_ds.resize(end, 0)
+            self.file_ds.write_direct(
+                self._data, np.s_[:self.nbuf], np.s_[self.pos:end])
+            self.pos = end
+            self.nbuf = 0
+
+    def write_one(self, value):
+        self._data[self.nbuf] = value
+        self.nbuf += 1
+        if self.nbuf >= self.size:
+            self.flush()
+
+    def write_many(self, arr, nrec):
+        buf_nrest = self.size - self.nbuf
+        data_nrest = nrec - buf_nrest
+        if data_nrest < 0:
+            # copy
+            end = self.nbuf + nrec
+            self._data[self.nbuf:end] = arr
+            self.nbuf = end
+        elif self.nbuf and data_nrest < self.size:
+            # copy, flush, copy
+            self._data[self.nbuf:] = arr[:buf_nrest]
+
+            end = self.pos + self.size
+            self.file_ds.write_direct(
+                self._data, np.s_[:], np.s_[self.pos:end])
+            self.pos = end
+
+            self._data[:data_nrest] = arr[buf_nrest:]
+            self.nbuf = data_nrest
+        else:
+            # flush, write, copy
+            nrest = nrec % self.size
+            nwrite = nrec - nrest
+
+            split = self.pos + self.nbuf
+            end = split + nwrite
+            self.file_ds.resize(end, 0)
+            if self.nbuf:
+                self.file_ds.write_direct(
+                    self._data, np.s_[:self.nbuf], np.s_[self.pos:split])
+            self.file_ds.write_direct(arr, np.s_[:nwrite], np.s_[split:end])
+
+            self._data[:nrest] = arr[nwrite:]
+            self.pos = end
+            self.nbuf = nrest
+
+    def write(self, data, nrec):
+        if nrec == 1:
+            self.write_one(data)
+        else:
+            arr = np.broadcast_to(data, (nrec,) + self.ds.entry_shape)
+            self.write_many(arr, nrec)
 
 
 # Attention! Do not instanciate `Source` in the metaclass `FileWriterMeta`
@@ -109,10 +195,10 @@ class Source:
         self.datasets.append(ds)
         self.file_ds.append(None)
 
-    def create(self, file):
+    def create(self, file, max_trains, buffering=True):
         grp = file.create_group(self.section + '/' + self.name)
         for dsno, ds in enumerate(self.datasets):
-            self.file_ds[dsno] = ds.create(grp)
+            self.file_ds[dsno] = ds.create(grp, max_trains, buffering)
         self._grp = grp
         return grp
 
@@ -139,14 +225,14 @@ class Source:
             self.first[t] = self.pos
             self.pos += self.count[t]
 
-    def resize_datasets(self):
+    def close_datasets(self):
         for dsno, ds in enumerate(self.datasets):
-            ds.resize(self.file_ds[dsno], self.pos)
+            self.file_ds[dsno].flush()
 
     def write_train(self, data):
         for dsno, ds in enumerate(self.datasets):
             try:
-                ds.write(self.file_ds[dsno], data[ds.key], self.pos, self.nrec)
+                self.file_ds[dsno].write(data[ds.key], self.nrec)
             except KeyError:
                 pass
 
@@ -169,16 +255,24 @@ class Options:
     """
     NAMES = (
         'max_train_per_file', 'break_into_sequence', 'warn_on_missing_data',
-        'class_attrs_interface'
+        'class_attrs_interface', 'buffering'
     )
 
-    def __init__(self, meta):
+    def __init__(self, meta=None, base=None):
         self.max_train_per_file = 500
         self.break_into_sequence = False
         self.warn_on_missing_data = False
         self.class_attrs_interface = True
+        self.buffering = True
 
+        self.copy(base)
         self.override_defaults(meta)
+
+    def copy(self, opts):
+        if not opts:
+            return
+        for attr_name in Options.NAMES:
+            setattr(self, attr_name, getattr(opts, attr_name))
 
     def override_defaults(self, meta):
         if not meta:
@@ -224,6 +318,13 @@ class FileWriterMeta(type):
         datasets = {}
         dataset_names = {}
         sources = {}
+        for base in reversed(bases):
+            datasets.update(base.datasets)
+            dataset_names.update(base.dataset_names)
+            if base.list_of_sources:
+                for sect, src_name in base.list_of_sources:
+                    sources[src_name] = Source.SECTION.index(sect)
+
         for key, val in attrs.items():
             if isinstance(val, Dataset):
                 datasets[key] = val
@@ -240,12 +341,12 @@ class FileWriterMeta(type):
         new_attrs['dataset_names'] = dataset_names
 
         new_class = super().__new__(cls, name, bases, new_attrs)
-        meta = attr_meta or getattr(new_class, 'Meta', None)
 
-        new_class._meta = Options(meta)
+        meta = attr_meta or getattr(new_class, 'Meta', None)
+        base_meta = getattr(new_class, '_meta', None)
+        new_class._meta = Options(meta, base_meta)
 
         for ds_name, ds in datasets.items():
-            ds.chunks_autosize(new_class._meta.max_train_per_file)
             if new_class._meta.class_attrs_interface:
                 setattr(new_class, ds_name, DataSetter(ds_name))
             else:
@@ -256,6 +357,9 @@ class FileWriterMeta(type):
 
 class FileWriterBase:
     """Writes data in EuXFEL format"""
+    list_of_sources = []
+    datasets = {}
+    dataset_names = {}
 
     def __init__(self, filename):
         self._train_data = {}
@@ -270,7 +374,7 @@ class FileWriterBase:
             stype = Source.SECTION.index(sect)
             self.sources[src_name] = Source(src_name, stype)
 
-        for ds in self.datasets.values():
+        for dsname, ds in self.datasets.items():
             self.sources[ds.source_name].add(ds)
 
         file = h5py.File(filename.format(seq=self.seq), 'w')
@@ -285,7 +389,7 @@ class FileWriterBase:
 
     def close(self):
         """Finalises writing and close a file"""
-        self.resize_datasets()
+        self.close_datasets()
         self.write_indices()
         self._file.close()
 
@@ -352,13 +456,13 @@ class FileWriterBase:
 
     def create_datasets(self):
         for sname, src in self.sources.items():
-            src.create(self._file)
+            src.create(self._file, self._meta.max_train_per_file,
+                       self._meta.buffering)
 
-    def resize_datasets(self):
-        """Resizes datasets in the file to match the number of written
-        trains/pulses"""
+    def close_datasets(self):
+        """Writes rest of buffered data in datasets and set final size"""
         for src in self.sources.values():
-            src.resize_datasets()
+            src.close_datasets()
 
     def __enter__(self):
         return self
