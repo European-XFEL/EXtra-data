@@ -40,6 +40,9 @@ def test_write_virtual(mock_fxe_raw_run):
             ds = f['CONTROL/SPB_XTD9_XGM/DOOCS/MAIN/beamPosition/ixPos/value']
             assert ds.is_virtual
 
+            link = f.get('RUN/SPB_XTD9_XGM/DOOCS/MAIN', getlink=True)
+            assert isinstance(link, h5py.ExternalLink)
+
         with H5File(new_file) as f:
             np.testing.assert_array_equal(f.train_ids,
                                       np.arange(10000, 10480, dtype=np.uint64))
@@ -53,3 +56,6 @@ def test_write_virtual(mock_fxe_raw_run):
 
             a = f.get_array('SPB_XTD9_XGM/DOOCS/MAIN:output', 'data.intensityTD')
             assert a.shape == (480, 1000)
+
+            r = f.get_run_value('SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value')
+            assert isinstance(r, np.float32)
