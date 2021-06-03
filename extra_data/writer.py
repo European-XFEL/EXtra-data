@@ -1,6 +1,8 @@
 import h5py
 import numpy as np
 
+from .exceptions import MultiRunError
+
 
 class FileWriter:
     """Write data in European XFEL HDF5 format
@@ -109,23 +111,39 @@ class FileWriter:
             group.create_dataset('count', data=count, dtype=np.uint64)
 
     def write_metadata(self):
+        try:
+            metadata = self.data.run_metadata()
+        except MultiRunError:
+            metadata = {}
+
+        metadata_grp = self.file.create_group('METADATA')
+        if metadata.get('dataFormatVersion') == '1.0':
+            self.write_sources(metadata_grp.create_group('dataSources'))
+
+            for key, val in metadata.items():
+                metadata_grp[key] = [val]
+        else:
+            # File format '0.5': source lists directly in METADATA
+            self.write_sources(metadata_grp)
+
+    def write_sources(self, data_sources_grp: h5py.Group):
         """Write the METADATA section, including lists of sources"""
         vlen_bytes = h5py.special_dtype(vlen=bytes)
         data_sources = sorted(self.data_sources)
         N = len(data_sources)
 
-        sources_ds = self.file.create_dataset(
-            'METADATA/dataSourceId', (N,), dtype=vlen_bytes, maxshape=(None,)
+        sources_ds = data_sources_grp.create_dataset(
+            'dataSourceId', (N,), dtype=vlen_bytes, maxshape=(None,)
         )
         sources_ds[:] = data_sources
 
-        root_ds = self.file.create_dataset(
-            'METADATA/root', (N,), dtype=vlen_bytes, maxshape=(None,)
+        root_ds = data_sources_grp.create_dataset(
+            'root', (N,), dtype=vlen_bytes, maxshape=(None,)
         )
         root_ds[:] = [ds.split('/', 1)[0] for ds in data_sources]
 
-        devices_ds = self.file.create_dataset(
-            'METADATA/deviceId', (N,), dtype=vlen_bytes, maxshape=(None,)
+        devices_ds = data_sources_grp.create_dataset(
+            'deviceId', (N,), dtype=vlen_bytes, maxshape=(None,)
         )
         devices_ds[:] = [ds.split('/', 1)[1] for ds in data_sources]
 
