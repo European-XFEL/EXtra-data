@@ -6,6 +6,23 @@ import numpy as np
 from .numpy_future import add_future_function_into
 add_future_function_into(np)
 
+def accumulate(iterable, *, initial=None):
+    'Return running totals'
+    # accumulate([1,2,3,4,5]) --> 1 3 6 10 15
+    # accumulate([1,2,3,4,5], initial=100) --> 100 101 103 106 110 115
+    it = iter(iterable)
+    total = initial
+    if initial is None:
+        try:
+            total = next(it)
+        except StopIteration:
+            return
+    yield total
+    for element in it:
+        total += element
+        yield total
+
+
 
 # Attention! `Dataset` is the descriptor class and its instances are
 # intended to be used as class members of `FileWriter` children. Changing
@@ -13,7 +30,7 @@ add_future_function_into(np)
 # Therefore, one can change `self` only in the `__init__` method and
 # in methods that are called from the `FileWriterMeta` metaclass.
 class Dataset:
-    """Create datasets and fill the with data"""
+    """Dataset descriptor"""
     def __init__(self, source_name, key, entry_shape, dtype,
                  chunks=None, compression=None):
         self.entry_shape = tuple(entry_shape)
@@ -32,6 +49,7 @@ class Dataset:
             self.key = key
 
     def chunks_autosize(self, max_trains):
+        """Caclulates chunk size"""
         if self.chunks is not None:
             return
 
@@ -50,6 +68,7 @@ class Dataset:
         return (chunk,) + self.entry_shape
 
     def create(self, grp, max_trains, buffering):
+        """Creates dataset in h5-file and return writer"""
         chunks = self.chunks_autosize(max_trains)
         ds = grp.create_dataset(
             self.key.replace('.', '/'), (0,) + self.entry_shape,
@@ -65,6 +84,7 @@ class Dataset:
 
 
 class DatasetDescr:
+    """Dataset descriptor for 2nd interface"""
     def __init__(self, name, entry_shape, dtype,
                  chunks=None, compression=None):
         self.name = name
@@ -81,6 +101,7 @@ class DatasetDescr:
 
 
 class DatasetWriterBase:
+    """Abstract class for writers wrapping h5py"""
     def __init__(self, ds, file_ds, chunks):
         self.ds = ds
         self.file_ds = file_ds
@@ -90,19 +111,28 @@ class DatasetWriterBase:
     def flush(self):
         pass
 
-    def write(self, data, nrec):
+    def write(self, data, nrec, start=None):
         pass
 
 
 class DatasetDirectWriter(DatasetWriterBase):
-
-    def write(self, data, nrec):
+    """Class writes data directly to the file"""
+    def write(self, data, nrec, start=None):
+        """Writes data to disk"""
         end = self.pos + nrec
         self.file_ds.resize(end, 0)
-        self.file_ds[self.pos:end] = data
+        if start is None:
+            self.file_ds[self.pos:end] = data
+        else:
+            if isinstance(data, np.ndarray):
+                self.file_ds.write_direct(
+                    data, np.s_[start:start+nrec], np.s_[self.pos:end])
+            else:
+                self.file_ds[self.pos:end] = data[start:start+nrec]
 
 
 class DatasetBufferedWriter(DatasetWriterBase):
+    """Class implements buffered writing"""
     def __init__(self, ds, file_ds, chunks):
         super().__init__(ds, file_ds, chunks)
         self._data = np.empty(chunks, dtype=ds.dtype)
@@ -110,7 +140,7 @@ class DatasetBufferedWriter(DatasetWriterBase):
         self.nbuf = 0
 
     def flush(self):
-        # write buffer to disk
+        """Writes buffer to disk"""
         if self.nbuf:
             end = self.pos + self.nbuf
             self.file_ds.resize(end, 0)
@@ -120,29 +150,36 @@ class DatasetBufferedWriter(DatasetWriterBase):
             self.nbuf = 0
 
     def write_one(self, value):
+        """Buffers single record"""
         self._data[self.nbuf] = value
         self.nbuf += 1
         if self.nbuf >= self.size:
             self.flush()
 
-    def write_many(self, arr, nrec):
+    def write_many(self, arr, nrec, start=None):
+        """Buffers multiple records"""
+        if start is None:
+            start = 0
         buf_nrest = self.size - self.nbuf
         data_nrest = nrec - buf_nrest
         if data_nrest < 0:
             # copy
             end = self.nbuf + nrec
-            self._data[self.nbuf:end] = arr
+            self._data[self.nbuf:end] = arr[start:start+nrec]
             self.nbuf = end
         elif self.nbuf and data_nrest < self.size:
             # copy, flush, copy
-            self._data[self.nbuf:] = arr[:buf_nrest]
+            split = start + buf_nrest
+            self._data[self.nbuf:] = arr[start:split]
 
             end = self.pos + self.size
+            #print(self.pos, end, self._data.shape)
+            self.file_ds.resize(end, 0)
             self.file_ds.write_direct(
                 self._data, np.s_[:], np.s_[self.pos:end])
             self.pos = end
 
-            self._data[:data_nrest] = arr[buf_nrest:]
+            self._data[:data_nrest] = arr[split:start+nrec]
             self.nbuf = data_nrest
         else:
             # flush, write, copy
@@ -155,18 +192,86 @@ class DatasetBufferedWriter(DatasetWriterBase):
             if self.nbuf:
                 self.file_ds.write_direct(
                     self._data, np.s_[:self.nbuf], np.s_[self.pos:split])
-            self.file_ds.write_direct(arr, np.s_[:nwrite], np.s_[split:end])
+            self.file_ds.write_direct(arr, np.s_[start:start+nwrite], np.s_[split:end])
 
-            self._data[:nrest] = arr[nwrite:]
+            self._data[:nrest] = arr[start+nwrite:start+nrec]
             self.pos = end
             self.nbuf = nrest
 
-    def write(self, data, nrec):
+    def write(self, data, nrec, start=None):
+        """Buffer or writes data"""
         if nrec == 1:
-            self.write_one(data)
+            self.write_one(data[start] if start is not None else data)
         else:
-            arr = np.broadcast_to(data, (nrec,) + self.ds.entry_shape)
-            self.write_many(arr, nrec)
+            if not isinstance(data, np.ndarray):
+                arr = np.array(data, dtype=self.ds.dtype)
+            else:
+                arr = data
+                
+            #arr = np.broadcast_to(data, (nrec,) + self.ds.entry_shape)
+            self.write_many(arr, nrec, start=start)
+
+class DataQueue:
+    def __init__(self, chunks):
+        self.data = []
+        self.size = []
+        self.nwritten = 0
+        self.nready = 0
+        self.chunks = chunks
+
+    def __bool__(self):
+        return bool(self.data)
+    
+    def append(self, count, data, max_trains=None):
+        """Appends data into queue for future writing"""
+        ntrain = len(count)
+        self.data.append((count, data))
+        self.size.append((0, 0, ntrain))
+        self.nready += ntrain
+
+    def reset(self):
+        """Reset counters for new file"""
+        self.nready -= self.nwritten
+        self.nwritten = 0
+
+    def get_max_below(self, end):
+        """Finds the maximum number of trains that data items in the queue
+        fill without splitting and below the given number"""
+        ntrain = self.nwritten
+        for _, _, n in self.size:
+            if ntrain + n > end:
+                return ntrain
+            ntrain += n
+        return ntrain
+
+    def write(self, writer, end):
+        """Writes data items from the queue"""
+        nrest = end - self.nwritten
+        while nrest > 0:
+            offset, train0, ntrain = self.size[0]
+            if ntrain == 1 and offset == 0:
+                count, data = self.data.pop(0)
+                writer.write(data, count[0])
+                nrest -= 1
+                self.size.pop(0)
+            elif ntrain <= nrest:
+                count, data = self.data.pop(0)
+                trainN = train0 + ntrain
+                nrec = np.sum(count[train0:trainN])
+                writer.write(data, nrec, offset)
+
+                nrest -= ntrain
+                self.size.pop(0)
+            else:
+                count, data = self.data[0]
+                trainN = train0 + nrest
+                nrec = np.sum(count[train0:trainN])
+                writer.write(data, nrec, offset)
+
+                self.size[0] = (offset + nrec, trainN, ntrain - nrest)
+                nrest = 0
+            
+        self.nwritten = end
 
 
 # Attention! Do not instanciate `Source` in the metaclass `FileWriterMeta`
@@ -175,7 +280,7 @@ class Source:
 
     SECTION = ('CONTROL', 'INSTRUMENT')
 
-    def __init__(self, name, stype=None):
+    def __init__(self, name, stype=None, max_trains=None):
         self.name = name
         if stype is None:
             self.stype = int(':' in name)
@@ -183,26 +288,49 @@ class Source:
             self.stype = stype
 
         self.section = self.SECTION[self.stype]
+        self.max_trains = max_trains
+        
+        self.ndatasets = 0
+        #self.min_ready_train = 1 << 31
+        self.nready = 0
+        
         self.datasets = []
+        self.dsno = {}
         self.file_ds = []
+        self.data = []
 
+        self.count_buf = []
+        
         self.first = []
         self.count = []
-        self.pos = 0
         self.nrec = 0
+        
+        self.block_writing = True
 
-    def add(self, ds):
+    def add(self, name, ds):
+        """Adds dataset to the source"""
+        self.dsno[name] = len(self.datasets)
         self.datasets.append(ds)
+        chunks = ds.chunks_autosize(1000)
+        self.data.append(DataQueue(chunks[0]))
         self.file_ds.append(None)
+        self.ndatasets += 1
 
     def create(self, file, max_trains, buffering=True):
+        """Creates all datasets in file"""
         grp = file.create_group(self.section + '/' + self.name)
         for dsno, ds in enumerate(self.datasets):
             self.file_ds[dsno] = ds.create(grp, max_trains, buffering)
         self._grp = grp
+        self.block_writing = False
+        
+        while self.nready >= self.ndatasets and not self.block_writing:
+            self.write_data()
+        
         return grp
 
     def create_index(self, index_grp, max_trains):
+        """Create source index in h5-file"""
         grp = index_grp.create_group(self.name)
         for key in ('first', 'count'):
             ds = grp.create_dataset(
@@ -212,41 +340,94 @@ class Source:
             ds[:] = 0
 
     def write_index(self, index_grp, ntrains):
+        """Writes source index in h5-file"""
+        nmissed = ntrains - len(self.count)
+        if nmissed > 0:
+            self.count += [0] * nmissed
+            self.first += [self.nrec] * nmissed
+
         grp = index_grp[self.name]
         for dsname in ('first', 'count'):
             ds = grp[dsname]
             ds.resize(ntrains, axis=0)
             val = getattr(self, dsname)
             ds[:] = val[:ntrains]
-            setattr(self, dsname, val[ntrains:])
+            del val[:ntrains]
 
-        self.pos = 0
-        for t in range(len(self.count)):
-            self.first[t] = self.pos
-            self.pos += self.count[t]
+        if len(self.count):
+            self.first = list(accumulate(self.count[:-1], initial=0))
+            self.nrec = sum(self.count)
+        else:
+            self.first = []
+            self.nrec = 0
+
+        del self.count_buf[:ntrains]
 
     def close_datasets(self):
+        """Finalize writing"""
         for dsno, ds in enumerate(self.datasets):
             self.file_ds[dsno].flush()
+            self.data[dsno].reset()
 
-    def write_train(self, data):
-        for dsno, ds in enumerate(self.datasets):
-            try:
-                self.file_ds[dsno].write(data[ds.key], self.nrec)
-            except KeyError:
-                pass
+    def add_data(self, count, name, value):
+        """Adds multitrain data to the source"""
+        if self.stype == 0 and np.any(count > 1):
+            raise ValueError("maximum one entry per train can be written "
+                             "in control source")
 
-        self.first.append(self.pos)
-        self.count.append(self.nrec)
+        dsno = self.dsno[name]
 
-        self.pos += self.nrec
-        self.nrec = int(not self.stype)
+        ntrain = self.data[dsno].nready
+        nwritten = len(self.count)
+        if nwritten > ntrain:
+            nmatch = min(nwritten - ntrain, len(count))
+            if np.any(self.count_buf[ntrain:ntrain+nmatch] != count[:nmatch]):
+                raise ValueError("count mismatch the number of frames in source")
 
-    def is_data_complete(self, data):
-        if self.stype == 1 and len(data) == 0:
-            return False
-        missed = set(ds.key for ds in self.datasets) - set(data.keys())
-        return list(missed) if missed else True
+            self.count_buf += count[nmatch:].tolist()
+        else:
+            self.count_buf += count.tolist()
+
+        self.nready += not self.data[dsno]
+        self.data[dsno].append(count, value, self.max_trains)
+        
+        while self.nready >= self.ndatasets and not self.block_writing:
+            self.write_data()
+            
+    def write_data(self):
+        """Write data when the trains completely filled"""
+        train0 = len(self.count)
+        max_ready = min(d.nready for d in self.data)
+
+        if self.max_trains is not None and self.max_trains < max_ready:
+            max_ready = self.max_trains
+            self.block_writing = True
+
+        self.nready = 0
+        trainN = train0
+        for dsno in range(self.ndatasets):
+            if self.block_writing:
+                end = max_ready
+            else:
+                end = self.data[dsno].get_max_below(max_ready)
+
+            self.data[dsno].write(self.file_ds[dsno], end)
+            self.nready += bool(self.data[dsno])
+            trainN = max(trainN, end)
+
+            
+        count = self.count_buf[train0:trainN]
+        first = list(accumulate(count[:-1], initial=self.nrec))
+        self.count += count
+        self.first += first
+        self.nrec += np.sum(count, dtype=int)
+
+    def get_ntrain(self, dsname):
+        dsno = self.dsno[dsname]
+        return self.data[dsno].nready
+
+    def get_min_trains(self):
+        return min(d.nready for d in self.data)
 
 
 class Options:
@@ -291,6 +472,12 @@ class Options:
                             ','.join(meta_attrs))
 
 
+class MultiTrainData:
+    def __init__(self, count, data):
+        self.count = count
+        self.data = data
+
+
 class DataSetter:
     """Overrides the setters for attributes which declared as datasets
     in order to use the assignment operation for adding data in a train
@@ -299,7 +486,10 @@ class DataSetter:
         self.name = name
 
     def __set__(self, instance, value):
-        instance.add_value(self.name, value)
+        if isinstance(value, MultiTrainData):
+            instance.add_value(value.count, self.name, value.data)
+        else:
+            instance.add_train_value(self.name, value)
 
 
 class BlockedSetter:
@@ -369,13 +559,20 @@ class FileWriterBase:
         self.seq = 0
         self.filename = filename
 
+        if self._meta.break_into_sequence:
+            max_trains = self._meta.max_train_per_file 
+        else:
+            max_trains = None
+
         self.sources = {}
+        self.source_ntrain = {}
         for sect, src_name in self.list_of_sources:
             stype = Source.SECTION.index(sect)
-            self.sources[src_name] = Source(src_name, stype)
+            self.sources[src_name] = Source(src_name, stype, max_trains)
+            self.source_ntrain[src_name] = 0
 
         for dsname, ds in self.datasets.items():
-            self.sources[ds.source_name].add(ds)
+            self.sources[ds.source_name].add(dsname, ds)
 
         file = h5py.File(filename.format(seq=self.seq), 'w')
         self.init_file(file)
@@ -389,6 +586,7 @@ class FileWriterBase:
 
     def close(self):
         """Finalises writing and close a file"""
+        self.rotate_sequence_file(True)
         self.close_datasets()
         self.write_indices()
         self._file.close()
@@ -437,6 +635,8 @@ class FileWriterBase:
     def write_indices(self):
         """Write real indices to the file"""
         ntrains = len(self.trains)
+        if self._meta.break_into_sequence:
+            ntrains = min(self._meta.max_train_per_file, ntrains)
         index_datasets = [
             ('trainId', self.trains),
             ('timestamp', self.timestamp),
@@ -445,16 +645,18 @@ class FileWriterBase:
         for key, data in index_datasets:
             ds = self.index_grp[key]
             ds.resize(ntrains, 0)
-            ds[:] = data
+            ds[:] = data[:ntrains]
 
-        for sname, src in self.sources.items():
+        for src_name, src in self.sources.items():
             src.write_index(self.index_grp, ntrains)
-
-        self.trains = []
-        self.timestamp = []
-        self.flags = []
+            self.source_ntrain[src_name] = src.get_min_trains()
+            
+        del self.trains[:ntrains]
+        del self.timestamp[:ntrains]
+        del self.flags[:ntrains]
 
     def create_datasets(self):
+        """Creates datasets in the file"""
         for sname, src in self.sources.items():
             src.create(self._file, self._meta.max_train_per_file,
                        self._meta.buffering)
@@ -493,93 +695,80 @@ class FileWriterBase:
                              f"be broadcast to {(None, ) + entry_shape}")
 
         return nrec
-
-    def add_value(self, name, value):
-        """Fills a single dataset in the current train"""
+    
+    def add_value(self, count, name, value):
+        """Fills a single dataset across multiple trains"""
         ds = self.datasets[name]
-        src = self.sources[ds.source_name]
 
         # check shape of value
         nrec = FileWriterBase.__check_value(value, ds.entry_shape, ds.dtype)
-        if src.stype == 0 and nrec != 1:
-            raise ValueError("shape mismatch: only one entry per train "
-                             f"can be written in control source, got {nrec}")
+        ntrain = np.size(count)
+        if nrec != np.sum(count):
+            raise ValueError("total counts is not equal to the number of records")
+        
+        # check count
+        src = self.sources[ds.source_name]
+        if src.get_ntrain(name) + ntrain > len(self.trains):
+            raise ValueError("the number of trains in this data exeeds "
+                             "the number of trains in file")
+        
+        src.add_data(np.array(count), name, value)
+        
+        self.source_ntrain[ds.source_name] = src.get_min_trains()
+        self.rotate_sequence_file()
+        
+    def add_train_value(self, name, value):
+        """Fills a single dataset in the current train"""
+        ds = self.datasets[name]
+        nrec = FileWriterBase.__check_value(value, ds.entry_shape, ds.dtype)
+        self.add_value([nrec], name, value)
 
-        # all datasets in the group must have
-        # the same number of records per train
-        src_data = self._train_data.setdefault(src.name, {})
-        nds = len(src_data)
-        if src.nrec == 0:
-            src.nrec = nrec
-        elif (src.nrec != nrec) and (nds != 1 or ds.key not in src_data):
-            raise RuntimeError(
-                f"adding number of entries ({nrec}) mismatch the number "
-                f"({src.nrec}) previously submitted to this source")
+    def add_data(self, count, **kwargs):
+        """Adds data"""
+        for name, value in kwargs.items():
+            self.add_value(count, name, value)
 
-        # store value
-        src_data[ds.key] = value
-
-    def add_value_by_key(self, source, key, value):
-        """Fills a single dataset in the current train given by source name"""
-        name = self.dataset_names[source, key]
-        self.add_value(name, value)
-
-    def add(self, **kwargs):
+    def add_train_data(self, **kwargs):
         """Adds data to the current train"""
         for name, value in kwargs.items():
-            self.add_value(name, value)
+            self.add_train_value(name, value)
 
-    def is_data_complete(self):
-        """ Checks the completness of data"""
-        missed = []
-        is_complete = True
-        for sname, src in self.sources.items():
-            status = src.is_data_complete(self._train_data.get(sname, {}))
-            if isinstance(status, list):
-                missed.append((sname, status))
-            else:
-                is_complete = is_complete and status
+    def rotate_sequence_file(self, finalize=False):
+        """opens a new sequence file if necessary"""
+        if self._meta.break_into_sequence:
+            op = (lambda a: max(a)) if finalize else (lambda a: min(a))
+            ntrain = op(self.source_ntrain.values())
+            while ntrain > self._meta.max_train_per_file:
 
-        return missed if missed else is_complete
+                self.close_datasets()
+                self.write_indices()
+                self._file.close()
 
-    def write_train(self, tid, ts=None):
-        """Writes submitted data to the file, opens a new sequence file
-        if necessary"""
-        self.rotate_sequence_file()
+                self.seq += 1
 
-        status = self.is_data_complete()
-        if isinstance(status, list):
-            raise ValueError("data was not submitted for dataset(s):\n" +
-                             "\n".join(f"{src}: {key}"for src, key in status))
-        elif self._meta.warn_on_missing_data and not status:
-            warnings.warn("Some instruments did not submitted data "
-                          f"for train {tid}", RuntimeWarning)
+                file = h5py.File(self.filename.format(seq=self.seq), 'w')
+                self.init_file(file)
 
-        for sname, src in self.sources.items():
-            if sname in self._train_data:
-                src.write_train(self._train_data[sname])
-                if src.stype == 1:
-                    del self._train_data[sname]
-            else:
-                src.write_train({})
+                ntrain = op(self.source_ntrain.values())
 
+    def add_trains(self, tid, ts):
+        """Adds trains to the file"""
+        ntrain = len(tid)
+        if ntrain != len(ts):
+            raise ValueError("arguments must have the same size")
+
+        self.trains += tid
+        self.timestamp += ts
+        self.flags += [1] * ntrain
+
+    def add_train(self, tid, ts):
         self.trains.append(tid)
         self.timestamp.append(ts)
         self.flags.append(1)
 
-    def rotate_sequence_file(self):
-        """opens a new sequence file if necessary"""
-        if (self._meta.break_into_sequence and
-                len(self.trains) >= self._meta.max_train_per_file):
-
-            self.close()
-            self.seq += 1
-
-            file = h5py.File(self.filename.format(seq=self.seq), 'w')
-            self.init_file(file)
-
 
 DS = Dataset
+trs_ = MultiTrainData
 
 
 class FileWriter(FileWriterBase, metaclass=FileWriterMeta):

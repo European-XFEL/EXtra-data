@@ -48,18 +48,19 @@ def test_writer2():
             # wr.nb = nbin
             # wr.rlim = (0.003, 0.016)
             # 2. funcion kwargs interface
-            wr.add(gv=gv, nb=nbin, rlim=(0.003, 0.016))
 
             for tid in trains:
                 # create/compute data
                 v = np.random.randn(npulse, nbin)
                 vref.append(v)
+                # add train
+                wr.add_train(tid, 0)
                 # add data
+                wr.add_train_data(gv=gv, nb=nbin, rlim=(0.003, 0.016))
+                
                 wr.tid = [tid] * npulse
                 wr.pid = pulses
                 wr.v = v
-                # write train
-                wr.write_train(tid, 0)
 
         vref = np.concatenate(vref, 0)
 
