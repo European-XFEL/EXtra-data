@@ -120,6 +120,9 @@ class FileWriter:
         if metadata.get('dataFormatVersion') == '1.0':
             self.write_sources(metadata_grp.create_group('dataSources'))
 
+            # File format 1.0 should also have INDEX/flag
+            self.file.create_dataset('INDEX/flag', data=self.gather_flag())
+
             for key, val in metadata.items():
                 metadata_grp[key] = [val]
         else:
@@ -146,6 +149,19 @@ class FileWriter:
             'deviceId', (N,), dtype=vlen_bytes, maxshape=(None,)
         )
         devices_ds[:] = [ds.split('/', 1)[1] for ds in data_sources]
+
+    def gather_flag(self):
+        """Make the array for INDEX/flag.
+
+        Trains are valid (1) if they are valid in *any* of the source files.
+        """
+        tid_arr = np.asarray(self.data.train_ids, dtype=np.uint64)
+        flag = np.zeros_like(tid_arr, dtype=np.int32)
+        for fa in self.data.files:
+            mask_valid = np.isin(tid_arr, fa.valid_train_ids)
+            flag[mask_valid] = 1
+
+        return flag
 
     def set_writer(self):
         """Record the package & version writing the file in an attribute"""
