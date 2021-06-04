@@ -31,6 +31,8 @@ Release Notes
 1.5
 ---
 
+- Exclude :ref:`suspect-trains`, fixing occasional issues in particular with
+  AGIPD data containing bad train IDs (:ghpull:`121`).
 - Avoid converting train IDs to floats when using
   ``run.select(..., require_all=True)`` (:ghpull:`159`).
 - New method :meth:`.train_timestamps` to get approximate timestamps for each
