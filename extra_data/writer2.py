@@ -1,4 +1,3 @@
-import warnings
 import h5py
 import numpy as np
 
@@ -6,8 +5,9 @@ import numpy as np
 from .numpy_future import add_future_function_into
 add_future_function_into(np)
 
+
 def accumulate(iterable, *, initial=None):
-    'Return running totals'
+    """Return running totals"""
     # accumulate([1,2,3,4,5]) --> 1 3 6 10 15
     # accumulate([1,2,3,4,5], initial=100) --> 100 101 103 106 110 115
     it = iter(iterable)
@@ -23,7 +23,6 @@ def accumulate(iterable, *, initial=None):
         yield total
 
 
-
 # Attention! `Dataset` is the descriptor class and its instances are
 # intended to be used as class members of `FileWriter` children. Changing
 # them leads to changes in the host class itself and in all its instances.
@@ -37,8 +36,25 @@ class Dataset:
         self.dtype = np.dtype(dtype)
         self.compression = compression
         self.chunks = chunks
-        self.canonical_name = (source_name, key)
+        if source_name and source_name[0] == '@':
+            self.orig_name = (True, source_name[1:], key)
+        else:
+            self.orig_name = (False, source_name, key)
 
+    def set_name(self, source_name, key):
+        self.orig_name = (False, source_name, key)
+        self.normalize_name(source_name, key)
+
+    def resolve_name(self, aliases={}):
+        """Normalizes source name and key"""
+        isalias, source_id, key = self.orig_name
+
+        # resolve reference
+        source_name = aliases[source_id] if isalias else source_id
+        self.normalize_name(source_name, key)
+
+    def normalize_name(self, source_name, key):
+        self.canonical_name = (source_name, key)
         # can we really distinguish sources by colons?
         self.stype = int(':' in source_name)
         if self.stype:
@@ -81,23 +97,6 @@ class Dataset:
             wrt = DatasetDirectWriter(self, ds, chunks)
 
         return wrt
-
-
-class DatasetDescr:
-    """Dataset descriptor for 2nd interface"""
-    def __init__(self, name, entry_shape, dtype,
-                 chunks=None, compression=None):
-        self.name = name
-        self.dtype = dtype
-        self.entry_shape = entry_shape
-        self.chunks = chunks
-        self.compression = compression
-
-    def get_dataset(self, source, key):
-        return Dataset(
-            source, key, self.entry_shape, self.dtype,
-            chunks=self.chunks, compression=self.compression
-        )
 
 
 class DatasetWriterBase:
@@ -173,7 +172,6 @@ class DatasetBufferedWriter(DatasetWriterBase):
             self._data[self.nbuf:] = arr[start:split]
 
             end = self.pos + self.size
-            #print(self.pos, end, self._data.shape)
             self.file_ds.resize(end, 0)
             self.file_ds.write_direct(
                 self._data, np.s_[:], np.s_[self.pos:end])
@@ -192,7 +190,8 @@ class DatasetBufferedWriter(DatasetWriterBase):
             if self.nbuf:
                 self.file_ds.write_direct(
                     self._data, np.s_[:self.nbuf], np.s_[self.pos:split])
-            self.file_ds.write_direct(arr, np.s_[start:start+nwrite], np.s_[split:end])
+            self.file_ds.write_direct(arr, np.s_[start:start+nwrite],
+                                      np.s_[split:end])
 
             self._data[:nrest] = arr[start+nwrite:start+nrec]
             self.pos = end
@@ -207,9 +206,10 @@ class DatasetBufferedWriter(DatasetWriterBase):
                 arr = np.array(data, dtype=self.ds.dtype)
             else:
                 arr = data
-                
-            #arr = np.broadcast_to(data, (nrec,) + self.ds.entry_shape)
+
+            # arr = np.broadcast_to(data, (nrec,) + self.ds.entry_shape)
             self.write_many(arr, nrec, start=start)
+
 
 class DataQueue:
     def __init__(self, chunks):
@@ -221,7 +221,7 @@ class DataQueue:
 
     def __bool__(self):
         return bool(self.data)
-    
+
     def append(self, count, data, max_trains=None):
         """Appends data into queue for future writing"""
         ntrain = len(count)
@@ -270,7 +270,7 @@ class DataQueue:
 
                 self.size[0] = (offset + nrec, trainN, ntrain - nrest)
                 nrest = 0
-            
+
         self.nwritten = end
 
 
@@ -289,22 +289,21 @@ class Source:
 
         self.section = self.SECTION[self.stype]
         self.max_trains = max_trains
-        
+
         self.ndatasets = 0
-        #self.min_ready_train = 1 << 31
         self.nready = 0
-        
+
         self.datasets = []
         self.dsno = {}
         self.file_ds = []
         self.data = []
 
         self.count_buf = []
-        
+
         self.first = []
         self.count = []
         self.nrec = 0
-        
+
         self.block_writing = True
 
     def add(self, name, ds):
@@ -323,10 +322,10 @@ class Source:
             self.file_ds[dsno] = ds.create(grp, max_trains, buffering)
         self._grp = grp
         self.block_writing = False
-        
+
         while self.nready >= self.ndatasets and not self.block_writing:
             self.write_data()
-        
+
         return grp
 
     def create_index(self, index_grp, max_trains):
@@ -382,7 +381,8 @@ class Source:
         if nwritten > ntrain:
             nmatch = min(nwritten - ntrain, len(count))
             if np.any(self.count_buf[ntrain:ntrain+nmatch] != count[:nmatch]):
-                raise ValueError("count mismatch the number of frames in source")
+                raise ValueError("count mismatch the number of frames "
+                                 "in source")
 
             self.count_buf += count[nmatch:].tolist()
         else:
@@ -390,10 +390,10 @@ class Source:
 
         self.nready += not self.data[dsno]
         self.data[dsno].append(count, value, self.max_trains)
-        
+
         while self.nready >= self.ndatasets and not self.block_writing:
             self.write_data()
-            
+
     def write_data(self):
         """Write data when the trains completely filled"""
         train0 = len(self.count)
@@ -415,7 +415,6 @@ class Source:
             self.nready += bool(self.data[dsno])
             trainN = max(trainN, end)
 
-            
         count = self.count_buf[train0:trainN]
         first = list(accumulate(count[:-1], initial=self.nrec))
         self.count += count
@@ -435,8 +434,8 @@ class Options:
     by ones declared in Meta subclass
     """
     NAMES = (
-        'max_train_per_file', 'break_into_sequence', 'warn_on_missing_data',
-        'class_attrs_interface', 'buffering'
+        'max_train_per_file', 'break_into_sequence',
+        'class_attrs_interface', 'buffering', 'aliases'
     )
 
     def __init__(self, meta=None, base=None):
@@ -445,6 +444,7 @@ class Options:
         self.warn_on_missing_data = False
         self.class_attrs_interface = True
         self.buffering = True
+        self.aliases = {}
 
         self.copy(base)
         self.override_defaults(meta)
@@ -465,7 +465,11 @@ class Options:
 
         for attr_name in Options.NAMES:
             if attr_name in meta_attrs:
-                setattr(self, attr_name, meta_attrs.pop(attr_name))
+                val = meta_attrs.pop(attr_name)
+                if isinstance(val, dict):
+                    getattr(self, attr_name).update(val)
+                else:
+                    setattr(self, attr_name, val)
 
         if meta_attrs != {}:
             raise TypeError("'class Meta' got invalid attribute(s): " +
@@ -506,50 +510,49 @@ class FileWriterMeta(type):
 
         new_attrs = {}
         datasets = {}
-        dataset_names = {}
-        sources = {}
         for base in reversed(bases):
-            datasets.update(base.datasets)
-            dataset_names.update(base.dataset_names)
-            if base.list_of_sources:
-                for sect, src_name in base.list_of_sources:
-                    sources[src_name] = Source.SECTION.index(sect)
+            if issubclass(base, FileWriterBase):
+                datasets.update(base.datasets)
 
         for key, val in attrs.items():
             if isinstance(val, Dataset):
                 datasets[key] = val
-                dataset_names[val.canonical_name] = key
-                sources.setdefault(val.source_name, val.stype)
             else:
                 new_attrs[key] = val
 
-        new_attrs['list_of_sources'] = list(
-            (Source.SECTION[src_type], src_name)
-            for src_name, src_type in sources.items()
-        )
         new_attrs['datasets'] = datasets
-        new_attrs['dataset_names'] = dataset_names
-
         new_class = super().__new__(cls, name, bases, new_attrs)
 
         meta = attr_meta or getattr(new_class, 'Meta', None)
         base_meta = getattr(new_class, '_meta', None)
         new_class._meta = Options(meta, base_meta)
 
+        sources = {}
         for ds_name, ds in datasets.items():
+            ds.resolve_name(new_class._meta.aliases)
+            sources.setdefault(ds.source_name, ds.stype)
             if new_class._meta.class_attrs_interface:
                 setattr(new_class, ds_name, DataSetter(ds_name))
             else:
                 setattr(new_class, ds_name, BlockedSetter())
 
+        new_class.list_of_sources = list(
+            (Source.SECTION[src_type], src_name)
+            for src_name, src_type in sources.items()
+        )
         return new_class
 
 
-class FileWriterBase:
+class FileWriterBase(object):
     """Writes data in EuXFEL format"""
     list_of_sources = []
     datasets = {}
-    dataset_names = {}
+
+    def __new__(cls, *args, **kwargs):
+        if not cls.datasets:
+            raise TypeError(f"Can't instantiate class {cls.__name__}, "
+                            "because it has no datasets")
+        return super().__new__(cls)
 
     def __init__(self, filename):
         self._train_data = {}
@@ -560,10 +563,11 @@ class FileWriterBase:
         self.filename = filename
 
         if self._meta.break_into_sequence:
-            max_trains = self._meta.max_train_per_file 
+            max_trains = self._meta.max_train_per_file
         else:
             max_trains = None
 
+        self.nsource = len(self.list_of_sources)
         self.sources = {}
         self.source_ntrain = {}
         for sect, src_name in self.list_of_sources:
@@ -608,7 +612,9 @@ class FileWriterBase:
         sources_grp.create_dataset('dataSourceId', dtype=vlen_bytes, data=[
             sect + '/' + src for sect, src in self.list_of_sources
         ])
-        sections, sources = zip(*self.list_of_sources)
+
+        sections, sources = (zip(*self.list_of_sources)
+                             if self.nsource else (None, None))
         sources_grp.create_dataset('root', dtype=vlen_bytes, data=sections)
         sources_grp.create_dataset('deviceId', dtype=vlen_bytes, data=sources)
 
@@ -650,7 +656,7 @@ class FileWriterBase:
         for src_name, src in self.sources.items():
             src.write_index(self.index_grp, ntrains)
             self.source_ntrain[src_name] = src.get_min_trains()
-            
+
         del self.trains[:ntrains]
         del self.timestamp[:ntrains]
         del self.flags[:ntrains]
@@ -695,7 +701,7 @@ class FileWriterBase:
                              f"be broadcast to {(None, ) + entry_shape}")
 
         return nrec
-    
+
     def add_value(self, count, name, value):
         """Fills a single dataset across multiple trains"""
         ds = self.datasets[name]
@@ -704,19 +710,20 @@ class FileWriterBase:
         nrec = FileWriterBase.__check_value(value, ds.entry_shape, ds.dtype)
         ntrain = np.size(count)
         if nrec != np.sum(count):
-            raise ValueError("total counts is not equal to the number of records")
-        
+            raise ValueError("total counts is not equal to "
+                             "the number of records")
+
         # check count
         src = self.sources[ds.source_name]
         if src.get_ntrain(name) + ntrain > len(self.trains):
             raise ValueError("the number of trains in this data exeeds "
                              "the number of trains in file")
-        
+
         src.add_data(np.array(count), name, value)
-        
+
         self.source_ntrain[ds.source_name] = src.get_min_trains()
         self.rotate_sequence_file()
-        
+
     def add_train_value(self, name, value):
         """Fills a single dataset in the current train"""
         ds = self.datasets[name]
@@ -735,7 +742,7 @@ class FileWriterBase:
 
     def rotate_sequence_file(self, finalize=False):
         """opens a new sequence file if necessary"""
-        if self._meta.break_into_sequence:
+        if self._meta.break_into_sequence and self.nsource:
             op = (lambda a: max(a)) if finalize else (lambda a: min(a))
             ntrain = op(self.source_ntrain.values())
             while ntrain > self._meta.max_train_per_file:
@@ -827,18 +834,23 @@ class FileWriter(FileWriterBase, metaclass=FileWriterMeta):
     of entries in the same train.
     """
     @classmethod
-    def open(cls, fn, sources, **kwargs):
-        class_name = cls.__name__ + '_' + str(id(sources))
+    def open(cls, fn, datasets, **kwargs):
+        class_name = cls.__name__ + '_' + str(id(datasets))
 
+        aliases = kwargs.get('aliases', {})
         attrs = {}
-        for source_name, datasets in sources.items():
-            for ds_key, ds in datasets.items():
-                if ds.name in attrs:
-                    warnings.warn(
-                        f"The dataset name '{ds.name}' is duplicated. "
-                        "Only the last entry is actual.", RuntimeWarning)
-
-                attrs[ds.name] = ds.get_dataset(source_name, ds_key)
+        for name, val in datasets.items():
+            if isinstance(val, dict):
+                for ds_name, ds in val.items():
+                    if isinstance(ds, Dataset):
+                        isalias, src_id, key = ds.orig_name
+                        src_suffix = aliases[src_id] if isalias else src_id
+                        new_name = (name + '/' + src_suffix
+                                    if src_suffix else name)
+                        ds.set_name(new_name, key)
+                    attrs[ds_name] = ds
+            else:
+                attrs[name] = val
 
         if kwargs:
             attrs['Meta'] = type(class_name + '.Meta', (object,), kwargs)
