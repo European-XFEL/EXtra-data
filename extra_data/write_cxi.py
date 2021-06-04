@@ -46,15 +46,32 @@ class VirtualCXIWriterBase:
 
     @property
     def nmodules(self):
+        """
+        Number of detector modules.
+        """
         return self.detdata.n_modules
 
     @property
     def ncells(self):
-        return self._n_cells
+        """
+        Number of detector memory cells per data entry.
+        """
+        return self._cells_per_entry
 
     @property
     def data(self):
+        """
+        DataCollection with detector data from a run.
+        """
         return self.detdata.data
+
+    def _get_module_index(self, module):
+        """
+        Supposed to return an index for the specified module.
+        Has to be implemented in the children classes.
+        """
+        raise NotImplementedError(
+            "Modules indexing has to be implemented in a child class.")
 
     def collect_pulse_ids(self):
         """
@@ -81,7 +98,7 @@ class VirtualCXIWriterBase:
 
         pulse_key = self.group_label + '.' + self.pulse_id_label
         for source, modno in self.detdata.source_to_modno.items():
-            module_id = self._get_module_id(modno)
+            module_id = self._get_module_index(modno)
             for chunk in self.data._find_data_chunks(source, pulse_key):
                 chunk_data = chunk.dataset
                 self._map_chunk(chunk, chunk_data, pulse_ids, module_id)
@@ -145,28 +162,30 @@ class VirtualCXIWriterBase:
             # How much of this chunk can be mapped in one go?
             mismatches = (chunk_tids_target != target_tids).nonzero()[0]
             if mismatches.size > 0:
-                n_match = int(mismatches[0] / self.ncells)
+                n_match = mismatches[0] // self.ncells
             else:
                 n_match = len(chunk_tids)
 
             # Select the matching data and add it to the target
             chunk_match_end = chunk_match_start + n_match
             tgt_end = tgt_start + (n_match*self.ncells)
-            matched = chunk_data[chunk_match_start:chunk_match_end]
             if self.ncells == 1:
                 # In some cases, there's an extra dimension of length 1.
                 # E.g. JUNGFRAU data with 1 memory cell per train or
-                # AGIPD/LPD raw data.
-                # Also, 'VirtualSource' object has no attribute 'ndim'.
-                if (len(matched.shape) > 1 and matched.shape[1] == 1):
-                    target[tgt_start:tgt_end, tgt_ax1] = matched[:, 0]
+                # DSSC/LPD raw data.
+                if (len(chunk_data.shape) > 1 and chunk_data.shape[1] == 1):
+                    matched = chunk_data[chunk_match_start:chunk_match_end, 0]
                 else:
-                    target[tgt_start:tgt_end, tgt_ax1] = matched
+                    matched = chunk_data[chunk_match_start:chunk_match_end]
+                target[tgt_start:tgt_end, tgt_ax1] = matched
             else:
-                for tid in range(n_match):
-                    start = tgt_start + tid*self.ncells
-                    end = tgt_start + (tid + 1)*self.ncells
-                    target[start:end, tgt_ax1] = matched[tid, :]
+                matched = chunk_data[chunk_match_start:chunk_match_end]
+                if isinstance(chunk_data, h5py.VirtualSource):
+                    # Use broadcasting of h5py.VirtualSource
+                    target[tgt_start:tgt_end, tgt_ax1] = matched
+                else:
+                    target[tgt_start:tgt_end, tgt_ax1] = matched.reshape(
+                        (-1,) + matched.shape[2:])
 
             # Fill in the map of what data we have
             if have_data is not None:
@@ -178,7 +197,7 @@ class VirtualCXIWriterBase:
 
     def _map_layouts(self, layouts):
         """
-        Map virtual layouts to the virtual sources in the data chunks.
+        Map virtual sources into virtual layouts.
 
         Parameters
         ----------
@@ -198,7 +217,7 @@ class VirtualCXIWriterBase:
 
             for source, modno in self.detdata.source_to_modno.items():
                 print(f" ### Source: {source}, ModNo: {modno}, Key: {key}")
-                module_id = self._get_module_id(modno)
+                module_id = self._get_module_index(modno)
                 for chunk in self.data._find_data_chunks(source, key):
                     vsrc = h5py.VirtualSource(chunk.dataset)
                     self._map_chunk(chunk, vsrc, layout, module_id, have_data)
@@ -334,15 +353,15 @@ class XtdfCXIWriter(VirtualCXIWriterBase):
       The detector data interface for the data to gather in this file.
     """
     def __init__(self, detdata) -> None:
-        self._n_cells = 1
+        self._cells_per_entry = 1
         self.pulse_id_label = 'pulseId'
         self.cell_id_label = 'cellId'
 
         super().__init__(detdata)
 
-    def _get_module_id(self, module):
+    def _get_module_index(self, module):
         """
-        Returns an ID for specified module.
+        Returns an index for the specified module.
         For AGIPD, DSSC & LPD modules are numbered from 0.
         """
         return module
@@ -423,15 +442,15 @@ class JUNGFRAUCXIWriter(VirtualCXIWriterBase):
         # Check number of cells
         src = next(iter(detdata.source_to_modno))
         keydata = detdata.data[src, 'data.adc']
-        self._n_cells = keydata.entry_shape[0]
+        self._cells_per_entry = keydata.entry_shape[0]
         self.pulse_id_label = 'memoryCell'
         self.cell_id_label = 'memoryCell'
 
         super().__init__(detdata)
 
-    def _get_module_id(self, module):
+    def _get_module_index(self, module):
         """
-        Returns an ID for specified module.
+        Returns an index for the specified module.
         For JUNGFRAU modules are numbered from 1.
         """
         return (module - 1)

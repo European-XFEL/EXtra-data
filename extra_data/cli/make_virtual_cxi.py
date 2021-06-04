@@ -17,6 +17,29 @@ def parse_number(number:str):
     except ValueError:
         return int(number, 0)
 
+def get_sequences (det_data):
+    """
+    Prepare a set of sequence names from the detector data in a run.
+
+    Parameters
+    ----------
+
+    det_data: extra_data.components.MultimodDetectorBase
+      The detector data instance for a run.
+
+    Returns
+    -------
+
+    list
+      Sorted list of strings of the file sequences names.
+    """
+    sequences = set()
+    for source in det_data.source_to_modno:
+        for file in det_data.data._source_index[source]:
+            mobj = re.search(r'-(S\d+)\.h5', file.filename)
+            if mobj is not None:
+                sequences.add(mobj.group(1))
+    return sorted(sequences)
 
 def main(argv=None):
     example = dedent("""
@@ -61,6 +84,10 @@ def main(argv=None):
              ' incorrect train IDs in the data, but may mean less data is'
              ' available.'
     )
+    ap.add_argument(
+        '-seq', '--per-sequence', action='store_true',
+        help='Create separate CXI files for each data sequence.'
+    )
     args = ap.parse_args(argv)
     out_file = args.output
     fill_values = None
@@ -97,25 +124,30 @@ def main(argv=None):
         sys.exit("ERROR: Don't have write access to {}".format(out_dir))
 
     log.info("Reading run directory %s", run_dir)
-    run = RunDirectory(run_dir, inc_suspect_trains=(not args.exc_suspect_trains))
+    inc_suspect = not args.exc_suspect_trains
+    run = RunDirectory(run_dir, inc_suspect_trains=inc_suspect)
 
     _, det_class = identify_multimod_detectors(run, single=True)
-    det_name = det_class.__name__
 
     min_modules = args.min_modules
     if min_modules is None:
         det_n_modules = getattr(det_class, 'n_modules', 0)
         min_modules = (det_n_modules // 2) + 1
 
-    if args.n_modules is None:
-        det = det_class(run, min_modules=min_modules)
-    elif det_name == 'JUNGFRAU':
-        det = det_class(run, min_modules=min_modules, n_modules=args.n_modules)
+    det = det_class(run, min_modules=min_modules, n_modules=args.n_modules)
+    if not args.per_sequence:
+        det.write_virtual_cxi(out_file, fill_values)
     else:
-        raise NotImplementedError(
-            '--n-modules option is available only for for JUNGFRAU data')
+        for sequence in get_sequences(det):
+            seq_wildcard = f"*{sequence}.h5"
+            split_out = out_file.rsplit('.', 1)
+            seq_out_file = f"{split_out[0]}_{sequence}.{split_out[1]}"
 
-    det.write_virtual_cxi(out_file, fill_values)
+            seq_run = RunDirectory(
+                run_dir, include=seq_wildcard, inc_suspect_trains=inc_suspect)
+            seq_det = det_class(
+                seq_run, min_modules=min_modules, n_modules=args.n_modules)
+            seq_det.write_virtual_cxi(seq_out_file, fill_values)
 
 if __name__ == '__main__':
     main()

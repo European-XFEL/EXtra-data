@@ -286,6 +286,13 @@ class XtdfDetectorBase(MultimodDetectorBase):
     n_modules = 16
     _main_data_key = 'image.data'
 
+    def __init__(self, data: DataCollection, detector_name=None, modules=None,
+                 *, min_modules=1, n_modules=None):
+        if n_modules is not None:
+            raise NotImplementedError(
+                '--n-modules option is not available for AGIPD/DSSC/LPD data')
+        super().__init__(data, detector_name, modules, min_modules=min_modules)
+
     @staticmethod
     def _select_pulse_ids(pulses, data_pulse_ids):
         """Select pulses by ID across a chunk of trains
