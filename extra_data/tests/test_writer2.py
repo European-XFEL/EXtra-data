@@ -8,27 +8,31 @@ from extra_data import RunDirectory, H5File
 from extra_data.writer2 import FileWriter, DS
 
 
-ctrl_grp = 'MID_DET_AGIPD1M-1/x/y'
-inst_grp = 'MID_DET_AGIPD1M-1/x/y:output'
 nbin = 1000
 
 
 class MyFileWriter(FileWriter):
-    gv = DS(ctrl_grp, 'geom.fragmentVectors', (10,100), float)
-    nb = DS(ctrl_grp, 'param.numberOfBins', (), np.uint64)
-    rlim = DS(ctrl_grp, 'param.radiusRange', (2,), float)
+    gv = DS('@ctrl', 'geom.fragmentVectors', (10,100), float)
+    nb = DS('@ctrl', 'param.numberOfBins', (), np.uint64)
+    rlim = DS('@ctrl', 'param.radiusRange', (2,), float)
 
-    tid = DS(inst_grp, 'azimuthal.trainId', (), np.uint64)
-    pid = DS(inst_grp, 'azimuthal.pulseId', (), np.uint64)
-    v = DS(inst_grp, 'azimuthal.profile', (nbin,), float)
+    tid = DS('@inst', 'azimuthal.trainId', (), np.uint64)
+    pid = DS('@inst', 'azimuthal.pulseId', (), np.uint64)
+    v = DS('@inst', 'azimuthal.profile', (nbin,), float)
 
     class Meta:
         max_train_per_file = 10
         break_into_sequence = True
         #warn_on_missing_data = True
+        aliases = {
+            'ctrl': 'MID_DET_AGIPD1M-1/x/y',
+            'inst': 'MID_DET_AGIPD1M-1/x/y:output',
+        }
 
 
 def test_writer2():
+    ctrl_grp = MyFileWriter._meta.aliases['ctrl']
+    inst_grp = MyFileWriter._meta.aliases['inst']
 
     with TemporaryDirectory() as td:
         new_file = osp.join(td, 'test{seq:03d}.h5')

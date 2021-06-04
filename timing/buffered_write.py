@@ -4,12 +4,8 @@ import h5py
 from extra_data.writer2 import FileWriter, DS
 
 
-ctrl_grp = 'MID_DET_AGIPD1M-1/x/y'
-inst_grp = 'MID_DET_AGIPD1M-1/x/y:output'
-
-
 class VectorWriterBuffered(FileWriter):
-    v = DS(inst_grp, 'azimuthal.profile', (1000,), float)
+    v = DS('MID_DET_AGIPD1M-1/x/y:output', 'azimuthal.profile', (1000,), float)
 
     class Meta:
         max_train_per_file = 500
@@ -50,21 +46,24 @@ def write_vector_at_once(cls):
 
 
 class ScalarWriterBuffered(FileWriter):
-    a = DS(ctrl_grp, 'param.a', (), np.uint64)
-    b = DS(ctrl_grp, 'param.b', (), np.uint64)
-    c = DS(ctrl_grp, 'param.c', (), np.uint64)
-    d = DS(ctrl_grp, 'param.d', (), np.uint64)
-    e = DS(ctrl_grp, 'param.e', (), np.uint64)
-    f = DS(ctrl_grp, 'param.f', (), np.uint64)
-    g = DS(ctrl_grp, 'param.g', (), np.uint64)
-    i = DS(ctrl_grp, 'param.i', (), np.uint64)
-    k = DS(ctrl_grp, 'param.k', (), np.uint64)
-    m = DS(ctrl_grp, 'param.m', (), np.uint64)
+    a = DS('@ctrl', 'param.a', (), np.uint64)
+    b = DS('@ctrl', 'param.b', (), np.uint64)
+    c = DS('@ctrl', 'param.c', (), np.uint64)
+    d = DS('@ctrl', 'param.d', (), np.uint64)
+    e = DS('@ctrl', 'param.e', (), np.uint64)
+    f = DS('@ctrl', 'param.f', (), np.uint64)
+    g = DS('@ctrl', 'param.g', (), np.uint64)
+    i = DS('@ctrl', 'param.i', (), np.uint64)
+    k = DS('@ctrl', 'param.k', (), np.uint64)
+    m = DS('@ctrl', 'param.m', (), np.uint64)
 
     class Meta:
         max_train_per_file = 10000
         break_into_sequence = False
         class_attrs_interface = True
+        aliases = {
+            'ctrl': 'MID_DET_AGIPD1M-1/x/y',
+        }
 
 
 class ScalarWriterDirect(ScalarWriterBuffered):
@@ -125,42 +124,46 @@ def write_with_h5py(ntrain, nds, nitem, dtype, chunks=None):
         f['INDEX/group/count'] = count
 
 
-def bench(fun, nrep):
-    tm = np.zeros(nrep, float)
-    for rep in range(nrep):
+def bench(fun, min_rep = 3, max_rep=30, tm_limit = 30):
+    tm = []
+    rep = 0
+    wtime = 0
+    while (rep < min_rep or wtime < tm_limit) and rep < max_rep:
         t0 = time.monotonic()
         fun()
-        t1 = time.monotonic()
-        tm[rep] = t1 - t0
-    return tm
+        dt = time.monotonic() - t0
+        tm.append(dt)
+        wtime += dt
+        rep += 1
+    return np.array(tm)
 
 
 if __name__ == "__main__":
     chunks = VectorWriterBuffered.datasets['v'].chunks_autosize(VectorWriterBuffered._meta.max_train_per_file)
     print("Medium data: 100 trains by 1000 frames of 1 vector [float: 1000]")
-    tm_pln = bench(lambda: write_with_h5py(100, 1, 1000000, float, (np.prod(chunks),)), 5)
-    print(f" - h5py:     nrep=5, mean={tm_pln.mean():.2f} s, "
+    tm_pln = bench(lambda: write_with_h5py(100, 1, 1000000, float, (np.prod(chunks),)))
+    print(f" - h5py:     nrep={len(tm_pln)}, mean={tm_pln.mean():.2f} s, "
           f"std={tm_pln.std():.3g} s")
-    tm_buf = bench(lambda: write_vector_by_trains(VectorWriterBuffered), 5)
-    print(f" - buffered: nrep=5, mean={tm_buf.mean():.2f} s, "
+    tm_buf = bench(lambda: write_vector_by_trains(VectorWriterBuffered))
+    print(f" - buffered: nrep={len(tm_buf)}, mean={tm_buf.mean():.2f} s, "
           f"std={tm_buf.std():.3g} s")
-    tm_dir = bench(lambda: write_vector_by_trains(VectorWriterDirect), 5)
-    print(f" - direct:   nrep=5, mean={tm_dir.mean():.2f} s, "
+    tm_dir = bench(lambda: write_vector_by_trains(VectorWriterDirect))
+    print(f" - direct:   nrep={len(tm_dir)}, mean={tm_dir.mean():.2f} s, "
           f"std={tm_dir.std():.3g} s")
-    tm_ent = bench(lambda: write_vector_at_once(VectorWriterBuffered), 5)
-    print(f" - at once:  nrep=5, mean={tm_ent.mean():.2f} s, "
+    tm_ent = bench(lambda: write_vector_at_once(VectorWriterBuffered))
+    print(f" - at once:  nrep={len(tm_ent)}, mean={tm_ent.mean():.2f} s, "
           f"std={tm_ent.std():.3g} s")
 
     print("Small data: 10000 trains by 1 frame of 10 scalars [uint64]")
-    tm_pln = bench(lambda: write_with_h5py(10000, 10, 1, np.uint64), 25)
-    print(f" - h5py:     nrep=25, mean={tm_pln.mean():.2f} s, "
+    tm_pln = bench(lambda: write_with_h5py(10000, 10, 1, np.uint64))
+    print(f" - h5py:     nrep={len(tm_pln)}, mean={tm_pln.mean():.2f} s, "
           f"std={tm_pln.std():.3g} s")
-    tm_buf = bench(lambda: write_scalars_by_trains(ScalarWriterBuffered), 15)
-    print(f" - buffered: nrep=15, mean={tm_buf.mean():.2f} s, "
+    tm_buf = bench(lambda: write_scalars_by_trains(ScalarWriterBuffered))
+    print(f" - buffered: nrep={len(tm_buf)}, mean={tm_buf.mean():.2f} s, "
           f"std={tm_buf.std():.3g} s")
-    tm_dir = bench(lambda: write_scalars_by_trains(ScalarWriterDirect), 3)
-    print(f" - direct:   nrep=3,  mean={tm_dir.mean():.2f} s, "
+    tm_dir = bench(lambda: write_scalars_by_trains(ScalarWriterDirect))
+    print(f" - direct:   nrep={len(tm_dir)},  mean={tm_dir.mean():.2f} s, "
           f"std={tm_dir.std():.3g} s")
-    tm_ent = bench(lambda: write_scalars_at_once(ScalarWriterBuffered), 25)
-    print(f" - at once:  nrep=25,  mean={tm_ent.mean():.2f} s, "
+    tm_ent = bench(lambda: write_scalars_at_once(ScalarWriterBuffered))
+    print(f" - at once:  nrep={len(tm_ent)},  mean={tm_ent.mean():.2f} s, "
           f"std={tm_ent.std():.3g} s")
