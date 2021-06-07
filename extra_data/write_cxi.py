@@ -29,7 +29,6 @@ class VirtualCXIWriterBase:
     """
     def __init__(self, detdata):
         self.detdata = detdata
-        self.modulenos = sorted(detdata.modno_to_source)
         self.group_label, self.image_label = detdata._main_data_key.split('.')
 
         frame_counts = detdata.frame_counts * self.ncells
@@ -67,11 +66,9 @@ class VirtualCXIWriterBase:
 
     def _get_module_index(self, module):
         """
-        Supposed to return an index for the specified module.
-        Has to be implemented in the children classes.
+        Returns an index for the specified module.
         """
-        raise NotImplementedError(
-            "Modules indexing has to be implemented in a child class.")
+        return self.modulenos.index(module)
 
     def collect_pulse_ids(self):
         """
@@ -359,12 +356,8 @@ class XtdfCXIWriter(VirtualCXIWriterBase):
 
         super().__init__(detdata)
 
-    def _get_module_index(self, module):
-        """
-        Returns an index for the specified module.
-        For AGIPD, DSSC & LPD modules are numbered from 0.
-        """
-        return module
+        # For AGIPD, DSSC & LPD detectors modules are numbered from 0
+        self.modulenos = list(range(self.nmodules))
 
     def collect_data(self):
         """
@@ -448,12 +441,8 @@ class JUNGFRAUCXIWriter(VirtualCXIWriterBase):
 
         super().__init__(detdata)
 
-    def _get_module_index(self, module):
-        """
-        Returns an index for the specified module.
-        For JUNGFRAU modules are numbered from 1.
-        """
-        return (module - 1)
+        # For JUNGFRAU detectors modules are numbered from 1
+        self.modulenos = [i+1 for i in range(self.nmodules)]
 
     def collect_data(self):
         """
