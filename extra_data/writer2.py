@@ -28,7 +28,21 @@ def accumulate(iterable, *, initial=None):
 # them leads to changes in the host class itself and in all its instances.
 # Therefore, one can change `self` only in the `__init__` method and
 # in methods that are called from the `FileWriterMeta` metaclass.
-class Dataset:
+class DatasetBase:
+    def set_name(self, source_name, key):
+        raise NotImplementedError
+
+    def resolve_name(self, aliases={}):
+        raise NotImplementedError
+    
+    def get_attribute_setter(self, name):
+        return BlockedSetter()
+    
+    def create(self, grp, max_trains, buffering):
+        raise NotImplementedError
+
+
+class Dataset(DatasetBase):
     """Dataset descriptor"""
     def __init__(self, source_name, key, entry_shape, dtype,
                  chunks=None, compression=None):
@@ -42,6 +56,7 @@ class Dataset:
             self.orig_name = (False, source_name, key)
 
     def set_name(self, source_name, key):
+        """Sets new name to the dataset"""
         self.orig_name = (False, source_name, key)
         self.normalize_name(source_name, key)
 
@@ -54,6 +69,7 @@ class Dataset:
         self.normalize_name(source_name, key)
 
     def normalize_name(self, source_name, key):
+        """Transforms canonical name to the internal form"""
         self.canonical_name = (source_name, key)
         # can we really distinguish sources by colons?
         self.stype = int(':' in source_name)
@@ -83,6 +99,10 @@ class Dataset:
 
         return (chunk,) + self.entry_shape
 
+    def get_attribute_setter(self, name):
+        """Returns suitable attribute setter instance"""
+        return DataSetter(name)
+
     def create(self, grp, max_trains, buffering):
         """Creates dataset in h5-file and return writer"""
         chunks = self.chunks_autosize(max_trains)
@@ -111,7 +131,7 @@ class DatasetWriterBase:
         pass
 
     def write(self, data, nrec, start=None):
-        pass
+        raise NotImplementedError
 
 
 class DatasetDirectWriter(DatasetWriterBase):
@@ -212,12 +232,11 @@ class DatasetBufferedWriter(DatasetWriterBase):
 
 
 class DataQueue:
-    def __init__(self, chunks):
+    def __init__(self):
         self.data = []
         self.size = []
         self.nwritten = 0
         self.nready = 0
-        self.chunks = chunks
 
     def __bool__(self):
         return bool(self.data)
@@ -310,8 +329,7 @@ class Source:
         """Adds dataset to the source"""
         self.dsno[name] = len(self.datasets)
         self.datasets.append(ds)
-        chunks = ds.chunks_autosize(1000)
-        self.data.append(DataQueue(chunks[0]))
+        self.data.append(DataQueue())
         self.file_ds.append(None)
         self.ndatasets += 1
 
@@ -482,7 +500,19 @@ class MultiTrainData:
         self.data = data
 
 
-class DataSetter:
+class DataSetterBase:
+    def __set__(self, instance, value):
+        raise NotImplementedError
+
+
+class BlockedSetter(DataSetterBase):
+    def __set__(self, instance, value):
+        raise RuntimeError(
+            "Class attributes interface is disabled. Use option "
+            "'class_attrs_interface=True' to enable it.")
+
+
+class DataSetter(DataSetterBase):
     """Overrides the setters for attributes which declared as datasets
     in order to use the assignment operation for adding data in a train
     """
@@ -494,13 +524,6 @@ class DataSetter:
             instance.add_value(value.count, self.name, value.data)
         else:
             instance.add_train_value(self.name, value)
-
-
-class BlockedSetter:
-    def __set__(self, instance, value):
-        raise RuntimeError(
-            "Class attributes interface is disabled. Use option "
-            "'class_attrs_interface=True' to enable it.")
 
 
 class FileWriterMeta(type):
@@ -532,7 +555,7 @@ class FileWriterMeta(type):
             ds.resolve_name(new_class._meta.aliases)
             sources.setdefault(ds.source_name, ds.stype)
             if new_class._meta.class_attrs_interface:
-                setattr(new_class, ds_name, DataSetter(ds_name))
+                setattr(new_class, ds_name, ds.get_attribute_setter(ds_name))
             else:
                 setattr(new_class, ds_name, BlockedSetter())
 
