@@ -34,11 +34,17 @@ class DatasetBase:
 
     def resolve_name(self, aliases={}):
         raise NotImplementedError
-    
-    def get_attribute_setter(self, name):
+
+    def get_attribute_setter(self):
         return BlockedSetter()
-    
-    def create(self, grp, max_trains, buffering):
+
+    def chunks_autosize(self, writer):
+        raise NotImplementedError
+
+    def dataset_parameters(self, writer):
+        raise NotImplementedError
+
+    def create(self, writer, grp):
         raise NotImplementedError
 
 
@@ -46,8 +52,8 @@ class Dataset(DatasetBase):
     """Dataset descriptor"""
     def __init__(self, source_name, key, entry_shape, dtype,
                  chunks=None, compression=None):
-        self.entry_shape = tuple(entry_shape)
-        self.dtype = np.dtype(dtype)
+        self.entry_shape = entry_shape
+        self.dtype = dtype
         self.compression = compression
         self.chunks = chunks
         if source_name and source_name[0] == '@':
@@ -80,38 +86,49 @@ class Dataset(DatasetBase):
             self.source_name = source_name
             self.key = key
 
-    def chunks_autosize(self, max_trains):
+    @staticmethod
+    def _chunks_autosize(max_trains, entry_shape, dtype, stype):
         """Caclulates chunk size"""
-        if self.chunks is not None:
-            return
-
         MN = (max_trains, 32, 32)
         SZ = (1 << 14, 1 << 19, 1 << 23)  # 16K, 512K, 8M
 
-        size = np.prod(self.entry_shape, dtype=int)
-        ndim = len(self.entry_shape)
-        nbytes = size * self.dtype.itemsize
+        size = np.prod(entry_shape, dtype=int)
+        ndim = len(entry_shape)
+        nbytes = size * np.dtype(dtype).itemsize
 
         entry_type = int(size != 1) * (1 + int(ndim > 1))
         chunk = max(SZ[entry_type] // nbytes, MN[entry_type])
-        if self.stype == 0:
+        if stype == 0:
             chunk = min(chunk, max_trains)
 
-        return (chunk,) + self.entry_shape
+        return (chunk,) + tuple(entry_shape)
+
+    def chunks_autosize(self, writer):
+        if self.chunks is None:
+            return Dataset._chunks_autosize(
+                writer._meta.max_train_per_file, self.entry_shape,
+                self.dtype, self.stype)
+        else:
+            return self.chunks
+
+    def dataset_parameters(self, writer):
+        return tuple(self.entry_shape), self.dtype
 
     def get_attribute_setter(self, name):
         """Returns suitable attribute setter instance"""
         return DataSetter(name)
 
-    def create(self, grp, max_trains, buffering):
+    def create(self, writer, grp):
         """Creates dataset in h5-file and return writer"""
-        chunks = self.chunks_autosize(max_trains)
+        chunks = self.chunks_autosize(writer)
+        entry_shape, dtype = self.dataset_parameters(writer)
+
         ds = grp.create_dataset(
-            self.key.replace('.', '/'), (0,) + self.entry_shape,
-            dtype=self.dtype, chunks=self.chunks,
-            maxshape=(None,) + self.entry_shape, compression=self.compression
+            self.key.replace('.', '/'), (0,) + entry_shape,
+            dtype=dtype, chunks=chunks, maxshape=(None,) + entry_shape,
+            compression=self.compression
         )
-        if buffering:
+        if writer._meta.buffering:
             wrt = DatasetBufferedWriter(self, ds, chunks)
         else:
             wrt = DatasetDirectWriter(self, ds, chunks)
@@ -139,15 +156,15 @@ class DatasetDirectWriter(DatasetWriterBase):
     def write(self, data, nrec, start=None):
         """Writes data to disk"""
         end = self.pos + nrec
-        self.file_ds.resize(end, 0)
         if start is None:
+            start = 0
+        self.file_ds.resize(end, 0)
+        if not np.ndim(data):
             self.file_ds[self.pos:end] = data
         else:
-            if isinstance(data, np.ndarray):
-                self.file_ds.write_direct(
-                    data, np.s_[start:start+nrec], np.s_[self.pos:end])
-            else:
-                self.file_ds[self.pos:end] = data[start:start+nrec]
+            # self.file_ds[self.pos:end] = data[start:start+nrec]
+            self.file_ds.write_direct(
+                data, np.s_[start:start+nrec], np.s_[self.pos:end])
 
 
 class DatasetBufferedWriter(DatasetWriterBase):
@@ -241,7 +258,7 @@ class DataQueue:
     def __bool__(self):
         return bool(self.data)
 
-    def append(self, count, data, max_trains=None):
+    def append(self, count, data):
         """Appends data into queue for future writing"""
         ntrain = len(count)
         self.data.append((count, data))
@@ -299,7 +316,8 @@ class Source:
 
     SECTION = ('CONTROL', 'INSTRUMENT')
 
-    def __init__(self, name, stype=None, max_trains=None):
+    def __init__(self, writer, name, stype=None):
+        self.writer = writer
         self.name = name
         if stype is None:
             self.stype = int(':' in name)
@@ -307,7 +325,10 @@ class Source:
             self.stype = stype
 
         self.section = self.SECTION[self.stype]
-        self.max_trains = max_trains
+        if writer._meta.break_into_sequence:
+            self.max_trains = writer._meta.max_train_per_file
+        else:
+            self.max_trains = None
 
         self.ndatasets = 0
         self.nready = 0
@@ -333,11 +354,11 @@ class Source:
         self.file_ds.append(None)
         self.ndatasets += 1
 
-    def create(self, file, max_trains, buffering=True):
+    def create(self):
         """Creates all datasets in file"""
-        grp = file.create_group(self.section + '/' + self.name)
+        grp = self.writer._file.create_group(self.section + '/' + self.name)
         for dsno, ds in enumerate(self.datasets):
-            self.file_ds[dsno] = ds.create(grp, max_trains, buffering)
+            self.file_ds[dsno] = ds.create(self.writer, grp)
         self._grp = grp
         self.block_writing = False
 
@@ -407,7 +428,7 @@ class Source:
             self.count_buf += count.tolist()
 
         self.nready += not self.data[dsno]
-        self.data[dsno].append(count, value, self.max_trains)
+        self.data[dsno].append(count, value)
 
         while self.nready >= self.ndatasets and not self.block_writing:
             self.write_data()
@@ -577,25 +598,21 @@ class FileWriterBase(object):
                             "because it has no datasets")
         return super().__new__(cls)
 
-    def __init__(self, filename):
+    def __init__(self, filename, **kwargs):
         self._train_data = {}
         self.trains = []
         self.timestamp = []
         self.flags = []
         self.seq = 0
         self.filename = filename
-
-        if self._meta.break_into_sequence:
-            max_trains = self._meta.max_train_per_file
-        else:
-            max_trains = None
+        self.param = kwargs
 
         self.nsource = len(self.list_of_sources)
         self.sources = {}
         self.source_ntrain = {}
         for sect, src_name in self.list_of_sources:
             stype = Source.SECTION.index(sect)
-            self.sources[src_name] = Source(src_name, stype, max_trains)
+            self.sources[src_name] = Source(self, src_name, stype)
             self.source_ntrain[src_name] = 0
 
         for dsname, ds in self.datasets.items():
@@ -687,8 +704,7 @@ class FileWriterBase(object):
     def create_datasets(self):
         """Creates datasets in the file"""
         for sname, src in self.sources.items():
-            src.create(self._file, self._meta.max_train_per_file,
-                       self._meta.buffering)
+            src.create()
 
     def close_datasets(self):
         """Writes rest of buffered data in datasets and set final size"""
@@ -730,7 +746,8 @@ class FileWriterBase(object):
         ds = self.datasets[name]
 
         # check shape of value
-        nrec = FileWriterBase.__check_value(value, ds.entry_shape, ds.dtype)
+        entry_shape, dtype = ds.dataset_parameters(self)
+        nrec = FileWriterBase.__check_value(value, entry_shape, dtype)
         ntrain = np.size(count)
         if nrec != np.sum(count):
             raise ValueError("total counts is not equal to "

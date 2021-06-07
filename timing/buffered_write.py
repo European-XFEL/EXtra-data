@@ -139,7 +139,8 @@ def bench(fun, min_rep = 3, max_rep=30, tm_limit = 30):
 
 
 if __name__ == "__main__":
-    chunks = VectorWriterBuffered.datasets['v'].chunks_autosize(VectorWriterBuffered._meta.max_train_per_file)
+    max_trains = VectorWriterBuffered._meta.max_train_per_file
+    chunks = DS._chunks_autosize(max_trains, (1000,), np.dtype(float), 1)
     print("Medium data: 100 trains by 1000 frames of 1 vector [float: 1000]")
     tm_pln = bench(lambda: write_with_h5py(100, 1, 1000000, float, (np.prod(chunks),)))
     print(f" - h5py:     nrep={len(tm_pln)}, mean={tm_pln.mean():.2f} s, "
