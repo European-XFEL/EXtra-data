@@ -28,30 +28,32 @@ objects refer to it.
 Modules
 -------
 
-- ``exceptions`` defines some custom error classes.
-- ``file_access`` contains :class:`.FileAccess` (described above), along with
-  machinery to keep the number of open files under a limit.
-- ``locality`` can check whether files are available on disk or on tape
-  in a `dCache <https://www.dcache.org/>`_ filesystem.
-- ``read_machinery`` is a collection of pieces that support ``reader``.
-- ``reader`` contains :class:`.DataCollection` (described above), and functions
-  to open a run or a file.
-- ``run_files_map`` manages caching metadata about the files of a run in a
-  JSON file, to speed up opening the run.
-- ``validation`` checks if files & runs have the expected format, for the
-  :ref:`cmd-validate` command.
-- ``keydata`` contains :class:`.KeyData` (described above).
+- ``cli`` contains command-line interfaces (so far only
+  :ref:`cmd-make-virtual-cxi`).
 - ``components`` provides interfaces that bring together data from several
   similar sources, i.e. multi-module detectors where each module is a separate
   source.
+- ``exceptions`` defines some custom error classes.
+- ``export`` sends data from files over ZMQ in the Karabo Bridge format.
+- ``file_access`` contains :class:`.FileAccess` (described above), along with
+  machinery to keep the number of open files under a limit.
+- ``h5index`` lists datasets in an HDF5 file. Deprecated.
+- ``keydata`` contains :class:`.KeyData` (described above).
+- ``locality`` can check whether files are available on disk or on tape
+  in a `dCache <https://www.dcache.org/>`_ filesystem.
+- ``lsxfel`` is the :ref:`cmd-lsxfel` command.
+- ``reader`` contains :class:`.DataCollection` (described above), and functions
+  to open a run or a file.
+- ``read_machinery`` is a collection of pieces that support ``reader``.
+- ``run_files_map`` manages caching metadata about the files of a run in a
+  JSON file, to speed up opening the run.
 - ``stacking`` has functions for stacking multiple arrays into one, another
   option for working with multi-module detector data.
+- ``utils`` is miscellaneous pieces that don't fit anywhere else.
+- ``validation`` checks if files & runs have the expected format, for the
+  :ref:`cmd-validate` command.
 - ``writer`` writes data in EuXFEL format files, for
   :meth:`~.DataCollection.write` and :meth:`~.DataCollection.write_virtual`.
 - ``write_cxi`` makes CXI format HDF5 files using virtual datasets to
   expose multi-module detector data. Used by :meth:`~.LPD1M.write_virtual_cxi`
   and the :ref:`cmd-make-virtual-cxi` command.
-- ``export`` sends data from files over ZMQ in the Karabo Bridge format.
-- ``lsxfel`` is the :ref:`cmd-lsxfel` command.
-- ``utils`` is miscellaneous pieces that don't fit anywhere else.
-- ``h5index`` lists datasets in an HDF5 file. Deprecated.
