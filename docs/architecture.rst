@@ -31,8 +31,8 @@ Modules
 - ``exceptions`` defines some custom error classes.
 - ``file_access`` contains :class:`.FileAccess` (described above), along with
   machinery to keep the number of open files under a limit.
-- ``locality`` can check whether files are available on disk or on tape,
-  and is specific to EuXFEL & DESY infrastructure.
+- ``locality`` can check whether files are available on disk or on tape
+  in a `dCache <https://www.dcache.org/>`_ filesystem.
 - ``read_machinery`` is a collection of pieces that support ``reader``.
 - ``reader`` contains :class:`.DataCollection` (described above), and functions
   to open a run or a file.
