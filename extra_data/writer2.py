@@ -29,30 +29,14 @@ def accumulate(iterable, *, initial=None):
 # Therefore, one can change `self` only in the `__init__` method and
 # in methods that are called from the `FileWriterMeta` metaclass.
 class DatasetBase:
-    def set_name(self, source_name, key):
-        raise NotImplementedError
+    """Base dataset descriptor class"""
 
-    def resolve_name(self, aliases={}):
-        raise NotImplementedError
+    class Attributes:
+        """Dataset attributes structure"""
+        def __init__(self, **kwargs):
+            for kw, val in kwargs.items():
+                setattr(self, kw, val)
 
-    def get_source_name(self, writer):
-        raise NotImplementedError
-
-    def chunks_autosize(self, writer):
-        raise NotImplementedError
-
-    def dataset_parameters(self, writer):
-        raise NotImplementedError
-
-    def get_attribute_setter(self, name):
-        return BlockedSetter()
-
-    def create(self, writer, grp):
-        raise NotImplementedError
-
-
-class Dataset(DatasetBase):
-    """Dataset descriptor"""
     def __init__(self, source_name, key, entry_shape, dtype,
                  chunks=None, compression=None):
         self.entry_shape = entry_shape
@@ -67,7 +51,7 @@ class Dataset(DatasetBase):
     def set_name(self, source_name, key):
         """Sets new name to the dataset"""
         self.orig_name = (False, source_name, key)
-        self.normalize_name(source_name, key)
+        self.canonical_name = (source_name, key)
 
     def resolve_name(self, aliases={}):
         """Normalizes source name and key"""
@@ -75,26 +59,52 @@ class Dataset(DatasetBase):
 
         # resolve reference
         source_name = aliases[source_id] if isalias else source_id
-        self.normalize_name(source_name, key)
-
-    def get_source_name(self, writer):
-        src_name = writer._ds_cache.get((id(self), 2), None)
-        if src_name is None:
-            src_name = self.source_name.format(**writer.param)
-            writer._ds_cache[(id(self), 2)] = src_name
-        return src_name
-
-    def normalize_name(self, source_name, key):
-        """Transforms canonical name to the internal form"""
         self.canonical_name = (source_name, key)
-        # can we really distinguish sources by colons?
-        self.stype = int(':' in source_name)
-        if self.stype:
-            tk, self.key = key.split('.', 1)
-            self.source_name = source_name + '/' + tk
+
+    def get_dataset_fullname(self, writer):
+        # expected to return (source_name, key, stype)
+        raise NotImplementedError
+
+    def get_entry_attr(self, writer):
+        # expected to return (entry_shape, dtype)
+        return self.entry_shape, self.dtype
+
+    def init_dataset_attr(self, writer):
+        # expand names
+        source_name, key, stype = self.get_dataset_fullname(writer)
+
+        # expand entry attributes
+        entry_shape, dtype = self.get_entry_attr(writer)
+
+        # auto chunking
+        chunks = self.chunks
+        if chunks is None:
+            chunks = Dataset._chunks_autosize(
+                writer._meta.max_train_per_file, entry_shape,
+                dtype, stype)
+
+        writer._ds_attrs[id(self)] = Dataset.Attributes(
+            source_name=source_name, key=key, stype=stype,
+            entry_shape=entry_shape, dtype=dtype, chunks=chunks,
+            compression=self.compression,
+        )
+
+    def check_value(self, writer, value):
+        """Checks data"""
+        # can we need to checked type cast?
+
+        # shape check
+        entry_shape = self(writer).entry_shape
+        value_shape = np.shape(value)
+        shape = np.broadcast_shapes(value_shape, (1,) + entry_shape)
+        if shape == entry_shape:
+            nrec = 1
+        elif shape[1:] == entry_shape:
+            nrec = shape[0]
         else:
-            self.source_name = source_name
-            self.key = key
+            raise ValueError(f"shape mismatch: {value_shape} cannot "
+                             f"be broadcast to {(None, ) + entry_shape}")
+        return nrec
 
     @staticmethod
     def _chunks_autosize(max_trains, entry_shape, dtype, stype):
@@ -113,41 +123,49 @@ class Dataset(DatasetBase):
 
         return (chunk,) + tuple(entry_shape)
 
-    def chunks_autosize(self, writer):
-        chunks = writer._ds_cache.get((id(self), 1), None)
-        if chunks is None:
-            if self.chunks is None:
-                chunks = Dataset._chunks_autosize(
-                    writer._meta.max_train_per_file, self.entry_shape,
-                    self.dtype, self.stype)
-            else:
-                chunks = self.chunks
-            writer._ds_cache[(id(self), 1)] = chunks
-        return chunks
+    def __call__(self, writer):
+        return writer._ds_attrs[id(self)]
 
-    def dataset_parameters(self, writer):
-        return tuple(self.entry_shape), self.dtype
+    def create(self, writer, grp):
+        """Creates dataset in h5-file and return writer"""
+        attr = self(writer)
+
+        ds = grp.create_dataset(
+            attr.key, (0,) + attr.entry_shape,
+            dtype=attr.dtype, chunks=attr.chunks, maxshape=(None,)
+            + attr.entry_shape, compression=attr.compression
+        )
+        if writer._meta.buffering:
+            wrt = DatasetBufferedWriter(self, ds, attr.chunks)
+        else:
+            wrt = DatasetDirectWriter(self, ds, attr.chunks)
+
+        return wrt
+
+
+class Dataset(DatasetBase):
+    """Dataset descriptor"""
+
+    def get_dataset_fullname(self, writer):
+        # expected to return (source_name, key, stype)
+        source_name, key = self.canonical_name
+        return Dataset._normalize_name(
+            source_name.format(**writer.param), key)
+
+    @staticmethod
+    def _normalize_name(source_name, key):
+        """Transforms canonical name to the internal form"""
+        # can we really distinguish sources by colons?
+        stype = int(':' in source_name)
+        if stype:
+            tk, key = key.split('.', 1)
+            source_name = source_name + '/' + tk
+
+        return source_name, key.replace('.', '/'), stype
 
     def get_attribute_setter(self, name):
         """Returns suitable attribute setter instance"""
         return DataSetter(name)
-
-    def create(self, writer, grp):
-        """Creates dataset in h5-file and return writer"""
-        chunks = self.chunks_autosize(writer)
-        entry_shape, dtype = self.dataset_parameters(writer)
-
-        ds = grp.create_dataset(
-            self.key.replace('.', '/'), (0,) + entry_shape,
-            dtype=dtype, chunks=chunks, maxshape=(None,) + entry_shape,
-            compression=self.compression
-        )
-        if writer._meta.buffering:
-            wrt = DatasetBufferedWriter(self, ds, chunks)
-        else:
-            wrt = DatasetDirectWriter(self, ds, chunks)
-
-        return wrt
 
 
 class AdjustableVectorDataset(Dataset):
@@ -156,19 +174,10 @@ class AdjustableVectorDataset(Dataset):
         super().__init__(source_name, key, None, dtype, None, compression)
         self.size_param_name = size_param_name
 
-    def chunks_autosize(self, writer):
-        chunks = writer._ds_cache.get((id(self), 1), None)
-        if chunks is None:
-            size = writer.param[self.size_param_name]
-            chunks = AdjustableVectorDataset._chunks_autosize(
-                writer._meta.max_train_per_file,
-                (size,), self.dtype, self.stype)
-            writer._ds_cache[(id(self), 1)] = chunks
-        return chunks
-
-    def dataset_parameters(self, writer):
-        nbin = writer.param[self.size_param_name]
-        return (nbin,), self.dtype
+    def get_entry_attr(self, writer):
+        # expected to return (entry_shape, dtype)
+        size = writer.param[self.size_param_name]
+        return (size,), self.dtype
 
 
 class AdjustableDataset(Dataset):
@@ -177,25 +186,13 @@ class AdjustableDataset(Dataset):
         super().__init__(source_name, key, entry_shape, dtype,
                          None, compression)
 
-    def chunks_autosize(self, writer):
-        chunks = writer._ds_cache.get((id(self), 1), None)
-        if chunks is None:
-            shape, dtype = self.dataset_parameters(writer)
-            chunks = AdjustableVectorDataset._chunks_autosize(
-                writer._meta.max_train_per_file,
-                shape, dtype, self.stype)
-            writer._ds_cache[(id(self), 1)] = chunks
-        return chunks
-
-    def dataset_parameters(self, writer):
-        shape = writer._ds_cache.get((id(self), 0), None)
-        if shape is None:
-            if isinstance(self.entry_shape, str):
-                shape = tuple(writer.param[self.entry_shape])
-            else:
-                shape = tuple(writer.param[n] if isinstance(n, str) else n
-                              for n in self.entry_shape)
-            writer._ds_cache[(id(self), 0)] = shape
+    def get_entry_attr(self, writer):
+        # expected to return (entry_shape, dtype)
+        if isinstance(self.entry_shape, str):
+            shape = tuple(writer.param[self.entry_shape])
+        else:
+            shape = tuple(writer.param[n] if isinstance(n, str) else n
+                          for n in self.entry_shape)
         return shape, self.dtype
 
 
@@ -656,7 +653,7 @@ class FileWriterBase(object):
         return super().__new__(cls)
 
     def __init__(self, filename, **kwargs):
-        self._ds_cache = {}
+        self._ds_attrs = {}
         self._train_data = {}
         self.trains = []
         self.timestamp = []
@@ -667,8 +664,9 @@ class FileWriterBase(object):
 
         sources = {}
         for ds_name, ds in self.datasets.items():
-            src_name = ds.get_source_name(self)
-            sources.setdefault(src_name, ds.stype)
+            ds.init_dataset_attr(self)
+            ds_attr = ds(self)
+            sources.setdefault(ds_attr.source_name, ds_attr.stype)
 
         self.list_of_sources = list(
             (Source.SECTION[src_type], src_name)
@@ -684,7 +682,7 @@ class FileWriterBase(object):
             self.source_ntrain[src_name] = 0
 
         for dsname, ds in self.datasets.items():
-            src_name = ds.get_source_name(self)
+            src_name = ds(self).source_name
             self.sources[src_name].add(dsname, ds)
 
         file = h5py.File(filename.format(seq=self.seq), 'w')
@@ -790,44 +788,19 @@ class FileWriterBase(object):
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.close()
 
-    @staticmethod
-    def __check_value(value, entry_shape, dtype):
-        """checks submitted data"""
-        # if not np.can_cast(np.result_type(value), dtype, casting='unsafe'):
-        #     raise(TypeError(
-        #         f"invalid type: <{np.result_type(value)}> "
-        #         f"cannot be cast to <{np.dtype(dtype)}>"))
-        # elif not np.can_cast(value, dtype, casting='safe'):
-        #     warnings.warn(
-        #         f"unsafe type cast from <{np.result_type(value)}> "
-        #         f"to <{np.dtype(dtype)}>", RuntimeWarning)
-        value_shape = np.shape(value)
-        shape = np.broadcast_shapes(value_shape, (1,) + entry_shape)
-
-        if shape == entry_shape:
-            nrec = 1
-        elif shape[1:] == entry_shape:
-            nrec = shape[0]
-        else:
-            raise ValueError(f"shape mismatch: {value_shape} cannot "
-                             f"be broadcast to {(None, ) + entry_shape}")
-
-        return nrec
-
     def add_value(self, count, name, value):
         """Fills a single dataset across multiple trains"""
         ds = self.datasets[name]
 
-        # check shape of value
-        entry_shape, dtype = ds.dataset_parameters(self)
-        nrec = FileWriterBase.__check_value(value, entry_shape, dtype)
+        # check shape value
+        nrec = ds.check_value(self, value)
         ntrain = np.size(count)
         if nrec != np.sum(count):
             raise ValueError("total counts is not equal to "
                              "the number of records")
 
         # check count
-        src_name = ds.get_source_name(self)
+        src_name = ds(self).source_name
         src = self.sources[src_name]
         if src.get_ntrain(name) + ntrain > len(self.trains):
             raise ValueError("the number of trains in this data exeeds "
@@ -841,8 +814,7 @@ class FileWriterBase(object):
     def add_train_value(self, name, value):
         """Fills a single dataset in the current train"""
         ds = self.datasets[name]
-        entry_shape, dtype = ds.dataset_parameters(self)
-        nrec = FileWriterBase.__check_value(value, entry_shape, dtype)
+        nrec = ds.check_value(self, value)
         self.add_value([nrec], name, value)
 
     def add_data(self, count, **kwargs):
