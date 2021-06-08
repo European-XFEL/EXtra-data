@@ -134,7 +134,13 @@ def mock_empty_dataset_file(format_version):
             shape = f['INSTRUMENT/SA1_XTD2_XGM/DOOCS/MAIN:output/data/intensityTD'].shape
             f['INSTRUMENT/SA1_XTD2_XGM/DOOCS/MAIN:output/data/intensityTD'].resize((0, *shape[1:]))
 
+            shape = f['INSTRUMENT/SA1_XTD2_XGM/DOOCS/MAIN:output/data/trainId'].shape
+            f['INSTRUMENT/SA1_XTD2_XGM/DOOCS/MAIN:output/data/trainId'].resize((0, *shape[1:]))
+
             shape = f['CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/pulseEnergy/photonFlux/value'].shape
             f['CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/pulseEnergy/photonFlux/value'].resize((0, *shape[1:]))
+
+            shape = f['CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/beamPosition/ixPos/value'].shape
+            f['CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/beamPosition/ixPos/value'].resize((0, *shape[1:]))
 
         yield path

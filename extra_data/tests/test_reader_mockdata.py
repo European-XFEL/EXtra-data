@@ -818,10 +818,17 @@ def test_empty_dataset(mock_empty_dataset_file):
     _, data = sel.train_from_index(0)
     assert list(data[device].keys()) == ['metadata']
 
-    # assert len(list(sel.trains(require_all=True))) == 0
     for _, data in sel.trains(require_all=True):
         assert key not in data[device]
         break
 
     _, data = sel.train_from_index(0)
     assert key not in data[device]
+
+    s = run.get_series(device, 'data.trainId')
+    assert isinstance(s, pd.Series)
+    assert len(s) == 0
+
+    df = run.get_dataframe(fields=[("*_XGM/*", "*.i[xy]Pos*")])
+    assert len(df.columns) == 4
+    assert "SA1_XTD2_XGM/DOOCS/MAIN/beamPosition.ixPos" in df.columns

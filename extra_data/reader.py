@@ -486,6 +486,8 @@ class DataCollection:
         if source in self.instrument_sources:
             data_path = "/INSTRUMENT/{}/{}".format(source, key.replace('.', '/'))
             for f in self._source_index[source]:
+                if f.file[data_path].size == 0:
+                    continue
                 group = key.partition('.')[0]
                 firsts, counts = f.get_index(source, group)
                 trainids = self._expand_trainids(counts, f.train_ids)
@@ -515,7 +517,10 @@ class DataCollection:
         else:
             return self._get_key_data(source, key).series()
 
-        ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
+        if not seq_series:
+            ser = pd.Series([])
+        else:
+            ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
 
         # Select out only the train IDs of interest
         if isinstance(ser.index, pd.MultiIndex):
