@@ -804,3 +804,24 @@ def test_run_metadata(mock_spb_raw_run):
             'sample', 'sequenceNumber',
         }
         assert isinstance(md['creationDate'], str)
+
+
+def test_empty_dataset(mock_empty_dataset_file):
+
+    run = H5File(mock_empty_dataset_file)
+    device, key = 'SA1_XTD2_XGM/DOOCS/MAIN:output', 'data.intensityTD'
+
+    assert run.get_array(device, key).size == 0
+    assert run.get_dask_array(device, key).size == 0
+
+    sel = run.select(device, key)
+    _, data = sel.train_from_index(0)
+    assert list(data[device].keys()) == ['metadata']
+
+    # assert len(list(sel.trains(require_all=True))) == 0
+    for _, data in sel.trains(require_all=True):
+        assert key not in data[device]
+        break
+
+    _, data = sel.train_from_index(0)
+    assert key not in data[device]

@@ -28,6 +28,7 @@ import signal
 import sys
 import tempfile
 import time
+from typing import Tuple
 from warnings import warn
 
 from .exceptions import (
@@ -381,6 +382,8 @@ class DataCollection:
 
             for key in self.keys_for_source(source):
                 path = '/CONTROL/{}/{}'.format(source, key.replace('.', '/'))
+                if file.file[path].size == 0:
+                    continue
                 source_data[key] = file.file[path][pos]
 
         for source in self.instrument_sources:
@@ -399,6 +402,8 @@ class DataCollection:
                     continue
 
                 path = '/INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
+                if file.file[path].size == 0:
+                    continue
                 if count == 1:
                     source_data[key] = file.file[path][first]
                 else:
@@ -997,7 +1002,7 @@ class DataCollection:
         """
         return self._get_key_data(source, key)._data_chunks
 
-    def _find_data(self, source, train_id) -> (FileAccess, int):
+    def _find_data(self, source, train_id) -> Tuple[FileAccess, int]:
         for f in self._source_index[source]:
             ixs = (f.train_ids == train_id).nonzero()[0]
             if self.inc_suspect_trains and ixs.size > 0:
@@ -1367,7 +1372,7 @@ class TrainIterator:
 
             for key in self.data.keys_for_source(source):
                 _, pos, ds = self._find_data(source, key, tid)
-                if ds is None:
+                if ds is None or ds.size == 0:
                     continue
                 self._set_result(res, source, key, ds[pos])
 
@@ -1376,7 +1381,7 @@ class TrainIterator:
                              {'source': source, 'timestamp.tid': tid})
             for key in self.data.keys_for_source(source):
                 file, pos, ds = self._find_data(source, key, tid)
-                if ds is None:
+                if ds is None or ds.size == 0:
                     continue
                 group = key.partition('.')[0]
                 firsts, counts = file.get_index(source, group)

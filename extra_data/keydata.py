@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -287,6 +287,8 @@ class KeyData:
                 )[chunk.slice]
             )
 
+        if not chunks_darrs:
+            chunks_darrs = [da.empty(shape=self.shape, dtype=self.dtype, chunks=self.shape)]
         dask_arr = da.concatenate(chunks_darrs, axis=0)
 
         if labelled:
@@ -303,7 +305,7 @@ class KeyData:
 
     # Getting data by train: --------------------------------------------------
 
-    def _find_tid(self, tid) -> (Optional[FileAccess], int):
+    def _find_tid(self, tid) -> Tuple[Optional[FileAccess], int]:
         for fa in self.files:
             matches = (fa.train_ids == tid).nonzero()[0]
             if self.inc_suspect_trains and matches.size > 0:
@@ -324,8 +326,8 @@ class KeyData:
             raise TrainIDError(tid)
 
         fa, ix = self._find_tid(tid)
-        if fa is None:
-            return np.empty((0,) + self.entry_shape, dtype=self.dtype)
+        if fa is None or fa.file[self.hdf5_data_path].size == 0:
+            return tid, np.empty((0,) + self.entry_shape, dtype=self.dtype)
 
         firsts, counts = fa.get_index(self.source, self._key_group)
         first, count = firsts[ix], counts[ix]
@@ -349,6 +351,8 @@ class KeyData:
         for chunk in self._data_chunks:
             start = chunk.first
             ds = chunk.dataset
+            if ds.size == 0:
+                continue
             for tid, count in zip(chunk.train_ids, chunk.counts):
                 if count > 1:
                     yield tid, ds[start: start+count]
