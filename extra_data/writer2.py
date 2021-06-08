@@ -35,6 +35,9 @@ class DatasetBase:
     def resolve_name(self, aliases={}):
         raise NotImplementedError
 
+    def get_source_name(self, writer):
+        raise NotImplementedError
+
     def chunks_autosize(self, writer):
         raise NotImplementedError
 
@@ -73,6 +76,13 @@ class Dataset(DatasetBase):
         # resolve reference
         source_name = aliases[source_id] if isalias else source_id
         self.normalize_name(source_name, key)
+
+    def get_source_name(self, writer):
+        src_name = writer._ds_cache.get((id(self), 2), None)
+        if src_name is None:
+            src_name = self.source_name.format(**writer.param)
+            writer._ds_cache[(id(self), 2)] = src_name
+        return src_name
 
     def normalize_name(self, source_name, key):
         """Transforms canonical name to the internal form"""
@@ -141,7 +151,8 @@ class Dataset(DatasetBase):
 
 
 class AdjustableVectorDataset(Dataset):
-    def __init__(self, source_name, key, size_param_name, dtype, compression=None):
+    def __init__(self, source_name, key, size_param_name, dtype,
+                 compression=None):
         super().__init__(source_name, key, None, dtype, None, compression)
         self.size_param_name = size_param_name
 
@@ -150,35 +161,39 @@ class AdjustableVectorDataset(Dataset):
         if chunks is None:
             size = writer.param[self.size_param_name]
             chunks = AdjustableVectorDataset._chunks_autosize(
-                writer._meta.max_train_per_file, (size,), self.dtype, self.stype)
+                writer._meta.max_train_per_file,
+                (size,), self.dtype, self.stype)
             writer._ds_cache[(id(self), 1)] = chunks
         return chunks
-        
+
     def dataset_parameters(self, writer):
         nbin = writer.param[self.size_param_name]
         return (nbin,), self.dtype
 
 
 class AdjustableDataset(Dataset):
-    def __init__(self, source_name, key, entry_shape, dtype, compression=None):
-        super().__init__(source_name, key, entry_shape, dtype, None, compression)
+    def __init__(self, source_name, key, entry_shape, dtype,
+                 compression=None):
+        super().__init__(source_name, key, entry_shape, dtype,
+                         None, compression)
 
     def chunks_autosize(self, writer):
         chunks = writer._ds_cache.get((id(self), 1), None)
         if chunks is None:
             shape, dtype = self.dataset_parameters(writer)
             chunks = AdjustableVectorDataset._chunks_autosize(
-                writer._meta.max_train_per_file, shape, dtype, self.stype)
+                writer._meta.max_train_per_file,
+                shape, dtype, self.stype)
             writer._ds_cache[(id(self), 1)] = chunks
         return chunks
-        
+
     def dataset_parameters(self, writer):
         shape = writer._ds_cache.get((id(self), 0), None)
         if shape is None:
             if isinstance(self.entry_shape, str):
                 shape = tuple(writer.param[self.entry_shape])
             else:
-                shape = tuple(writer.param[n] if isinstance(n, str) else n 
+                shape = tuple(writer.param[n] if isinstance(n, str) else n
                               for n in self.entry_shape)
             writer._ds_cache[(id(self), 0)] = shape
         return shape, self.dtype
@@ -619,19 +634,13 @@ class FileWriterMeta(type):
         base_meta = getattr(new_class, '_meta', None)
         new_class._meta = Options(meta, base_meta)
 
-        sources = {}
         for ds_name, ds in datasets.items():
             ds.resolve_name(new_class._meta.aliases)
-            sources.setdefault(ds.source_name, ds.stype)
             if new_class._meta.class_attrs_interface:
                 setattr(new_class, ds_name, ds.get_attribute_setter(ds_name))
             else:
                 setattr(new_class, ds_name, BlockedSetter())
 
-        new_class.list_of_sources = list(
-            (Source.SECTION[src_type], src_name)
-            for src_name, src_type in sources.items()
-        )
         return new_class
 
 
@@ -656,6 +665,16 @@ class FileWriterBase(object):
         self.filename = filename
         self.param = kwargs
 
+        sources = {}
+        for ds_name, ds in self.datasets.items():
+            src_name = ds.get_source_name(self)
+            sources.setdefault(src_name, ds.stype)
+
+        self.list_of_sources = list(
+            (Source.SECTION[src_type], src_name)
+            for src_name, src_type in sources.items()
+        )
+
         self.nsource = len(self.list_of_sources)
         self.sources = {}
         self.source_ntrain = {}
@@ -665,7 +684,8 @@ class FileWriterBase(object):
             self.source_ntrain[src_name] = 0
 
         for dsname, ds in self.datasets.items():
-            self.sources[ds.source_name].add(dsname, ds)
+            src_name = ds.get_source_name(self)
+            self.sources[src_name].add(dsname, ds)
 
         file = h5py.File(filename.format(seq=self.seq), 'w')
         try:
@@ -807,14 +827,15 @@ class FileWriterBase(object):
                              "the number of records")
 
         # check count
-        src = self.sources[ds.source_name]
+        src_name = ds.get_source_name(self)
+        src = self.sources[src_name]
         if src.get_ntrain(name) + ntrain > len(self.trains):
             raise ValueError("the number of trains in this data exeeds "
                              "the number of trains in file")
 
         src.add_data(np.array(count), name, value)
 
-        self.source_ntrain[ds.source_name] = src.get_min_trains()
+        self.source_ntrain[src_name] = src.get_min_trains()
         self.rotate_sequence_file()
 
     def add_train_value(self, name, value):

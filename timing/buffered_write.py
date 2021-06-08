@@ -5,7 +5,7 @@ from extra_data.writer2 import FileWriter, DS
 
 
 class VectorWriterBuffered(FileWriter):
-    v = DS('MID_DET_AGIPD1M-1/x/y:output', 'azimuthal.profile', (1000,), float)
+    v = DS('/x/y:output', 'azimuthal.profile', (1000,), float)
 
     class Meta:
         max_train_per_file = 500
@@ -19,8 +19,9 @@ class VectorWriterDirect(VectorWriterBuffered):
 
 
 def write_vector_by_trains(cls):
+    detname = 'MID_DET_AGIPD1M-1'
     trains = range(10001, 10101)
-    with cls('test_{seq:02d}.h5') as wr:
+    with cls('test_{seq:02d}.h5', detname=detname) as wr:
         # print(wr._meta.max_train_per_file)
         # print(wr.datasets['v'].chunks_autosize(wr._meta.max_train_per_file))
         # add data (funcion kwargs interface)
@@ -34,9 +35,10 @@ def write_vector_by_trains(cls):
 
 
 def write_vector_at_once(cls):
+    detname = 'MID_DET_AGIPD1M-1'
     trains = list(range(10001, 10101))
     ntrain = len(trains)
-    with cls('test_{seq:02d}.h5') as wr:
+    with cls('test_{seq:02d}.h5', detname=detname) as wr:
         # print(wr._meta.max_train_per_file)
         # print(wr.datasets['v'].chunks_autosize(wr._meta.max_train_per_file))
         # add data (funcion kwargs interface)
@@ -72,8 +74,9 @@ class ScalarWriterDirect(ScalarWriterBuffered):
 
 
 def write_scalars_by_trains(cls):
+    detname = 'MID_DET_AGIPD1M-1'
     trains = range(10001, 20001)
-    with cls('test_{seq:02d}.h5') as wr:
+    with cls('test_{seq:02d}.h5', detname=detname) as wr:
         i = 0
         for tid in trains:
             # add train
@@ -87,9 +90,10 @@ def write_scalars_by_trains(cls):
 
 
 def write_scalars_at_once(cls):
+    detname = 'MID_DET_AGIPD1M-1'
     trains = list(range(10001, 20001))
     ntrain = len(trains)
-    with cls('test_{seq:02d}.h5') as wr:
+    with cls('test_{seq:02d}.h5', detname=detname) as wr:
         # add train
         wr.add_trains(trains, [0]*ntrain)
         # add data (class attribute interface)

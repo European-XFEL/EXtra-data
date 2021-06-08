@@ -22,15 +22,17 @@ class MyFileWriter(FileWriter):
         break_into_sequence = True
         #warn_on_missing_data = True
         aliases = {
-            'ctrl': 'MID_DET_AGIPD1M-1/x/y',
-            'inst': 'MID_DET_AGIPD1M-1/x/y:output',
+            'ctrl': '{detname}/x/y',
+            'inst': '{detname}/x/y:output',
         }
 
 
 def test_writer2():
-    ctrl_grp = MyFileWriter._meta.aliases['ctrl']
-    inst_grp = MyFileWriter._meta.aliases['inst']
     nbin = 1000
+    detname = 'MID_DET_AGIPD1M-1'
+    ctrl_grp = f'{detname}/x/y'
+    inst_grp = f'{detname}/x/y:output'
+    
 
     with TemporaryDirectory() as td:
         new_file = osp.join(td, 'test{seq:03d}.h5')
@@ -43,7 +45,7 @@ def test_writer2():
         gv = np.random.randn(10, 100)
         vref = []
 
-        with MyFileWriter(new_file, nbin=nbin) as wr:
+        with MyFileWriter(new_file, nbin=nbin, detname=detname) as wr:
             # add data:
             # 1. class attribute interface
             # wr.gv = gv
