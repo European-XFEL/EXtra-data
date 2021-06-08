@@ -28,6 +28,12 @@ class KeyData:
     def _find_chunks(self):
         """Find contiguous chunks of data for this key, in any order."""
         for file in self.files:
+            if file.file[self.hdf5_data_path].size == 0:
+                # this file does not contain data for this key we skip the files here
+                # for cases where index claims there's data for this key, but the
+                # dataset is empty.
+                continue
+
             firsts, counts = file.get_index(self.source, self._key_group)
 
             # Of trains in this file, which are in selection
@@ -168,6 +174,8 @@ class KeyData:
             np.repeat(chunk.train_ids, chunk.counts.astype(np.intp))
             for chunk in self._data_chunks
         ]
+        if not chunks_trainids:
+            return chunks_trainids
         return np.concatenate(chunks_trainids)
 
     def xarray(self, extra_dims=None, roi=(), name=None):

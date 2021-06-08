@@ -1,8 +1,24 @@
+import os.path as osp
+
+from h5py import File
 import numpy as np
 import pytest
 
-from extra_data import RunDirectory
+from extra_data import H5File, RunDirectory
 from extra_data.exceptions import TrainIDError
+from tempfile import TemporaryDirectory
+
+from . import make_examples
+
+
+@pytest.fixture(scope='function')
+def data_aggregator_file():
+    with TemporaryDirectory() as td:
+        path = osp.join(td, 'RAW-R0450-DA01-S00001.h5')
+        make_examples.make_fxe_da_file(path)
+
+        yield path
+
 
 def test_get_keydata(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
@@ -95,7 +111,7 @@ def test_data_counts(mock_reduced_spb_proc_run):
     assert count.index.tolist() == xgm_beam_x.train_ids
     assert (count.values == 1).all()
 
-    # intrument data
+    # instrument data
     camera = run['SPB_IRU_CAM/CAM/SIDEMIC:daqOutput', 'data.image.pixels']
     count = camera.data_counts()
     assert count.index.tolist() == camera.train_ids
@@ -113,3 +129,20 @@ def test_select_by(mock_spb_raw_run):
     subrun = run.select(am0)
     assert subrun.all_sources == {am0.source}
     assert subrun.keys_for_source(am0.source) == {am0.key}
+
+
+def test_empty_dataset(data_aggregator_file):
+    with File(data_aggregator_file, 'a') as f:
+        shape = f['INSTRUMENT/SA1_XTD2_XGM/DOOCS/MAIN:output/data/intensityTD'].shape
+        f['INSTRUMENT/SA1_XTD2_XGM/DOOCS/MAIN:output/data/intensityTD'].resize((0, *shape[1:]))
+
+        shape = f['CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/pulseEnergy/photonFlux/value'].shape
+        f['CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/pulseEnergy/photonFlux/value'].resize((0, *shape[1:]))
+
+    run = H5File(data_aggregator_file)
+    kd = run['SA1_XTD2_XGM/DOOCS/MAIN:output', 'data.intensityTD']
+    assert kd.ndarray().size == 0
+    assert kd.xarray().size == 0
+
+    kd = run['SA1_XTD2_XGM/DOOCS/MAIN', 'pulseEnergy.photonFlux.value']
+    assert kd.series().size == 0
