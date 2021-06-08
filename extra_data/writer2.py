@@ -35,14 +35,14 @@ class DatasetBase:
     def resolve_name(self, aliases={}):
         raise NotImplementedError
 
-    def get_attribute_setter(self):
-        return BlockedSetter()
-
     def chunks_autosize(self, writer):
         raise NotImplementedError
 
     def dataset_parameters(self, writer):
         raise NotImplementedError
+
+    def get_attribute_setter(self, name):
+        return BlockedSetter()
 
     def create(self, writer, grp):
         raise NotImplementedError
@@ -104,12 +104,16 @@ class Dataset(DatasetBase):
         return (chunk,) + tuple(entry_shape)
 
     def chunks_autosize(self, writer):
-        if self.chunks is None:
-            return Dataset._chunks_autosize(
-                writer._meta.max_train_per_file, self.entry_shape,
-                self.dtype, self.stype)
-        else:
-            return self.chunks
+        chunks = writer._ds_cache.get((id(self), 1), None)
+        if chunks is None:
+            if self.chunks is None:
+                chunks = Dataset._chunks_autosize(
+                    writer._meta.max_train_per_file, self.entry_shape,
+                    self.dtype, self.stype)
+            else:
+                chunks = self.chunks
+            writer._ds_cache[(id(self), 1)] = chunks
+        return chunks
 
     def dataset_parameters(self, writer):
         return tuple(self.entry_shape), self.dtype
@@ -134,6 +138,50 @@ class Dataset(DatasetBase):
             wrt = DatasetDirectWriter(self, ds, chunks)
 
         return wrt
+
+
+class AdjustableVectorDataset(Dataset):
+    def __init__(self, source_name, key, size_param_name, dtype, compression=None):
+        super().__init__(source_name, key, None, dtype, None, compression)
+        self.size_param_name = size_param_name
+
+    def chunks_autosize(self, writer):
+        chunks = writer._ds_cache.get((id(self), 1), None)
+        if chunks is None:
+            size = writer.param[self.size_param_name]
+            chunks = AdjustableVectorDataset._chunks_autosize(
+                writer._meta.max_train_per_file, (size,), self.dtype, self.stype)
+            writer._ds_cache[(id(self), 1)] = chunks
+        return chunks
+        
+    def dataset_parameters(self, writer):
+        nbin = writer.param[self.size_param_name]
+        return (nbin,), self.dtype
+
+
+class AdjustableDataset(Dataset):
+    def __init__(self, source_name, key, entry_shape, dtype, compression=None):
+        super().__init__(source_name, key, entry_shape, dtype, None, compression)
+
+    def chunks_autosize(self, writer):
+        chunks = writer._ds_cache.get((id(self), 1), None)
+        if chunks is None:
+            shape, dtype = self.dataset_parameters(writer)
+            chunks = AdjustableVectorDataset._chunks_autosize(
+                writer._meta.max_train_per_file, shape, dtype, self.stype)
+            writer._ds_cache[(id(self), 1)] = chunks
+        return chunks
+        
+    def dataset_parameters(self, writer):
+        shape = writer._ds_cache.get((id(self), 0), None)
+        if shape is None:
+            if isinstance(self.entry_shape, str):
+                shape = tuple(writer.param[self.entry_shape])
+            else:
+                shape = tuple(writer.param[n] if isinstance(n, str) else n 
+                              for n in self.entry_shape)
+            writer._ds_cache[(id(self), 0)] = shape
+        return shape, self.dtype
 
 
 class DatasetWriterBase:
@@ -599,6 +647,7 @@ class FileWriterBase(object):
         return super().__new__(cls)
 
     def __init__(self, filename, **kwargs):
+        self._ds_cache = {}
         self._train_data = {}
         self.trains = []
         self.timestamp = []
@@ -619,7 +668,11 @@ class FileWriterBase(object):
             self.sources[ds.source_name].add(dsname, ds)
 
         file = h5py.File(filename.format(seq=self.seq), 'w')
-        self.init_file(file)
+        try:
+            self.init_file(file)
+        except Exception as e:
+            file.close()
+            raise e
 
     def init_file(self, file):
         """Initialises a new file"""
@@ -767,7 +820,8 @@ class FileWriterBase(object):
     def add_train_value(self, name, value):
         """Fills a single dataset in the current train"""
         ds = self.datasets[name]
-        nrec = FileWriterBase.__check_value(value, ds.entry_shape, ds.dtype)
+        entry_shape, dtype = ds.dataset_parameters(self)
+        nrec = FileWriterBase.__check_value(value, entry_shape, dtype)
         self.add_value([nrec], name, value)
 
     def add_data(self, count, **kwargs):
@@ -815,6 +869,8 @@ class FileWriterBase(object):
 
 
 DS = Dataset
+AdjVecDS = AdjustableVectorDataset
+AdjDS = AdjustableDataset
 trs_ = MultiTrainData
 
 

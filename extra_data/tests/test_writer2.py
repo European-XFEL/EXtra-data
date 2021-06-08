@@ -5,10 +5,7 @@ from tempfile import TemporaryDirectory
 from testpath import assert_isfile
 
 from extra_data import RunDirectory, H5File
-from extra_data.writer2 import FileWriter, DS
-
-
-nbin = 1000
+from extra_data.writer2 import FileWriter, DS, AdjVecDS
 
 
 class MyFileWriter(FileWriter):
@@ -18,7 +15,7 @@ class MyFileWriter(FileWriter):
 
     tid = DS('@inst', 'azimuthal.trainId', (), np.uint64)
     pid = DS('@inst', 'azimuthal.pulseId', (), np.uint64)
-    v = DS('@inst', 'azimuthal.profile', (nbin,), float)
+    v = AdjVecDS('@inst', 'azimuthal.profile', 'nbin', float)
 
     class Meta:
         max_train_per_file = 10
@@ -33,6 +30,7 @@ class MyFileWriter(FileWriter):
 def test_writer2():
     ctrl_grp = MyFileWriter._meta.aliases['ctrl']
     inst_grp = MyFileWriter._meta.aliases['inst']
+    nbin = 1000
 
     with TemporaryDirectory() as td:
         new_file = osp.join(td, 'test{seq:03d}.h5')
@@ -45,7 +43,7 @@ def test_writer2():
         gv = np.random.randn(10, 100)
         vref = []
 
-        with MyFileWriter(new_file) as wr:
+        with MyFileWriter(new_file, nbin=nbin) as wr:
             # add data:
             # 1. class attribute interface
             # wr.gv = gv
