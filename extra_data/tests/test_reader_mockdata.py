@@ -811,6 +811,7 @@ def test_empty_dataset(mock_empty_dataset_file):
     run = H5File(mock_empty_dataset_file)
     device, key = 'SA1_XTD2_XGM/DOOCS/MAIN:output', 'data.intensityTD'
 
+    assert not run.get_data_counts(device, key).any()
     assert run.get_array(device, key).size == 0
     assert run.get_dask_array(device, key).size == 0
 

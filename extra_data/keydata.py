@@ -122,7 +122,9 @@ class KeyData:
         seq_series = []
 
         for f in self.files:
-            if self.section == 'CONTROL':
+            if f.file[self.hdf5_data_path].size == 0:
+                counts = np.zeros_like(f.train_ids, dtype=np.uint64)
+            elif self.section == 'CONTROL':
                 counts = np.ones(len(f.train_ids), dtype=np.uint64)
             else:
                 _, counts = f.get_index(self.source, self._key_group)

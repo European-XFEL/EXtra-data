@@ -120,6 +120,7 @@ def test_empty_dataset(mock_empty_dataset_file):
 
     run = H5File(mock_empty_dataset_file)
     kd = run['SA1_XTD2_XGM/DOOCS/MAIN:output', 'data.intensityTD']
+    assert not kd.data_count().values.any()
     assert kd.ndarray().size == 0
     assert kd.xarray().size == 0
     assert kd.dask_array().size == 0
