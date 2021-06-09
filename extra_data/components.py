@@ -24,13 +24,11 @@ def multimod_detectors(detector_cls):
 
     Parameters
     ----------
-
     detector_cls: class
       Decorated detector class to append to the list.
 
     Returns
     -------
-
     detector_cls: class
       Unmodified decorated detector class.
     """
@@ -211,7 +209,6 @@ class MultimodDetectorBase:
 
         Parameters
         ----------
-
         key: str
           The data to get, e.g. 'image.data' for pixel values.
         fill_value: int or float, optional
@@ -235,6 +232,7 @@ class MultimodDetectorBase:
 
     def get_dask_array(self, key, fill_value=None, astype=None):
         """Get a labelled Dask array of detector data
+
         Parameters
         ----------
         key: str
@@ -260,14 +258,12 @@ class MultimodDetectorBase:
 
         Parameters
         ----------
-
         require_all: bool
           If True (default), skip trains where any of the selected detector
           modules are missing data.
 
         Yields
         ------
-
         train_data: dict
           A dictionary mapping key names (e.g. ``image.data``) to labelled
           arrays.
@@ -340,7 +336,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
         Parameters
         ----------
-
         tids: np.array
           Train id repeated for each inner coordinate.
         inner_ids: np.array
@@ -350,7 +345,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
         Returns
         -------
-
         pd.MultiIndex
           MultiIndex of 'train_ids' x 'inner_ids'.
         """
@@ -495,7 +489,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
         Parameters
         ----------
-
         key: str
           The data to get, e.g. 'image.data' for pixel values.
         pulses: slice, array, by_id or by_index
@@ -555,7 +548,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
         Parameters
         ----------
-
         key: str
           The data to get, e.g. 'image.data' for pixel values.
         subtrain_index: str, optional
@@ -607,7 +599,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
         Parameters
         ----------
-
         pulses: slice, array, by_index or by_id
           Select which pulses to include for each train.
           The default is to include all pulses.
@@ -617,7 +608,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
         Yields
         ------
-
         train_data: dict
           A dictionary mapping key names (e.g. ``image.data``) to labelled
           arrays.
@@ -761,7 +751,6 @@ class MPxDetectorTrainIterator:
 
         Parameters
         ----------
-
         source: string
           Path to keys in HD5 file, e.g.: 'SPB_DET_AGIPD1M-1/DET/5CH0:xtdf'.
         key: string
@@ -771,7 +760,6 @@ class MPxDetectorTrainIterator:
 
         Returns
         -------
-
         Tuple[FileAccess, int, h5py.Dataset]
           FileAccess
             Instance for the HD5 file with requested data.
@@ -804,7 +792,6 @@ class MPxDetectorTrainIterator:
 
         Parameters
         ----------
-
         source: string
           Path to keys in HD5 file, e.g.: 'SPB_DET_AGIPD1M-1/DET/5CH0:xtdf'.
         key: string
@@ -814,7 +801,6 @@ class MPxDetectorTrainIterator:
 
         Returns
         -------
-
         xarray.DataArray
           Array of selected slow data. In case there are more than one frame
           for the train id tid - train id dimension is kept indexing frames
@@ -840,7 +826,6 @@ class MPxDetectorTrainIterator:
 
         Parameters
         ----------
-
         source: string
           Path to keys in HD5 file, e.g.: 'SPB_DET_AGIPD1M-1/DET/5CH0:xtdf'.
         key: string
@@ -850,7 +835,6 @@ class MPxDetectorTrainIterator:
 
         Returns
         -------
-
         xarray.DataArray
           Array of selected per pulse data.
         """
@@ -931,13 +915,11 @@ class MPxDetectorTrainIterator:
 
         Parameters
         ----------
-
         tid: int
           Train id.
 
         Returns
         -------
-
         Dict[str, xarray]:
           str
             Key name.
@@ -976,10 +958,13 @@ class MPxDetectorTrainIterator:
         """
         Iterate over train ids and yield assembled data dictionaries.
 
-        Yields:
-            Tuple[int, Dict[str, xarray]]:
-                int: train id.
-                Dict[str, xarray]: assembled {key: data array} dictionary.
+        Yields
+        ------
+        Tuple[int, Dict[str, xarray]]:
+          int
+            train id.
+          Dict[str, xarray]
+            assembled {key: data array} dictionary.
         """
         for tid in self.data.train_ids:
             tid = int(tid)  # Convert numpy int to regular Python int
@@ -994,7 +979,6 @@ class AGIPD1M(XtdfDetectorBase):
 
     Parameters
     ----------
-
     data: DataCollection
       A data collection, e.g. from :func:`.RunDirectory`.
     modules: set of ints, optional
@@ -1028,7 +1012,6 @@ class DSSC1M(XtdfDetectorBase):
 
     Parameters
     ----------
-
     data: DataCollection
       A data collection, e.g. from :func:`.RunDirectory`.
     modules: set of ints, optional
@@ -1050,7 +1033,6 @@ class LPD1M(XtdfDetectorBase):
 
     Parameters
     ----------
-
     data: DataCollection
       A data collection, e.g. from :func:`.RunDirectory`.
     modules: set of ints, optional
@@ -1142,7 +1124,6 @@ class JUNGFRAU(MultimodDetectorBase):
 
     Parameters
     ----------
-
     data: DataCollection
       A data collection, e.g. from :func:`.RunDirectory`.
     detector_name: str, optional
@@ -1199,7 +1180,6 @@ class JUNGFRAU(MultimodDetectorBase):
 
         Parameters
         ----------
-
         key: str
           The data to get, e.g. 'data.adc' for pixel values.
         fill_value: int or float, optional
@@ -1227,7 +1207,6 @@ class JUNGFRAU(MultimodDetectorBase):
 
         Parameters
         ----------
-
         key: str
           The data to get, e.g. 'data.adc' for pixel values.
         fill_value: int or float, optional
@@ -1245,14 +1224,12 @@ class JUNGFRAU(MultimodDetectorBase):
 
         Parameters
         ----------
-
         require_all: bool
           If True (default), skip trains where any of the selected detector
           modules are missing data.
 
         Yields
         ------
-
         train_data: dict
           A dictionary mapping key names (e.g. 'data.adc') to labelled
           arrays.

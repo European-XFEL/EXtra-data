@@ -23,15 +23,14 @@ class VirtualCXIWriterBase:
 
     Parameters
     ----------
-
-    detdata: extra_data.components.XtdfDetectorBase
+    detdata: extra_data.components.MultimodDetectorBase
       The detector data interface for the data to gather in this file.
     """
     def __init__(self, detdata):
         self.detdata = detdata
         self.group_label, self.image_label = detdata._main_data_key.split('.')
 
-        frame_counts = detdata.frame_counts * self.ncells
+        frame_counts = detdata.frame_counts * self.cells_per_entry
         self.nframes = frame_counts.sum()
         log.info("Up to %d frames per train, %d frames in total",
                  frame_counts.max(), self.nframes)
@@ -49,23 +48,12 @@ class VirtualCXIWriterBase:
         return self.detdata.n_modules
 
     @property
-    def ncells(self):
-        """
-        Number of detector memory cells per data entry.
-        """
-        return self._cells_per_entry
-
-    @property
     def data(self):
-        """
-        DataCollection with detector data from a run.
-        """
+        """DataCollection with detector data from a run."""
         return self.detdata.data
 
     def _get_module_index(self, module):
-        """
-        Returns an index for the specified module.
-        """
+        """Returns an index for the specified module."""
         return self.modulenos.index(module)
 
     def collect_pulse_ids(self):
@@ -74,7 +62,6 @@ class VirtualCXIWriterBase:
 
         Raises
         ------
-
         Exception:
           Some data has no pulse ID values for any module.
         Exception:
@@ -82,7 +69,6 @@ class VirtualCXIWriterBase:
 
         Returns
         -------
-
         pulse_ids_min: np.array
           Array of pulse IDs per frame common for all detector modules.
         """
@@ -120,7 +106,6 @@ class VirtualCXIWriterBase:
 
         Parameters
         ----------
-
         chunk: read_machinery::DataChunk
           Reference to a contiguous chunk of data to be mapped.
         chunk_data: h5py.Dataset / h5py.VirtualSource
@@ -144,10 +129,10 @@ class VirtualCXIWriterBase:
             tgt_start = int(self.train_id_to_ix[chunk_tids[0]])
 
             # Chunk train IDs organized in the same way as in the target
-            chunk_tids_target = np.repeat(chunk_tids, self.ncells)
+            chunk_tids_target = np.repeat(chunk_tids, self.cells_per_entry)
 
             target_tids = self.train_ids_perframe[
-                tgt_start : tgt_start + len(chunk_tids)*self.ncells
+                tgt_start : tgt_start + len(chunk_tids)*self.cells_per_entry
             ]
             assert target_tids.shape == chunk_tids_target.shape, \
                 f"{target_tids.shape} != {chunk_tids_target.shape}"
@@ -157,14 +142,14 @@ class VirtualCXIWriterBase:
             # How much of this chunk can be mapped in one go?
             mismatches = (chunk_tids_target != target_tids).nonzero()[0]
             if mismatches.size > 0:
-                n_match = mismatches[0] // self.ncells
+                n_match = mismatches[0] // self.cells_per_entry
             else:
                 n_match = len(chunk_tids)
 
             # Select the matching data and add it to the target
             chunk_match_end = chunk_match_start + n_match
-            tgt_end = tgt_start + (n_match*self.ncells)
-            if self.ncells == 1:
+            tgt_end = tgt_start + (n_match*self.cells_per_entry)
+            if self.cells_per_entry == 1:
                 # In some cases, there's an extra dimension of length 1.
                 # E.g. JUNGFRAU data with 1 memory cell per train or
                 # DSSC/LPD raw data.
@@ -196,13 +181,11 @@ class VirtualCXIWriterBase:
 
         Parameters
         ----------
-
         layouts: dict
           A dictionary of unmapped virtual layouts.
 
         Returns
         -------
-
         layouts: dict
           A dictionary of virtual layouts mapped to the virtual sources.
         """
@@ -229,7 +212,6 @@ class VirtualCXIWriterBase:
 
         Parameters
         ----------
-
         filename: str
           Path of the file to be written.
         fillvalues: dict, optional
@@ -343,12 +325,11 @@ class XtdfCXIWriter(VirtualCXIWriterBase):
 
     Parameters
     ----------
-
     detdata: extra_data.components.XtdfDetectorBase
       The detector data interface for the data to gather in this file.
     """
     def __init__(self, detdata) -> None:
-        self._cells_per_entry = 1
+        self.cells_per_entry = 1
         self.pulse_id_label = 'pulseId'
         self.cell_id_label = 'cellId'
 
@@ -364,7 +345,6 @@ class XtdfCXIWriter(VirtualCXIWriterBase):
 
         Returns
         -------
-
         layouts: dict
           A dictionary mapping virtual datasets names (e.g. ``data``)
           to h5py virtual layouts.
@@ -425,7 +405,6 @@ class JUNGFRAUCXIWriter(VirtualCXIWriterBase):
 
     Parameters
     ----------
-
     detdata: extra_data.components.JUNGFRAU
       The detector data interface for the data to gather in this file.
     """
@@ -433,14 +412,14 @@ class JUNGFRAUCXIWriter(VirtualCXIWriterBase):
         # Check number of cells
         src = next(iter(detdata.source_to_modno))
         keydata = detdata.data[src, 'data.adc']
-        self._cells_per_entry = keydata.entry_shape[0]
+        self.cells_per_entry = keydata.entry_shape[0]
         self.pulse_id_label = 'memoryCell'
         self.cell_id_label = 'memoryCell'
 
         super().__init__(detdata)
 
         # For JUNGFRAU detectors modules are numbered from 1
-        self.modulenos = [i+1 for i in range(self.nmodules)]
+        self.modulenos = list(range(1, self.nmodules + 1))
 
     def collect_data(self):
         """
@@ -449,7 +428,6 @@ class JUNGFRAUCXIWriter(VirtualCXIWriterBase):
 
         Returns
         -------
-
         layouts: dict
           A dictionary mapping virtual datasets names (e.g. ``data``)
           to h5py virtual layouts.
