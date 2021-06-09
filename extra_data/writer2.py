@@ -467,6 +467,25 @@ class Source:
             self.file_ds[dsno].flush()
             self.data[dsno].reset()
 
+    def add_train_data(self, nrec, name, value):
+        """Adds single train data to the source"""
+        if self.stype == 0 and nrec != 1:
+            raise ValueError("maximum one entry per train can be written "
+                             "in control source")
+
+        dsno = self.dsno[name]
+
+        ntrain = self.data[dsno].nready
+        nwritten = len(self.count)
+        if nwritten > ntrain:
+            if self.count_buf[ntrain] != nrec:
+                raise ValueError("count mismatch the number of frames "
+                                 "in source")
+        else:
+            self.count_buf.append(nrec)
+
+        self._put_data(dsno, [nrec], value)
+
     def add_data(self, count, name, value):
         """Adds multitrain data to the source"""
         if self.stype == 0 and np.any(count > 1):
@@ -487,6 +506,9 @@ class Source:
         else:
             self.count_buf += count.tolist()
 
+        self._put_data(dsno, count, value)
+
+    def _put_data(self, dsno, count, value):
         self.nready += not self.data[dsno]
         self.data[dsno].append(count, value)
 
@@ -815,7 +837,18 @@ class FileWriterBase(object):
         """Fills a single dataset in the current train"""
         ds = self.datasets[name]
         nrec = ds.check_value(self, value)
-        self.add_value([nrec], name, value)
+
+        # check count
+        src_name = ds(self).source_name
+        src = self.sources[src_name]
+        if src.get_ntrain(name) + 1 > len(self.trains):
+            raise ValueError("the number of trains in this data exeeds "
+                             "the number of trains in file")
+
+        src.add_train_data(nrec, name, value)
+
+        self.source_ntrain[src_name] = src.get_min_trains()
+        self.rotate_sequence_file()
 
     def add_data(self, count, **kwargs):
         """Adds data"""
