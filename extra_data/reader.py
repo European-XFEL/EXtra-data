@@ -850,34 +850,16 @@ class DataCollection:
             train_ids = self.train_ids
 
             for source, keys in selection.items():
-                if source in self.instrument_sources:
-                    # For INSTRUMENT sources, the INDEX is saved by
-                    # key group, which is the first hash component. In
-                    # many cases this is 'data', but not always.
-                    if keys is None:
-                        # All keys are selected.
-                        keys = self.keys_for_source(source)
+                if keys is None:
+                    keys = self.keys_for_source(source)
 
-                    groups = {key.partition('.')[0] for key in keys}
-                else:
-                    # CONTROL data has no key group.
-                    groups = ['']
-
-                for group in groups:
-                    # Empty list would be converted to np.float64 array.
-                    source_tids = np.empty(0, dtype=np.uint64)
-
-                    for f in self._source_index[source]:
-                        valid = True if self.inc_suspect_trains else f.validity_flag
-                        # Add the trains with data in each file.
-                        _, counts = f.get_index(source, group)
-                        source_tids = np.union1d(
-                            f.train_ids[valid & (counts > 0)], source_tids
-                        )
+                for key in keys:
+                    counts = self._get_key_data(source, key).data_counts()
+                    key_tids = counts[counts>0].index.values
 
                     # Remove any trains previously selected, for which this
                     # selected source and key group has no data.
-                    train_ids = np.intersect1d(train_ids, source_tids)
+                    train_ids = np.intersect1d(train_ids, key_tids)
 
             # Filtering may have eliminated previously selected files.
             files = [f for f in files
