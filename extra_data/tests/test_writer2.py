@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 from testpath import assert_isfile
 
 from extra_data import RunDirectory, H5File
-from extra_data.writer2 import FileWriter, DS, AdjVecDS
+from extra_data.writer2 import FileWriter, DS
 
 
 class MyFileWriter(FileWriter):
@@ -15,7 +15,7 @@ class MyFileWriter(FileWriter):
 
     tid = DS('@inst', 'azimuthal.trainId', (), np.uint64)
     pid = DS('@inst', 'azimuthal.pulseId', (), np.uint64)
-    v = AdjVecDS('@inst', 'azimuthal.profile', 'nbin', float)
+    v = DS('@inst', 'azimuthal.profile', ('nbin',), float)
 
     class Meta:
         max_train_per_file = 10

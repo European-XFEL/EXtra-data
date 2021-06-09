@@ -69,6 +69,10 @@ class DatasetBase:
         # expected to return (entry_shape, dtype)
         return self.entry_shape, self.dtype
 
+    def get_chunks(self, writer):
+        # expected to return chunks
+        return self.chunks
+
     def init_dataset_attr(self, writer):
         # expand names
         source_name, key, stype = self.get_dataset_fullname(writer)
@@ -77,7 +81,7 @@ class DatasetBase:
         entry_shape, dtype = self.get_entry_attr(writer)
 
         # auto chunking
-        chunks = self.chunks
+        chunks = self.get_chunks(writer)
         if chunks is None:
             chunks = Dataset._chunks_autosize(
                 writer._meta.max_train_per_file, entry_shape,
@@ -146,11 +150,24 @@ class DatasetBase:
 class Dataset(DatasetBase):
     """Dataset descriptor"""
 
+    def get_attribute_setter(self, name):
+        """Returns suitable attribute setter instance"""
+        return DataSetter(name)
+
     def get_dataset_fullname(self, writer):
         # expected to return (source_name, key, stype)
         source_name, key = self.canonical_name
         return Dataset._normalize_name(
             source_name.format(**writer.param), key)
+
+    def get_chunks(self, writer):
+        # expected to return chunks
+        return Dataset._expand_shape(self.chunks, writer)
+
+    def get_entry_attr(self, writer):
+        # expected to return (entry_shape, dtype)
+        return (Dataset._expand_shape(self.entry_shape, writer),
+                self.dtype)
 
     @staticmethod
     def _normalize_name(source_name, key):
@@ -163,37 +180,17 @@ class Dataset(DatasetBase):
 
         return source_name, key.replace('.', '/'), stype
 
-    def get_attribute_setter(self, name):
-        """Returns suitable attribute setter instance"""
-        return DataSetter(name)
-
-
-class AdjustableVectorDataset(Dataset):
-    def __init__(self, source_name, key, size_param_name, dtype,
-                 compression=None):
-        super().__init__(source_name, key, None, dtype, None, compression)
-        self.size_param_name = size_param_name
-
-    def get_entry_attr(self, writer):
-        # expected to return (entry_shape, dtype)
-        size = writer.param[self.size_param_name]
-        return (size,), self.dtype
-
-
-class AdjustableDataset(Dataset):
-    def __init__(self, source_name, key, entry_shape, dtype,
-                 compression=None):
-        super().__init__(source_name, key, entry_shape, dtype,
-                         None, compression)
-
-    def get_entry_attr(self, writer):
-        # expected to return (entry_shape, dtype)
-        if isinstance(self.entry_shape, str):
-            shape = tuple(writer.param[self.entry_shape])
-        else:
+    @staticmethod
+    def _expand_shape(shape_decl, writer):
+        if isinstance(shape_decl, str):
+            shape = tuple(writer.param[shape_decl])
+        elif hasattr(shape_decl, '__iter__'):
             shape = tuple(writer.param[n] if isinstance(n, str) else n
-                          for n in self.entry_shape)
-        return shape, self.dtype
+                          for n in shape_decl)
+        else:
+            shape = shape_decl
+
+        return shape
 
 
 class DatasetWriterBase:
@@ -895,8 +892,6 @@ class FileWriterBase(object):
 
 
 DS = Dataset
-AdjVecDS = AdjustableVectorDataset
-AdjDS = AdjustableDataset
 trs_ = MultiTrainData
 
 
