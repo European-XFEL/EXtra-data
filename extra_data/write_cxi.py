@@ -45,9 +45,7 @@ class VirtualCXIWriterBase:
 
     @property
     def nmodules(self):
-        """
-        Number of detector modules.
-        """
+        """Number of detector modules."""
         return self.detdata.n_modules
 
     @property
