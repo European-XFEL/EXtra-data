@@ -863,7 +863,7 @@ class DataCollection:
 
                     if train_ids.size == 0:
                         return DataCollection(
-                            [], selection={}, train_ids=[],
+                            [], selection=selection, train_ids=[],
                             inc_suspect_trains=self.inc_suspect_trains,
                             is_single_run=self.is_single_run
                         )

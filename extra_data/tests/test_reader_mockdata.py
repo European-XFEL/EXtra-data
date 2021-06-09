@@ -833,3 +833,7 @@ def test_empty_dataset(mock_empty_dataset_file):
     df = run.get_dataframe(fields=[("*_XGM/*", "*.i[xy]Pos*")])
     assert len(df.columns) == 4
     assert "SA1_XTD2_XGM/DOOCS/MAIN/beamPosition.ixPos" in df.columns
+
+    dc = run.select(device, require_all=True)
+    assert dc.all_sources == frozenset([device])
+    assert dc.train_ids == []
