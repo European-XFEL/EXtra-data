@@ -861,6 +861,13 @@ class DataCollection:
                     # selected source and key group has no data.
                     train_ids = np.intersect1d(train_ids, key_tids)
 
+                    if train_ids.size == 0:
+                        return DataCollection(
+                            [], selection={}, train_ids=[],
+                            inc_suspect_trains=self.inc_suspect_trains,
+                            is_single_run=self.is_single_run
+                        )
+
             # Filtering may have eliminated previously selected files.
             files = [f for f in files
                      if f.has_train_ids(train_ids, self.inc_suspect_trains)]
