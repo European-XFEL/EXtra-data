@@ -518,7 +518,7 @@ class DataCollection:
             return self._get_key_data(source, key).series()
 
         if not seq_series:
-            ser = pd.Series([])
+            ser = pd.Series([], dtype=self._get_key_data(source, key).dtype)
         else:
             ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
 

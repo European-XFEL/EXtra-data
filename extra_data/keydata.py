@@ -175,7 +175,7 @@ class KeyData:
             for chunk in self._data_chunks
         ]
         if not chunks_trainids:
-            return chunks_trainids
+            return np.array([], dtype=np.uint64)
         return np.concatenate(chunks_trainids)
 
     def xarray(self, extra_dims=None, roi=(), name=None):
@@ -288,7 +288,8 @@ class KeyData:
             )
 
         if not chunks_darrs:
-            chunks_darrs = [da.empty(shape=self.shape, dtype=self.dtype, chunks=self.shape)]
+            chunks_darrs = [da.empty(shape=(0,) + self.entry_shape,
+                                     dtype=self.dtype, chunks=self.shape)]
         dask_arr = da.concatenate(chunks_darrs, axis=0)
 
         if labelled:

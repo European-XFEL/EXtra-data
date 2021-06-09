@@ -131,16 +131,9 @@ def mock_empty_dataset_file(format_version):
         make_examples.make_fxe_da_file(path, format_version=format_version)
 
         with h5py.File(path, 'a') as f:
-            shape = f['INSTRUMENT/SA1_XTD2_XGM/DOOCS/MAIN:output/data/intensityTD'].shape
-            f['INSTRUMENT/SA1_XTD2_XGM/DOOCS/MAIN:output/data/intensityTD'].resize((0, *shape[1:]))
-
-            shape = f['INSTRUMENT/SA1_XTD2_XGM/DOOCS/MAIN:output/data/trainId'].shape
-            f['INSTRUMENT/SA1_XTD2_XGM/DOOCS/MAIN:output/data/trainId'].resize((0, *shape[1:]))
-
-            shape = f['CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/pulseEnergy/photonFlux/value'].shape
-            f['CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/pulseEnergy/photonFlux/value'].resize((0, *shape[1:]))
-
-            shape = f['CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/beamPosition/ixPos/value'].shape
-            f['CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/beamPosition/ixPos/value'].resize((0, *shape[1:]))
+            f['INSTRUMENT/SA1_XTD2_XGM/DOOCS/MAIN:output/data/intensityTD'].resize(0, axis=0)
+            f['INSTRUMENT/SA1_XTD2_XGM/DOOCS/MAIN:output/data/trainId'].resize(0, axis=0)
+            f['CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/pulseEnergy/photonFlux/value'].resize(0, axis=0)
+            f['CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/beamPosition/ixPos/value'].resize(0, axis=0)
 
         yield path
