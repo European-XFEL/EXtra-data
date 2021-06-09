@@ -29,7 +29,7 @@ class KeyData:
         """Find contiguous chunks of data for this key, in any order."""
         for file in self.files:
             if file.file[self.hdf5_data_path].size == 0:
-                # this file does not contain data for this key we skip the files here
+                # this file does not contain data for this key. We skip the files here
                 # for cases where index claims there's data for this key, but the
                 # dataset is empty.
                 continue
