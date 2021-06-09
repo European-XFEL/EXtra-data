@@ -835,5 +835,6 @@ def test_empty_dataset(mock_empty_dataset_file):
     assert "SA1_XTD2_XGM/DOOCS/MAIN/beamPosition.ixPos" in df.columns
 
     dc = run.select(device, require_all=True)
-    assert dc.all_sources == frozenset([device])
+    assert dc.selection == {device: None}
+    assert dc.all_sources == frozenset()
     assert dc.train_ids == []
