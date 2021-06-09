@@ -94,6 +94,7 @@ Documentation contents
    :maxdepth: 1
 
    changelog
+   architecture
 
 .. seealso::
 
