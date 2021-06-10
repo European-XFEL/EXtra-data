@@ -363,6 +363,53 @@ def test_write_virtual_cxi_some_modules(mock_spb_proc_run, tmpdir):
         ds = det_grp['data']
         assert ds.shape[1:] == (16, 512, 128)
 
+def test_write_virtual_cxi_jungfrau(mock_jungfrau_run, tmpdir):
+    run = RunDirectory(mock_jungfrau_run)
+    det = JUNGFRAU(run)
+
+    test_file = osp.join(str(tmpdir), 'test.cxi')
+    det.write_virtual_cxi(test_file)
+    assert_isfile(test_file)
+
+    with h5py.File(test_file, 'r') as f:
+        det_grp = f['entry_1/instrument_1/detector_1']
+        ds = det_grp['data']
+        assert isinstance(ds, h5py.Dataset)
+        assert ds.is_virtual
+        assert ds.shape[1:] == (8, 512, 1024)
+        assert 'axes' in ds.attrs
+
+        assert len(ds.virtual_sources()) == 8
+
+        # Check position of each source file in the modules dimension
+        for src in ds.virtual_sources():
+            start, _, block, count = src.vspace.get_regular_hyperslab()
+            assert block[1] == 1
+            assert count[1] == 1
+
+            expected_file = 'RAW-R0012-JNGFR{:0>2}-S00000.h5'.format(
+                start[1] + 1)
+            assert osp.basename(src.file_name) == expected_file
+
+        # Check presence of other datasets
+        assert 'gain' in det_grp
+        assert 'mask' in det_grp
+        assert 'experiment_identifier' in det_grp
+
+def test_write_virtual_cxi_jungfrau_some_modules(mock_jungfrau_run, tmpdir):
+    run = RunDirectory(mock_jungfrau_run)
+    det = JUNGFRAU(run, modules=[2, 3, 4, 6])
+
+    test_file = osp.join(str(tmpdir), 'test.cxi')
+    det.write_virtual_cxi(test_file)
+    assert_isfile(test_file)
+
+    with h5py.File(test_file, 'r') as f:
+        det_grp = f['entry_1/instrument_1/detector_1']
+        ds = det_grp['data']
+        assert ds.shape[1:] == (8, 512, 1024)
+        assert (det_grp['module_identifier'][:] == np.arange(1,9)).all()
+
 def test_write_virtual_cxi_raw_data(mock_fxe_raw_run, tmpdir, caplog):
     import logging
     caplog.set_level(logging.INFO)
