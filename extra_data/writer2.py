@@ -709,7 +709,7 @@ class FileWriterBase(object):
             self.sources[src_name] = src
             self.source_ntrain[src_name] = 0
             self.list_of_sources.append((src.section, src_name))
-        
+
         for dsname, ds in self.datasets.items():
             src_name = ds(self).source_name
             self.sources[src_name].add(dsname, ds)
@@ -912,51 +912,82 @@ class FileWriter(FileWriterBase, metaclass=FileWriterMeta):
     and use :class:`DS` to declare datasets:
 
     .. code-block:: python
-
-        ctrl_grp = 'MID_DET_AGIPD1M-1/x/y'
-        inst_grp = 'MID_DET_AGIPD1M-1/x/y:output'
-        nbin = 1000
+        from extra_data.writer2 import FileWriter, DS, trs_
 
         class MyFileWriter(FileWriter):
-            gv = DS(ctrl_grp, 'geom.fragmentVectors', (10,100), float)
-            nb = DS(ctrl_grp, 'param.numberOfBins', (), np.uint64)
-            rlim = DS(ctrl_grp, 'param.radiusRange', (2,), float)
+            gv = DS('@ctrl', 'geom.fragmentVectors', ('nfrag',3,3), float)
+            nb = DS('@ctrl', 'param.numberOfBins', (), np.uint64)
 
-            tid = DS(inst_grp, 'azimuthal.trainId', (), np.uint64)
-            pid = DS(inst_grp, 'azimuthal.pulseId', (), np.uint64)
-            v = DS(inst_grp, 'azimuthal.profile', (nbin,), float)
+            tid = DS('@inst', 'azimuthal.trainId', (), np.uint64)
+            pid = DS('@inst', 'azimuthal.pulseId', (), np.uint64)
+            v = DS('@inst', 'azimuthal.profile', ('nbin',), float)
 
             class Meta:
-                max_train_per_file = 10
+                max_train_per_file = 40
                 break_into_sequence = True
+                aliases = {
+                    'ctrl': '{det_name}/x/y',
+                    'inst': '{det_name}/x/y:output'
+                }
 
     Subclass :class:`Meta` is a special class for options.
 
     Use new class to write data in files by trains:
 
     .. code-block:: python
+        nbin, nfrag = 1000, 4
+        det_name = 'MID_DET_AGIPD1M-1'
+        gv = np.zeros([nfrag, 3, 3])
 
+        pulses = list(range(0, 400, 4))
+        npulse = len(pulses)
+        trains = list(range(100001, 100101))
+        ntrain = len(trains)
+
+        prm = {'det_name': det_name, 'nbin': nbin, 'nfrag': nfrag}
         filename = 'mydata-{seq:03d}.h5'
-        with MyFileWriter(filename) as wr:
-            # add data (funcion kwargs interface)
-            wr.add(gv=gv, nb=nbin, rlim=(0.003, 0.016))
+        with MyFileWriter(filename, **prm) as wr:
 
             for tid in trains:
                 # create/compute data
-                v = np.random.randn(npulse, nbin)
-                vref.append(v)
+                v = np.random.rand(npulse, nbin)
+                # add train
+                wr.add_train(tid, 0)
+                # add data (funcion kwargs interface)
+                wr.add_train_data(gv=gv, nb=nbin)
                 # add data (class attribute interface)
                 wr.tid = [tid] * npulse
                 wr.pid = pulses
                 wr.v = v
-                # write train
-                wr.write_train(tid, 0)
 
-    For the sources in 'CONTROL' section, the last added data repeats in
-    the following trains. Only one entry is allowed per train in this section.
+    Multi-train arrays can also be written at once:
 
-    For the sources in 'INSTRUMENT' section, data is dropped after flushing.
-    One train may contain multiple entries. The number of entries may vary
+    .. code-block:: python
+        with MyFileWriter(filename, **prm) as wr:
+            # create/compute data
+            v = np.random.rand(ntrain*npulse, nbin)
+            tid, pid = np.meshgrid(trains, pulses, indexing='ij')
+            nrec = [npulse] * ntrain
+            # add train
+            wr.add_trains(trains, [0] * ntrain)
+            # add data (funcion kwargs interface)
+            wr.add_data(
+                [1]*ntrain,
+                gv=gv[None,...].repeat(ntrain, 0),
+                nb=[nbin]*ntrain,
+            )
+            # add data (class attribute interface)
+            wr.tid = trs_(nrec, tid.flatten())
+            wr.pid = trs_(nrec, pid.flatten())
+            wr.v = trs_(nrec, v)
+
+    Writing of multi-train arrays and writing by trains may be combined.
+    Remember that only those trains are written to the file for which all
+    the keys of one source are filled with data.
+
+    For the sources in 'CONTROL' section, only one entry is allowed per train.
+
+    For the sources in 'INSTRUMENT' section, the number of entries may vary
     from train to train. All datasets in one source must have the same number
     of entries in the same train.
     """
