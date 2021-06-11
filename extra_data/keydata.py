@@ -89,6 +89,12 @@ class KeyData:
             run[source, key][:10]  # Select data for first 10 trains
         """
         tids = select_train_ids(self.train_ids, trains)
+        return self._only_tids(tids)
+
+    def __getitem__(self, item):
+        return self.select_trains(item)
+
+    def _only_tids(self, tids):
         files = [f for f in self.files
                  if f.has_train_ids(tids, self.inc_suspect_trains)]
 
@@ -103,34 +109,32 @@ class KeyData:
             inc_suspect_trains=self.inc_suspect_trains,
         )
 
-    def __getitem__(self, item):
-        return self.select_trains(item)
+    def drop_missing(self):
+        """Select only trains with data as a new :class:`KeyData` object."""
+        counts = self.data_counts(labelled=False)
+        tids = np.array(self.train_ids)[counts > 0]
+        return self._only_tids(list(tids))
 
-    def data_counts(self):
+    def data_counts(self, labelled=True):
         """Get a count of data entries in each train.
 
-        Returns a pandas series with an index of train IDs.
+        If *labelled* is True, returns a pandas series with an index of train
+        IDs. Otherwise, returns a NumPy array of counts to match ``.train_ids``.
         """
-        import pandas as pd
+        train_ids = np.concatenate([c.train_ids for c in self._data_chunks])
+        counts = np.concatenate([c.counts for c in self._data_chunks])
 
-        seq_series = []
-
-        for f in self.files:
-            if self.section == 'CONTROL':
-                counts = np.ones(len(f.train_ids), dtype=np.uint64)
-            else:
-                _, counts = f.get_index(self.source, self._key_group)
-
-            if self.inc_suspect_trains:
-                s = pd.Series(counts, index=f.train_ids)
-            else:
-                s = pd.Series(counts[f.validity_flag], index=f.valid_train_ids)
-            seq_series.append(s)
-
-        ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
-        # Select out only the train IDs of interest
-        train_ids = ser.index.intersection(np.asarray(self.train_ids))
-        return ser.loc[train_ids]
+        if labelled:
+            import pandas as pd
+            return pd.Series(counts, index=train_ids)
+        else:
+            # self.train_ids is always sorted. The train IDs from chunks
+            # should be in order, but sometimes trains are written out of order.
+            # Reorder the counts to match self.train_ids.
+            assert len(train_ids) == len(self.train_ids)
+            assert np.isin(train_ids, self.train_ids).all()
+            idxs = np.argsort(train_ids)
+            return counts[idxs]
 
     # Getting data as different kinds of array: -------------------------------
 

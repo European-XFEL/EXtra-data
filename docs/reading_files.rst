@@ -133,6 +133,8 @@ below, e.g.::
 
    .. automethod:: select_trains
 
+   .. automethod:: drop_missing
+
 The run or file object (a :class:`DataCollection`) also has methods to load
 data by sources and keys. :meth:`get_array`, :meth:`get_dask_array` and
 :meth:`get_series` are directly equivalent to the options above, but other
