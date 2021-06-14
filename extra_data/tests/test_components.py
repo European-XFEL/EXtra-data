@@ -408,7 +408,7 @@ def test_write_virtual_cxi_jungfrau_some_modules(mock_jungfrau_run, tmpdir):
         det_grp = f['entry_1/instrument_1/detector_1']
         ds = det_grp['data']
         assert ds.shape[1:] == (8, 512, 1024)
-        assert (det_grp['module_identifier'][:] == np.arange(1,9)).all()
+        np.testing.assert_array_equal(det_grp['module_identifier'][:], np.arange(1,9))
 
 def test_write_virtual_cxi_raw_data(mock_fxe_raw_run, tmpdir, caplog):
     import logging
