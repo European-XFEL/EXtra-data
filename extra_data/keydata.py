@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -295,7 +295,7 @@ class KeyData:
 
     # Getting data by train: --------------------------------------------------
 
-    def _find_tid(self, tid) -> (Optional[FileAccess], int):
+    def _find_tid(self, tid) -> Tuple[Optional[FileAccess], int]:
         for fa in self.files:
             matches = (fa.train_ids == tid).nonzero()[0]
             if self.inc_suspect_trains and matches.size > 0:

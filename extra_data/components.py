@@ -9,12 +9,43 @@ import xarray
 from .exceptions import SourceNameError
 from .reader import DataCollection, by_id, by_index
 from .writer import FileWriter
+from .write_cxi import XtdfCXIWriter, JUNGFRAUCXIWriter
+
+__all__ = [
+    'AGIPD1M',
+    'AGIPD500K',
+    'DSSC1M',
+    'LPD1M',
+    'JUNGFRAU',
+    'identify_multimod_detectors',
+]
 
 log = logging.getLogger(__name__)
 
 MAX_PULSES = 2700
 
 
+def multimod_detectors(detector_cls):
+    """
+    Decorator for multimod detector classes (e.g. AGIPD/LPD/JUNGFRAU)
+    to store them in a list 'multimod_detectors.list' and their names
+    in 'multimod_detectors.names'.
+
+    Parameters
+    ----------
+    detector_cls: class
+      Decorated detector class to append to the list.
+
+    Returns
+    -------
+    detector_cls: class
+      Unmodified decorated detector class.
+    """
+    multimod_detectors.list = getattr(multimod_detectors, 'list', list())
+    multimod_detectors.list.append(detector_cls)
+    multimod_detectors.names = getattr(multimod_detectors, 'names', list())
+    multimod_detectors.names.append(detector_cls.__name__)
+    return detector_cls
 
 
 def _check_pulse_selection(pulses):
@@ -62,6 +93,7 @@ class MultimodDetectorBase:
     # Override in subclass
     _main_data_key = ''  # Key to use for checking data counts match
     module_shape = (0, 0)
+    n_modules = 0
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
                  *, min_modules=1):
@@ -124,12 +156,14 @@ class MultimodDetectorBase:
             )
         return detector_names.pop()
 
-    def _identify_sources(self, data, detector_name, modules=None):
-        source_to_modno = {}
+    def _source_matches(self, data, detector_name):
         for source in data.instrument_sources:
             m = self._source_re.match(source)
             if m and m.group('detname') == detector_name:
-                source_to_modno[source] = int(m.group('modno'))
+                yield source, int(m.group('modno'))
+
+    def _identify_sources(self, data, detector_name, modules=None):
+        source_to_modno = dict(self._source_matches(data, detector_name))
 
         if modules is not None:
             source_to_modno = {s: n for (s, n) in source_to_modno.items()
@@ -187,7 +221,6 @@ class MultimodDetectorBase:
 
         Parameters
         ----------
-
         key: str
           The data to get, e.g. 'image.data' for pixel values.
         fill_value: int or float, optional
@@ -211,6 +244,7 @@ class MultimodDetectorBase:
 
     def get_dask_array(self, key, fill_value=None, astype=None):
         """Get a labelled Dask array of detector data
+
         Parameters
         ----------
         key: str
@@ -236,14 +270,12 @@ class MultimodDetectorBase:
 
         Parameters
         ----------
-
         require_all: bool
           If True (default), skip trains where any of the selected detector
           modules are missing data.
 
         Yields
         ------
-
         train_data: dict
           A dictionary mapping key names (e.g. ``image.data``) to labelled
           arrays.
@@ -261,6 +293,10 @@ class XtdfDetectorBase(MultimodDetectorBase):
     """
     n_modules = 16
     _main_data_key = 'image.data'
+
+    def __init__(self, data: DataCollection, detector_name=None, modules=None,
+                 *, min_modules=1):
+        super().__init__(data, detector_name, modules, min_modules=min_modules)
 
     @staticmethod
     def _select_pulse_ids(pulses, data_pulse_ids):
@@ -304,6 +340,23 @@ class XtdfDetectorBase(MultimodDetectorBase):
         return np.concatenate(positions)
 
     def _make_image_index(self, tids, inner_ids, inner_name='pulse'):
+        """
+        Prepare indices for data per inner coordinate.
+
+        Parameters
+        ----------
+        tids: np.array
+          Train id repeated for each inner coordinate.
+        inner_ids: np.array
+          Array of inner coordinate values.
+        inner_name: string
+          Name of the inner coordinate.
+
+        Returns
+        -------
+        pd.MultiIndex
+          MultiIndex of 'train_ids' x 'inner_ids'.
+        """
         # Overridden in LPD1M for parallel gain mode
         return pd.MultiIndex.from_arrays(
             [tids, inner_ids], names=['train', inner_name]
@@ -445,7 +498,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
         Parameters
         ----------
-
         key: str
           The data to get, e.g. 'image.data' for pixel values.
         pulses: slice, array, by_id or by_index
@@ -505,7 +557,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
         Parameters
         ----------
-
         key: str
           The data to get, e.g. 'image.data' for pixel values.
         subtrain_index: str, optional
@@ -557,7 +608,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
         Parameters
         ----------
-
         pulses: slice, array, by_index or by_id
           Select which pulses to include for each train.
           The default is to include all pulses.
@@ -567,12 +617,10 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
         Yields
         ------
-
         train_data: dict
           A dictionary mapping key names (e.g. ``image.data``) to labelled
           arrays.
         """
-        pulses = _check_pulse_selection(pulses)
         return MPxDetectorTrainIterator(self, pulses, require_all=require_all)
 
     def write_virtual_cxi(self, filename, fillvalues=None):
@@ -591,8 +639,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
             fill value for missing data  (default is np.nan for float arrays and
             zero for integer arrays)
         """
-        from .write_cxi import VirtualCXIWriter
-        VirtualCXIWriter(self).write(filename, fillvalues=fillvalues)
+        XtdfCXIWriter(self).write(filename, fillvalues=fillvalues)
 
     def write_frames(self, filename, trains, pulses):
         """Write selected detector frames to a new EuXFEL HDF5 file
@@ -701,12 +748,35 @@ class MPxDetectorTrainIterator:
     """
     def __init__(self, data, pulses=by_index[:], require_all=True):
         self.data = data
-        self.pulses = pulses
+        self.pulses = _check_pulse_selection(pulses)
         self.require_all = require_all
         # {(source, key): (f, dataset)}
         self._datasets_cache = {}
 
     def _find_data(self, source, key, tid):
+        """
+        Find FileAccess instance and dataset corresponding to source, key,
+        and train id tid.
+
+        Parameters
+        ----------
+        source: string
+          Path to keys in HD5 file, e.g.: 'SPB_DET_AGIPD1M-1/DET/5CH0:xtdf'.
+        key: string
+          Key for data at source separated by dot, e.g.: 'image.data'.
+        tid: np.int
+          Train id.
+
+        Returns
+        -------
+        Tuple[FileAccess, int, h5py.Dataset]
+          FileAccess
+            Instance for the HD5 file with requested data.
+          int
+            Starting index for the requested data.
+          h5py.Dataset
+            h5py dataset with found data.
+        """
         file, ds = self._datasets_cache.get((source, key), (None, None))
         if ds:
             ixs = (file.train_ids == tid).nonzero()[0]
@@ -724,6 +794,27 @@ class MPxDetectorTrainIterator:
         return None, None, None
 
     def _get_slow_data(self, source, key, tid):
+        """
+        Get an array of slow (per train) data corresponding to source, key,
+        and train id tid. Also used for JUNGFRAU data with memory cell
+        dimension.
+
+        Parameters
+        ----------
+        source: string
+          Path to keys in HD5 file, e.g.: 'SPB_DET_AGIPD1M-1/DET/5CH0:xtdf'.
+        key: string
+          Key for data at source separated by dot, e.g.: 'header.pulseCount'.
+        tid: np.int
+          Train id.
+
+        Returns
+        -------
+        xarray.DataArray
+          Array of selected slow data. In case there are more than one frame
+          for the train id tid - train id dimension is kept indexing frames
+          within tid.
+        """
         file, pos, ds = self._find_data(source, key, tid)
         if file is None:
             return None
@@ -737,6 +828,25 @@ class MPxDetectorTrainIterator:
             return xarray.DataArray(ds[first : first + count])
 
     def _get_pulse_data(self, source, key, tid):
+        """
+        Get an array of per pulse data corresponding to source, key,
+        and train id tid. Used only for AGIPD-like detectors, for 
+        JUNGFRAU-like per-cell data '_get_slow_data' is used.
+
+        Parameters
+        ----------
+        source: string
+          Path to keys in HD5 file, e.g.: 'SPB_DET_AGIPD1M-1/DET/5CH0:xtdf'.
+        key: string
+          Key for data at source separated by dot, e.g.: 'image.data'.
+        tid: np.int
+          Train id.
+
+        Returns
+        -------
+        xarray.DataArray
+          Array of selected per pulse data.
+        """
         file, pos, ds = self._find_data(source, key, tid)
         if file is None:
             return None
@@ -769,7 +879,9 @@ class MPxDetectorTrainIterator:
         else:  # ndarray
             data_positions = first + positions
 
-        return self.data._guess_axes(ds[data_positions], train_pulse_ids, unstack_pulses=True)
+        return self.data._guess_axes(
+            ds[data_positions], train_pulse_ids, unstack_pulses=True
+        )
 
     def _select_pulse_ids(self, pulse_ids):
         """Select pulses by ID
@@ -807,6 +919,22 @@ class MPxDetectorTrainIterator:
         return val[val < count]
 
     def _assemble_data(self, tid):
+        """
+        Assemble data for all keys into a dictionary for specified train id.
+
+        Parameters
+        ----------
+        tid: int
+          Train id.
+
+        Returns
+        -------
+        Dict[str, xarray]:
+          str
+            Key name.
+          xarray
+            Assembled data array.
+        """
         key_module_arrays = {}
 
         for modno, source in sorted(self.data.modno_to_source.items()):
@@ -836,6 +964,17 @@ class MPxDetectorTrainIterator:
         }
 
     def __iter__(self):
+        """
+        Iterate over train ids and yield assembled data dictionaries.
+
+        Yields
+        ------
+        Tuple[int, Dict[str, xarray]]:
+          int
+            train id.
+          Dict[str, xarray]
+            assembled {key: data array} dictionary.
+        """
         for tid in self.data.train_ids:
             tid = int(tid)  # Convert numpy int to regular Python int
             if self.require_all and self.data.data._check_data_missing(tid):
@@ -843,12 +982,12 @@ class MPxDetectorTrainIterator:
             yield tid, self._assemble_data(tid)
 
 
+@multimod_detectors
 class AGIPD1M(XtdfDetectorBase):
     """An interface to AGIPD-1M data.
 
     Parameters
     ----------
-
     data: DataCollection
       A data collection, e.g. from :func:`.RunDirectory`.
     modules: set of ints, optional
@@ -864,6 +1003,7 @@ class AGIPD1M(XtdfDetectorBase):
     module_shape = (512, 128)
 
 
+@multimod_detectors
 class AGIPD500K(XtdfDetectorBase):
     """An interface to AGIPD-500K data
 
@@ -875,12 +1015,12 @@ class AGIPD500K(XtdfDetectorBase):
     n_modules = 8
 
 
+@multimod_detectors
 class DSSC1M(XtdfDetectorBase):
     """An interface to DSSC-1M data.
 
     Parameters
     ----------
-
     data: DataCollection
       A data collection, e.g. from :func:`.RunDirectory`.
     modules: set of ints, optional
@@ -896,12 +1036,12 @@ class DSSC1M(XtdfDetectorBase):
     module_shape = (128, 512)
 
 
+@multimod_detectors
 class LPD1M(XtdfDetectorBase):
     """An interface to LPD-1M data.
 
     Parameters
     ----------
-
     data: DataCollection
       A data collection, e.g. from :func:`.RunDirectory`.
     modules: set of ints, optional
@@ -983,32 +1123,52 @@ class LPD1M(XtdfDetectorBase):
         )
 
 
+@multimod_detectors
 class JUNGFRAU(MultimodDetectorBase):
     """An interface to JUNGFRAU data.
 
+    JNGFR, JF1M, JF4M all store data in a "data" group, with trains along
+    the first and memory cells along the second dimension.
+    This allows only a set number of frames to be stored for each train.
+
     Parameters
     ----------
-
     data: DataCollection
       A data collection, e.g. from :func:`.RunDirectory`.
-    modules: set of ints, optional
-      Detector module numbers to use. By default, all available modules
-      are used.
     detector_name: str, optional
       Name of a detector, e.g. 'SPB_IRDA_JNGFR'. This is only needed
       if the dataset includes more than one JUNGFRAU detector.
+    modules: set of ints, optional
+      Detector module numbers to use. By default, all available modules
+      are used.
     min_modules: int
       Include trains where at least n modules have data. Default is 1.
+    n_modules: int
+      Number of detector modules in the experiment setup. Default is
+      None, in which case it will be estimated from the available data.
     """
     # We appear to have a few different formats for source names:
     # SPB_IRDA_JNGFR/DET/MODULE_1:daqOutput  (e.g. in p 2566, r 61)
     # SPB_IRDA_JF4M/DET/JNGFR03:daqOutput    (e.g. in p 2732, r 12)
     # FXE_XAD_JF1M/DET/RECEIVER-1
     _source_re = re.compile(
-        r'(?P<detname>.+_(JNGFR|JF[14]M))/DET/(MODULE_|RECEIVER-|JNGFR)(?P<modno>\d+)'
+        r'(?P<detname>.+_(JNGFR|JF[14]M))/DET/'
+        r'(MODULE_|RECEIVER-|JNGFR)(?P<modno>\d+)'
     )
     _main_data_key = 'data.adc'
     module_shape = (512, 1024)
+
+    def __init__(self, data: DataCollection, detector_name=None, modules=None,
+                 *, min_modules=1, n_modules=None):
+        super().__init__(data, detector_name, modules, min_modules=min_modules)
+
+        if n_modules is not None:
+            self.n_modules = int(n_modules)
+        else:
+            # For JUNGFRAU modules are indexed from 1
+            self.n_modules = max(modno for (_, modno) in self._source_matches(
+                data, self.detector_name
+            ))
 
     @staticmethod
     def _label_dims(arr):
@@ -1020,10 +1180,10 @@ class JUNGFRAU(MultimodDetectorBase):
 
         if ndim_pertrain == 4:
             arr = arr.rename({
-                'dim_0': 'pulse', 'dim_1': 'slow_scan', 'dim_2': 'fast_scan'
+                'dim_0': 'cell', 'dim_1': 'slow_scan', 'dim_2': 'fast_scan'
             })
         elif ndim_pertrain == 2:
-            arr = arr.rename({'dim_0': 'pulse'})
+            arr = arr.rename({'dim_0': 'cell'})
         return arr
 
     def get_array(self, key, *, fill_value=None, roi=(), astype=None):
@@ -1031,7 +1191,6 @@ class JUNGFRAU(MultimodDetectorBase):
 
         Parameters
         ----------
-
         key: str
           The data to get, e.g. 'data.adc' for pixel values.
         fill_value: int or float, optional
@@ -1059,7 +1218,6 @@ class JUNGFRAU(MultimodDetectorBase):
 
         Parameters
         ----------
-
         key: str
           The data to get, e.g. 'data.adc' for pixel values.
         fill_value: int or float, optional
@@ -1077,14 +1235,12 @@ class JUNGFRAU(MultimodDetectorBase):
 
         Parameters
         ----------
-
         require_all: bool
           If True (default), skip trains where any of the selected detector
           modules are missing data.
 
         Yields
         ------
-
         train_data: dict
           A dictionary mapping key names (e.g. 'data.adc') to labelled
           arrays.
@@ -1092,15 +1248,33 @@ class JUNGFRAU(MultimodDetectorBase):
         for tid, d in super().trains(require_all=require_all):
             yield tid, {k: self._label_dims(a) for (k, a) in d.items()}
 
+    def write_virtual_cxi(self, filename, fillvalues=None):
+        """Write a virtual CXI file to access the detector data.
+
+        The virtual datasets in the file provide a view of the detector
+        data as if it was a single huge array, but without copying the data.
+        Creating and using virtual datasets requires HDF5 1.10.
+
+        Parameters
+        ----------
+        filename: str
+          The file to be written. Will be overwritten if it already exists.
+        fillvalues: dict, optional
+            keys are datasets names (one of: data, gain, mask) and associated
+            fill value for missing data  (default is np.nan for float arrays and
+            zero for integer arrays)
+        """
+        JUNGFRAUCXIWriter(self).write(filename, fillvalues=fillvalues)
 
 def identify_multimod_detectors(
         data, detector_name=None, *, single=False, clses=None
 ):
     """Identify multi-module detectors in the data
 
-    Various detectors record data in a similar format, and we often want to
-    process whichever detector was used in a run. This tries to identify the
-    detector, so a user doesn't have to specify it manually.
+    Various detectors record data for individual X-ray pulses within
+    trains, and we often want to process whichever detector was used
+    in a run. This tries to identify the detector, so a user doesn't
+    have to specify it manually.
 
     If ``single=True``, this returns a tuple of (detector_name, access_class),
     throwing ``ValueError`` if there isn't exactly 1 detector found.
@@ -1109,7 +1283,7 @@ def identify_multimod_detectors(
     *clses* may be a list of acceptable detector classes to check.
     """
     if clses is None:
-        clses = [AGIPD1M, DSSC1M, LPD1M]
+        clses = multimod_detectors.list
 
     res = set()
     for cls in clses:

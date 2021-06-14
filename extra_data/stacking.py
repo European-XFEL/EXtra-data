@@ -40,7 +40,7 @@ def stack_data(train, data, axis=-3, xcept=()):
     if not devices:
         raise ValueError("No data after filtering by 'xcept' argument.")
 
-    dtypes, shapes = set(), set()
+    dtypes = set()
     ordered_arrays = []
     for device in sorted(devices, key=lambda d: list(map(int, re.findall(r'\d+', d)))):
         array = train[device][data]

@@ -96,7 +96,7 @@ required if streamed data shall be provided to OnDA.
 ``extra-data-make-virtual-cxi``
 --------------------------------
 
-Make a virtual CXI file to access AGIPD/LPD detector data from a specified run:
+Make a virtual CXI file to access AGIPD/LPD/JUNGFRAU detector data from a specified run:
 
 .. code-block:: shell
 
@@ -111,7 +111,11 @@ Make a virtual CXI file to access AGIPD/LPD detector data from a specified run:
 
 .. option:: --min-modules <number>
 
-   Include trains where at least N modules have data (default 9).
+   Include trains where at least N modules have data (default: half+1 of all detector modules).
+
+.. option:: --n-modules <number>
+
+   Number of detector modules in the experiment setup. Should be used only for JUNGFRAU data.
 
 .. option:: --fill-value <dataset> <value>
 

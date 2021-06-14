@@ -28,6 +28,7 @@ import signal
 import sys
 import tempfile
 import time
+from typing import Tuple
 from warnings import warn
 
 from .exceptions import (
@@ -247,7 +248,7 @@ class DataCollection:
             source,
             key,
             train_ids=self.train_ids,
-            files=self._source_index[source],
+            files=files,
             section=section,
             dtype=ds0.dtype,
             eshape=ds0.shape[1:],
@@ -997,7 +998,7 @@ class DataCollection:
         """
         return self._get_key_data(source, key)._data_chunks
 
-    def _find_data(self, source, train_id) -> (FileAccess, int):
+    def _find_data(self, source, train_id) -> Tuple[FileAccess, int]:
         for f in self._source_index[source]:
             ixs = (f.train_ids == train_id).nonzero()[0]
             if self.inc_suspect_trains and ixs.size > 0:

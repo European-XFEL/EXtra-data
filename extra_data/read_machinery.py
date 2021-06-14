@@ -155,7 +155,7 @@ def contiguous_regions(condition):
     a 2D array where the first column is the start index of the region and the
     second column is the end index."""
 
-    # Find the indicies of changes in "condition"
+    # Find the indices of changes in "condition"
     d = np.diff(condition)
     idx, = d.nonzero()
 
