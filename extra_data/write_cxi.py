@@ -26,6 +26,13 @@ class VirtualCXIWriterBase:
     detdata: extra_data.components.MultimodDetectorBase
       The detector data interface for the data to gather in this file.
     """
+
+    # 1 entry is an index along the first (time) dimension in the source files.
+    # XTDF detectors (AGIPD etc.) arrange pulses along this dimension, so each
+    # entry is one frame & one memory cell. JUNGFRAU in burst mode makes one
+    # entry with a separate dimension for several pulses, so overrides this.
+    cells_per_entry = 1
+
     def __init__(self, detdata):
         self.detdata = detdata
         self.group_label, self.image_label = detdata._main_data_key.split('.')
@@ -41,6 +48,10 @@ class VirtualCXIWriterBase:
 
         # Cumulative sum gives the end of each train, subtract to get start
         self.train_id_to_ix = frame_counts.cumsum() - frame_counts
+
+        # For AGIPD, DSSC & LPD detectors modules are numbered from 0.
+        # Overridden for JUNGFRAU to number from 1.
+        self.modulenos = list(range(self.nmodules))
 
     @property
     def nmodules(self):
@@ -334,9 +345,6 @@ class XtdfCXIWriter(VirtualCXIWriterBase):
         self.cell_id_label = 'cellId'
 
         super().__init__(detdata)
-
-        # For AGIPD, DSSC & LPD detectors modules are numbered from 0
-        self.modulenos = list(range(self.nmodules))
 
     def collect_data(self):
         """

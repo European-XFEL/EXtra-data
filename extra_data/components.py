@@ -93,6 +93,7 @@ class MultimodDetectorBase:
     # Override in subclass
     _main_data_key = ''  # Key to use for checking data counts match
     module_shape = (0, 0)
+    n_modules = 0
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
                  *, min_modules=1):
