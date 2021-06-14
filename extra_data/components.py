@@ -293,10 +293,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
     _main_data_key = 'image.data'
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
-                 *, min_modules=1, n_modules=None):
-        if n_modules is not None:
-            raise NotImplementedError(
-                '--n-modules option is not available for AGIPD/DSSC/LPD data')
+                 *, min_modules=1):
         super().__init__(data, detector_name, modules, min_modules=min_modules)
 
     @staticmethod

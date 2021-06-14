@@ -102,12 +102,17 @@ def main(argv=None):
 
     _, det_class = identify_multimod_detectors(run, single=True)
 
+    n_modules = det_class.n_modules
+    kwargs = {}
+    if n_modules == 0:
+        n_modules = args.n_modules
+        kwargs['n_modules'] = n_modules
+
     min_modules = args.min_modules
     if min_modules is None:
-        det_n_modules = getattr(det_class, 'n_modules', 0)
-        min_modules = (det_n_modules // 2) + 1
+        min_modules = 1 if (n_modules is None) else (n_modules // 2) + 1
 
-    det = det_class(run, min_modules=min_modules, n_modules=args.n_modules)
+    det = det_class(run, min_modules=min_modules, **kwargs)
     det.write_virtual_cxi(out_file, fill_values)
 
 if __name__ == '__main__':
