@@ -79,10 +79,10 @@ class VirtualCXIWriterBase:
 
         pulse_key = self.group_label + '.' + self.pulse_id_label
         for source, modno in self.detdata.source_to_modno.items():
-            module_id = self._get_module_index(modno)
+            module_ix = self._get_module_index(modno)
             for chunk in self.data._find_data_chunks(source, pulse_key):
                 chunk_data = chunk.dataset
-                self._map_chunk(chunk, chunk_data, pulse_ids, module_id)
+                self._map_chunk(chunk, chunk_data, pulse_ids, module_ix)
 
         # Sanity checks on pulse IDs
         pulse_ids_min = pulse_ids.min(axis=1)
@@ -195,10 +195,10 @@ class VirtualCXIWriterBase:
 
             for source, modno in self.detdata.source_to_modno.items():
                 print(f" ### Source: {source}, ModNo: {modno}, Key: {key}")
-                module_id = self._get_module_index(modno)
+                module_ix = self._get_module_index(modno)
                 for chunk in self.data._find_data_chunks(source, key):
                     vsrc = h5py.VirtualSource(chunk.dataset)
-                    self._map_chunk(chunk, vsrc, layout, module_id, have_data)
+                    self._map_chunk(chunk, vsrc, layout, module_ix, have_data)
 
             filled_pct = 100 * have_data.sum() / have_data.size
             log.info(f"Assembled {len(layout.sources):d} chunks for {key:s}, "
