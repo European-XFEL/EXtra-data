@@ -156,12 +156,14 @@ class MultimodDetectorBase:
             )
         return detector_names.pop()
 
-    def _identify_sources(self, data, detector_name, modules=None):
-        source_to_modno = {}
+    def _source_matches(self, data, detector_name):
         for source in data.instrument_sources:
             m = self._source_re.match(source)
             if m and m.group('detname') == detector_name:
-                source_to_modno[source] = int(m.group('modno'))
+                yield source, int(m.group('modno'))
+
+    def _identify_sources(self, data, detector_name, modules=None):
+        source_to_modno = dict(self._source_matches(data, detector_name))
 
         if modules is not None:
             source_to_modno = {s: n for (s, n) in source_to_modno.items()
@@ -1164,7 +1166,9 @@ class JUNGFRAU(MultimodDetectorBase):
             self.n_modules = int(n_modules)
         else:
             # For JUNGFRAU modules are indexed from 1
-            self.n_modules = max(self.source_to_modno.values())
+            self.n_modules = max(modno for (_, modno) in self._source_matches(
+                data, self.detector_name
+            ))
 
     @staticmethod
     def _label_dims(arr):
