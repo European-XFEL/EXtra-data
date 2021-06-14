@@ -11,6 +11,15 @@ from .reader import DataCollection, by_id, by_index
 from .writer import FileWriter
 from .write_cxi import XtdfCXIWriter, JUNGFRAUCXIWriter
 
+__all__ = [
+    'AGIPD1M',
+    'AGIPD500K',
+    'DSSC1M',
+    'LPD1M',
+    'JUNGFRAU',
+    'identify_multimod_detectors',
+]
+
 log = logging.getLogger(__name__)
 
 MAX_PULSES = 2700
