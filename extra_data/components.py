@@ -153,8 +153,6 @@ class MultimodDetectorBase:
             if m and m.group('detname') == detector_name:
                 source_to_modno[source] = int(m.group('modno'))
 
-        self.max_module = max(source_to_modno.values())
-
         if modules is not None:
             source_to_modno = {s: n for (s, n) in source_to_modno.items()
                                if n in modules}
@@ -1159,7 +1157,7 @@ class JUNGFRAU(MultimodDetectorBase):
             self.n_modules = int(n_modules)
         else:
             # For JUNGFRAU modules are indexed from 1
-            self.n_modules = self.max_module
+            self.n_modules = max(self.source_to_modno.values())
 
     @staticmethod
     def _label_dims(arr):
