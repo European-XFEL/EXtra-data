@@ -116,6 +116,8 @@ class KeyData:
         This returns an iterator yielding new :class:`KeyData` objects.
         The parts will have similar sizes, e.g. splitting 11 trains
         with ``trains_per_part=8`` will produce 5 & 6 trains, not 8 & 3.
+        Selected trains count even if they are missing data, so different
+        keys from the same run can be split into matching chunks.
 
         Parameters
         ----------
