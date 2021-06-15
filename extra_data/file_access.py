@@ -70,7 +70,7 @@ class OpenFilesLimiter(object):
         will be closed.
         
         For use of the file cache, FileAccess should use `touch(filename)` every time 
-        it provides the underying instance of `h5py.File` for reading.
+        it provides the underlying instance of `h5py.File` for reading.
         """
         if filename in self._cache:
             self._cache.move_to_end(filename)

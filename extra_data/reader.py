@@ -28,6 +28,7 @@ import signal
 import sys
 import tempfile
 import time
+from typing import Tuple
 from warnings import warn
 
 from .exceptions import (
@@ -40,6 +41,7 @@ from .read_machinery import (
     by_id,
     by_index,
     select_train_ids,
+    split_trains,
     union_selections,
     find_proposal,
 )
@@ -247,7 +249,7 @@ class DataCollection:
             source,
             key,
             train_ids=self.train_ids,
-            files=self._source_index[source],
+            files=files,
             section=section,
             dtype=ds0.dtype,
             eshape=ds0.shape[1:],
@@ -960,6 +962,29 @@ class DataCollection:
             is_single_run=self.is_single_run,
         )
 
+    def split_trains(self, parts=None, trains_per_part=None):
+        """Split this data into chunks with a fraction of the trains each.
+
+        Either *parts* or *trains_per_part* must be specified.
+
+        This returns an iterator yielding new :class:`DataCollection` objects.
+        The parts will have similar sizes, e.g. splitting 11 trains
+        with ``trains_per_part=8`` will produce 5 & 6 trains, not 8 & 3.
+
+        Parameters
+        ----------
+
+        parts: int
+            How many parts to split the data into. If trains_per_part is also
+            specified, this is a minimum, and it may make more parts.
+            It may also make fewer if there are fewer trains in the data.
+        trains_per_part: int
+            A maximum number of trains in each part. Parts will often have
+            fewer trains than this.
+        """
+        for s in split_trains(len(self.train_ids), parts, trains_per_part):
+            yield self.select_trains(s)
+
     def _check_source_conflicts(self):
         """Check for data with the same source and train ID in different files.
         """
@@ -997,7 +1022,7 @@ class DataCollection:
         """
         return self._get_key_data(source, key)._data_chunks
 
-    def _find_data(self, source, train_id) -> (FileAccess, int):
+    def _find_data(self, source, train_id) -> Tuple[FileAccess, int]:
         for f in self._source_index[source]:
             ixs = (f.train_ids == train_id).nonzero()[0]
             if self.inc_suspect_trains and ixs.size > 0:

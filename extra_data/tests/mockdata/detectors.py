@@ -71,7 +71,7 @@ class DetectorModule:
         return self._frames_per_train
 
     def write_instrument(self, f):
-        """Write the INSTRUMENT data, and the relevants parts of INDEX"""
+        """Write the INSTRUMENT data, and the relevant parts of INDEX"""
         trainids = np.arange(self.firsttrain, self.firsttrain + self.ntrains)
 
         ntrains_pad = self.ntrains

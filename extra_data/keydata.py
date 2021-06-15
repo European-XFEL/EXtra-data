@@ -1,10 +1,12 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 
 from .exceptions import TrainIDError
 from .file_access import FileAccess
-from .read_machinery import contiguous_regions, DataChunk, select_train_ids
+from .read_machinery import (
+    contiguous_regions, DataChunk, select_train_ids, split_trains,
+)
 
 class KeyData:
     """Data for one key in one source
@@ -114,6 +116,31 @@ class KeyData:
         counts = self.data_counts(labelled=False)
         tids = np.array(self.train_ids)[counts > 0]
         return self._only_tids(list(tids))
+
+    def split_trains(self, parts=None, trains_per_part=None):
+        """Split this data into chunks with a fraction of the trains each.
+
+        Either *parts* or *trains_per_part* must be specified.
+
+        This returns an iterator yielding new :class:`KeyData` objects.
+        The parts will have similar sizes, e.g. splitting 11 trains
+        with ``trains_per_part=8`` will produce 5 & 6 trains, not 8 & 3.
+        Selected trains count even if they are missing data, so different
+        keys from the same run can be split into matching chunks.
+
+        Parameters
+        ----------
+
+        parts: int
+            How many parts to split the data into. If trains_per_part is also
+            specified, this is a minimum, and it may make more parts.
+            It may also make fewer if there are fewer trains in the data.
+        trains_per_part: int
+            A maximum number of trains in each part. Parts will often have
+            fewer trains than this.
+        """
+        for s in split_trains(len(self.train_ids), parts, trains_per_part):
+            yield self.select_trains(s)
 
     def data_counts(self, labelled=True):
         """Get a count of data entries in each train.
@@ -299,7 +326,7 @@ class KeyData:
 
     # Getting data by train: --------------------------------------------------
 
-    def _find_tid(self, tid) -> (Optional[FileAccess], int):
+    def _find_tid(self, tid) -> Tuple[Optional[FileAccess], int]:
         for fa in self.files:
             matches = (fa.train_ids == tid).nonzero()[0]
             if self.inc_suspect_trains and matches.size > 0:

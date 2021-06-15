@@ -590,6 +590,19 @@ def test_select_trains(mock_fxe_raw_run):
         run.select_trains(by_index[[480]])
 
 
+def test_split_trains(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    assert len(run.train_ids) == 480
+
+    chunks = list(run.split_trains(3))
+    assert len(chunks) == 3
+    assert {len(c.train_ids) for c in chunks} == {160}
+
+    chunks = list(run.split_trains(4, trains_per_part=100))
+    assert len(chunks) == 5
+    assert {len(c.train_ids) for c in chunks} == {96}
+
+
 def test_train_timestamps(mock_scs_run):
     run = RunDirectory(mock_scs_run)
 

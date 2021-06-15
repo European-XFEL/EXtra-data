@@ -7,6 +7,7 @@ class JUNGFRAUModule(DeviceBase):
         ('adc', 'u2', (16, 512, 1024)),
         ('frameNumber', 'u8', (16,)),
         ('gain', 'u1', (16, 512, 1024)),
+        ('mask', 'u2', (16, 512, 1024)),
         ('memoryCell', 'u1', (16,)),
         ('timestamp', 'f8', (16,)),
     ]

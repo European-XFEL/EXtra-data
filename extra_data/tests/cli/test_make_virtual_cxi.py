@@ -18,3 +18,8 @@ def test_make_virtual_cxi_runno(mock_spb_proc_run, tmpdir):
     # Pass proposal directory and run number
     main([str(tmpdir), '238', '-o', output])
     assert_isfile(output)
+
+def test_make_virtual_cxi_jungfrau(mock_jungfrau_run, tmpdir):
+    output = osp.join(str(tmpdir), 'test.cxi')
+    main([mock_jungfrau_run, '-o', output])
+    assert_isfile(output)
