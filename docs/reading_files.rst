@@ -17,8 +17,6 @@ run number to look up the standard data paths on the Maxwell cluster.
 
 .. autofunction:: open_run
 
-   .. versionadded:: 0.5
-
 You can also open a single file. The methods described below all work for either
 a run or a single file.
 
@@ -133,6 +131,10 @@ below, e.g.::
 
    .. automethod:: select_trains
 
+   .. automethod:: split_trains
+
+      .. versionadded:: 1.7
+
 The run or file object (a :class:`DataCollection`) also has methods to load
 data by sources and keys. :meth:`get_array`, :meth:`get_dask_array` and
 :meth:`get_series` are directly equivalent to the options above, but other
@@ -158,8 +160,6 @@ methods offer extra capabilities.
           Examples using xarray & pandas with EuXFEL data
 
    .. automethod:: get_virtual_dataset
-
-      .. versionadded:: 0.5
 
       .. seealso::
         :doc:`parallel_example`
@@ -230,6 +230,10 @@ data, so you use them like this::
    .. automethod:: deselect
 
    .. automethod:: select_trains
+
+   .. automethod:: split_trains
+
+      .. versionadded:: 1.7
 
    .. automethod:: union
 
