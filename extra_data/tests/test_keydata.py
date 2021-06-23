@@ -137,7 +137,13 @@ def test_drop_missing(mock_sa3_control_data):
     assert len(beamview.train_ids) == 500
     a1 = beamview.ndarray()
     assert a1.shape == (250, 2)
+    frame_counts = beamview.data_counts(labelled=False)
+    assert frame_counts.shape == (500,)
+    assert frame_counts.min() == 0
 
     beamview_w_data = beamview.drop_missing()
     assert len(beamview_w_data.train_ids) == 250
     np.testing.assert_array_equal(beamview_w_data.ndarray(), a1)
+    frame_counts = beamview_w_data.data_counts(labelled=False)
+    assert frame_counts.shape == (250,)
+    assert frame_counts.min() == 1
