@@ -212,7 +212,11 @@ class VirtualCXIWriterBase:
                     self._map_chunk(chunk, vsrc, layout, module_ix, have_data)
 
             filled_pct = 100 * have_data.sum() / have_data.size
-            log.info(f"Assembled {len(layout.sources):d} chunks for {key:s}, "
+            if hasattr(layout, 'sources'):
+                n_mappings = len(layout.sources)  # h5py < 3.3
+            else:
+                n_mappings = layout.dcpl.get_virtual_count()  # h5py >= 3.3
+            log.info(f"Assembled {n_mappings:d} chunks for {key:s}, "
                      f"filling {filled_pct:.2f}% of the hyperslab")
 
         return layouts
