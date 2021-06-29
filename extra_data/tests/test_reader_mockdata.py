@@ -255,27 +255,28 @@ def test_file_get_series_control(mock_fxe_control_data):
         assert s.index[0] == 10000
 
 
-def test_file_get_series_instrument(mock_agipd_data):
-    with H5File(mock_agipd_data) as f:
+def test_file_get_series_instrument(mock_spb_proc_run):
+    agipd_file = os.path.join(mock_spb_proc_run, 'CORR-R0238-AGIPD07-S00000.h5')
+    with H5File(agipd_file) as f:
         s = f.get_series('SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'header.linkId')
         assert isinstance(s, pd.Series)
-        assert len(s) == 250
+        assert len(s) == 64
         assert s.index[0] == 10000
 
         # Multiple readings per train
-        s2 = f.get_series('SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.status')
+        s2 = f.get_series('SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId')
         assert isinstance(s2, pd.Series)
-        assert isinstance(s2.index, pd.MultiIndex)
-        assert len(s2) == 16000
+        assert not s2.index.is_unique
+        assert len(s2) == 64 * 64
         assert len(s2.loc[10000:10004]) == 5 * 64
 
         sel = f.select_trains(by_index[5:10])
-        s3 = sel.get_series('SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.status')
+        s3 = sel.get_series('SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId')
         assert isinstance(s3, pd.Series)
-        assert isinstance(s3.index, pd.MultiIndex)
+        assert not s3.index.is_unique
         assert len(s3) == 5 * 64
         np.testing.assert_array_equal(
-            s3.index.get_level_values(0), np.arange(10005, 10010).repeat(64)
+            s3.index.values, np.arange(10005, 10010).repeat(64)
         )
 
 

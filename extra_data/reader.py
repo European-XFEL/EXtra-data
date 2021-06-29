@@ -453,76 +453,11 @@ class DataCollection:
         return self._get_key_data(source, key).data_counts()
 
     def get_series(self, source, key):
-        """Return a pandas Series for a particular data field.
+        """Return a pandas Series for a 1D data field defined by source & key.
 
-        ::
-
-            s = run.get_series("SA1_XTD2_XGM/XGM/DOOCS", "beamPosition.ixPos")
-
-        This only works for 1-dimensional data.
-
-        Parameters
-        ----------
-
-        source: str
-            Device name with optional output channel, e.g.
-            "SA1_XTD2_XGM/DOOCS/MAIN" or "SPB_DET_AGIPD1M-1/DET/7CH0:xtdf"
-        key: str
-            Key of parameter within that device, e.g. "beamPosition.iyPos.value"
-            or "header.linkId". The data must be 1D in the file.
+        See :meth:`.KeyData.series` for details.
         """
-        import pandas as pd
-
-        self._check_field(source, key)
-        name = source + '/' + key
-        if name.endswith('.value'):
-            name = name[:-6]
-
-        seq_series = []
-
-        if source in self.instrument_sources:
-            data_path = "/INSTRUMENT/{}/{}".format(source, key.replace('.', '/'))
-            for f in self._source_index[source]:
-                group = key.partition('.')[0]
-                firsts, counts = f.get_index(source, group)
-                trainids = self._expand_trainids(counts, f.train_ids)
-
-                index = pd.Index(trainids, name='trainId')
-                data = f.file[data_path][:]
-                if not index.is_unique:
-                    pulse_id = f.file['/INSTRUMENT/{}/{}/pulseId'.format(source, group)]
-                    pulse_id = pulse_id[: len(index), 0]
-                    index = pd.MultiIndex.from_arrays(
-                        [trainids, pulse_id], names=['trainId', 'pulseId']
-                    )
-                    # Does pulse-oriented data always have an extra dimension?
-                    assert data.shape[1] == 1
-                    data = data[:, 0]
-
-                    warn(
-                        "Getting a series with pulseId labels is deprecated, "
-                        "as it only works in very specific cases. "
-                        "If you still need this, please contact "
-                        "da-support@xfel.eu to discuss it.",
-                        stacklevel=2
-                    )
-                data = data[: len(index)]
-
-                seq_series.append(pd.Series(data, name=name, index=index))
-        else:
-            return self._get_key_data(source, key).series()
-
-        ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
-
-        # Select out only the train IDs of interest
-        if isinstance(ser.index, pd.MultiIndex):
-            train_ids = ser.index.levels[0].intersection(self.train_ids)
-            # A numpy array works for selecting, but a pandas index doesn't
-            train_ids = np.asarray(train_ids)
-        else:
-            train_ids = ser.index.intersection(self.train_ids)
-
-        return ser.loc[train_ids]
+        return self._get_key_data(source, key).series()
 
     def get_dataframe(self, fields=None, *, timestamps=False):
         """Return a pandas dataframe for given data fields.
