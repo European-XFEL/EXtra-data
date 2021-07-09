@@ -10,6 +10,7 @@ import numpy as np
 import os
 import os.path as osp
 import resource
+from warnings import warn
 from weakref import WeakValueDictionary
 
 from .exceptions import SourceNameError
@@ -139,6 +140,24 @@ class FileAccess:
             else:
                 self.validity_flag = self.file['INDEX/flag'][:len(self.train_ids)].astype(bool)
 
+                if self.format_version == '1.1':
+                    # File format version 1.1 changed the semantics of
+                    # INDEX/flag from a boolean flag to an index, with
+                    # the time server device being hardcoded to occur
+                    # at index 0. Inverting the flag after the boolean
+                    # cast above restores compatibility with format
+                    # version 1.0, with any "invalid" train having an
+                    # index >= 1, thus being casted to True and inverted
+                    # to False. Format 1.2 restored the 1.0 semantics.
+                    np.logical_not(self.validity_flag, out=self.validity_flag)
+
+                    warn(
+                        'Train validation is not fully supported for data '
+                        'format version 1.1. If you have issues accessing '
+                        'these files, please contact da-support@xfel.eu.',
+                        stacklevel=2
+                    )
+
         if self._file is not None:
             # Store the stat of the file as it was when we read the metadata.
             # This is used by the run files map.
@@ -214,6 +233,10 @@ class FileAccess:
                 # TODO: Do something with groups?
             elif category == 'CONTROL':
                 control_sources.add(h5_source)
+            elif category == 'Karabo_TimerServer':
+                # Ignore virtual data source used only in file format
+                # version 1.1 / pclayer-1.10.3-2.10.5.
+                pass
             else:
                 raise ValueError("Unknown data category %r" % category)
 
