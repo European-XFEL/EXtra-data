@@ -383,6 +383,8 @@ class DataCollection:
 
             for key in self.keys_for_source(source):
                 path = '/CONTROL/{}/{}'.format(source, key.replace('.', '/'))
+                if file.file[path].size == 0:
+                    continue
                 source_data[key] = file.file[path][pos]
 
         for source in self.instrument_sources:
@@ -401,6 +403,8 @@ class DataCollection:
                     continue
 
                 path = '/INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
+                if file.file[path].size == 0:
+                    continue
                 if count == 1:
                     source_data[key] = file.file[path][first]
                 else:
@@ -483,6 +487,8 @@ class DataCollection:
         if source in self.instrument_sources:
             data_path = "/INSTRUMENT/{}/{}".format(source, key.replace('.', '/'))
             for f in self._source_index[source]:
+                if f.file[data_path].size == 0:
+                    continue
                 group = key.partition('.')[0]
                 firsts, counts = f.get_index(source, group)
                 trainids = self._expand_trainids(counts, f.train_ids)
@@ -512,7 +518,10 @@ class DataCollection:
         else:
             return self._get_key_data(source, key).series()
 
-        ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
+        if not seq_series:
+            ser = pd.Series([], dtype=self._get_key_data(source, key).dtype)
+        else:
+            ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
 
         # Select out only the train IDs of interest
         if isinstance(ser.index, pd.MultiIndex):
@@ -842,34 +851,23 @@ class DataCollection:
             train_ids = self.train_ids
 
             for source, keys in selection.items():
-                if source in self.instrument_sources:
-                    # For INSTRUMENT sources, the INDEX is saved by
-                    # key group, which is the first hash component. In
-                    # many cases this is 'data', but not always.
-                    if keys is None:
-                        # All keys are selected.
-                        keys = self.keys_for_source(source)
+                if keys is None:
+                    keys = self.keys_for_source(source)
 
-                    groups = {key.partition('.')[0] for key in keys}
-                else:
-                    # CONTROL data has no key group.
-                    groups = ['']
-
-                for group in groups:
-                    # Empty list would be converted to np.float64 array.
-                    source_tids = np.empty(0, dtype=np.uint64)
-
-                    for f in self._source_index[source]:
-                        valid = True if self.inc_suspect_trains else f.validity_flag
-                        # Add the trains with data in each file.
-                        _, counts = f.get_index(source, group)
-                        source_tids = np.union1d(
-                            f.train_ids[valid & (counts > 0)], source_tids
-                        )
+                for key in keys:
+                    counts = self._get_key_data(source, key).data_counts()
+                    key_tids = counts[counts>0].index.values
 
                     # Remove any trains previously selected, for which this
                     # selected source and key group has no data.
-                    train_ids = np.intersect1d(train_ids, source_tids)
+                    train_ids = np.intersect1d(train_ids, key_tids)
+
+                    if train_ids.size == 0:
+                        return DataCollection(
+                            [], selection=selection, train_ids=[],
+                            inc_suspect_trains=self.inc_suspect_trains,
+                            is_single_run=self.is_single_run
+                        )
 
             # Filtering may have eliminated previously selected files.
             files = [f for f in files
@@ -1392,7 +1390,7 @@ class TrainIterator:
 
             for key in self.data.keys_for_source(source):
                 _, pos, ds = self._find_data(source, key, tid)
-                if ds is None:
+                if ds is None or ds.size == 0:
                     continue
                 self._set_result(res, source, key, ds[pos])
 
@@ -1401,7 +1399,7 @@ class TrainIterator:
                              {'source': source, 'timestamp.tid': tid})
             for key in self.data.keys_for_source(source):
                 file, pos, ds = self._find_data(source, key, tid)
-                if ds is None:
+                if ds is None or ds.size == 0:
                     continue
                 group = key.partition('.')[0]
                 firsts, counts = file.get_index(source, group)

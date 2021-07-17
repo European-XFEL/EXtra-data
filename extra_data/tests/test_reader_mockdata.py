@@ -817,3 +817,37 @@ def test_run_metadata(mock_spb_raw_run):
             'sample', 'sequenceNumber',
         }
         assert isinstance(md['creationDate'], str)
+
+
+def test_empty_dataset(mock_empty_dataset_file):
+
+    run = H5File(mock_empty_dataset_file)
+    device, key = 'SA1_XTD2_XGM/DOOCS/MAIN:output', 'data.intensityTD'
+
+    assert not run.get_data_counts(device, key).any()
+    assert run.get_array(device, key).size == 0
+    assert run.get_dask_array(device, key).size == 0
+
+    sel = run.select(device, key)
+    _, data = sel.train_from_index(0)
+    assert list(data[device].keys()) == ['metadata']
+
+    for _, data in sel.trains(require_all=True):
+        assert key not in data[device]
+        break
+
+    _, data = sel.train_from_index(0)
+    assert key not in data[device]
+
+    s = run.get_series(device, 'data.trainId')
+    assert isinstance(s, pd.Series)
+    assert len(s) == 0
+
+    df = run.get_dataframe(fields=[("*_XGM/*", "*.i[xy]Pos*")])
+    assert len(df.columns) == 4
+    assert "SA1_XTD2_XGM/DOOCS/MAIN/beamPosition.ixPos" in df.columns
+
+    dc = run.select(device, require_all=True)
+    assert dc.selection == {device: None}
+    assert dc.all_sources == frozenset()
+    assert dc.train_ids == []

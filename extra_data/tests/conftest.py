@@ -122,3 +122,18 @@ def mock_empty_file():
         path = osp.join(td, 'RAW-R0450-DA01-S00002.h5')
         make_examples.make_sa3_da_file(path, ntrains=0)
         yield path
+
+
+@pytest.fixture(scope='function')
+def mock_empty_dataset_file(format_version):
+    with TemporaryDirectory() as td:
+        path = osp.join(td, 'RAW-R0999-DA10-S00001.h5')
+        make_examples.make_fxe_da_file(path, format_version=format_version)
+
+        with h5py.File(path, 'a') as f:
+            f['INSTRUMENT/SA1_XTD2_XGM/DOOCS/MAIN:output/data/intensityTD'].resize(0, axis=0)
+            f['INSTRUMENT/SA1_XTD2_XGM/DOOCS/MAIN:output/data/trainId'].resize(0, axis=0)
+            f['CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/pulseEnergy/photonFlux/value'].resize(0, axis=0)
+            f['CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/beamPosition/ixPos/value'].resize(0, axis=0)
+
+        yield path

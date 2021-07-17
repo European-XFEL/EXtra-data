@@ -30,6 +30,12 @@ class KeyData:
     def _find_chunks(self):
         """Find contiguous chunks of data for this key, in any order."""
         for file in self.files:
+            if file.file[self.hdf5_data_path].size == 0:
+                # this file does not contain data for this key. We skip the files here
+                # for cases where index claims there's data for this key, but the
+                # dataset is empty.
+                continue
+
             firsts, counts = file.get_index(self.source, self._key_group)
 
             # Of trains in this file, which are in selection
@@ -143,7 +149,9 @@ class KeyData:
         seq_series = []
 
         for f in self.files:
-            if self.section == 'CONTROL':
+            if f.file[self.hdf5_data_path].size == 0:
+                counts = np.zeros_like(f.train_ids, dtype=np.uint64)
+            elif self.section == 'CONTROL':
                 counts = np.ones(len(f.train_ids), dtype=np.uint64)
             else:
                 _, counts = f.get_index(self.source, self._key_group)
@@ -195,6 +203,8 @@ class KeyData:
             np.repeat(chunk.train_ids, chunk.counts.astype(np.intp))
             for chunk in self._data_chunks
         ]
+        if not chunks_trainids:
+            return np.array([], dtype=np.uint64)
         return np.concatenate(chunks_trainids)
 
     def xarray(self, extra_dims=None, roi=(), name=None):
@@ -306,6 +316,9 @@ class KeyData:
                 )[chunk.slice]
             )
 
+        if not chunks_darrs:
+            chunks_darrs = [da.empty(shape=(0,) + self.entry_shape,
+                                     dtype=self.dtype, chunks=self.shape)]
         dask_arr = da.concatenate(chunks_darrs, axis=0)
 
         if labelled:
@@ -343,8 +356,8 @@ class KeyData:
             raise TrainIDError(tid)
 
         fa, ix = self._find_tid(tid)
-        if fa is None:
-            return np.empty((0,) + self.entry_shape, dtype=self.dtype)
+        if fa is None or fa.file[self.hdf5_data_path].size == 0:
+            return tid, np.empty((0,) + self.entry_shape, dtype=self.dtype)
 
         firsts, counts = fa.get_index(self.source, self._key_group)
         first, count = firsts[ix], counts[ix]
@@ -368,6 +381,8 @@ class KeyData:
         for chunk in self._data_chunks:
             start = chunk.first
             ds = chunk.dataset
+            if ds.size == 0:
+                continue
             for tid, count in zip(chunk.train_ids, chunk.counts):
                 if count > 1:
                     yield tid, ds[start: start+count]
