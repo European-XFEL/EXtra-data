@@ -10,6 +10,7 @@ program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 
 from psutil import net_if_addrs
 from socket import AF_INET
+from warnings import warn
 
 import h5py
 import numpy as np
@@ -118,7 +119,12 @@ class QuickView:
 
 
 def hdf5_paths(ds, indent=0, maxlen=100):
-    """Visit and print name of all element in HDF5 file (from S Hauf)"""
+    """Deprecated: Visit and print name of all element in HDF5 file (from S Hauf)"""
+    warn(
+        "hdf5_paths is deprecated and likely to be removed. Try our h5glance "
+        "package for a similar view of HDF5 files. If this is a problem, "
+        "please contact da-support@xfel.eu .", stacklevel=2,
+    )
 
     for k in list(ds.keys())[:maxlen]:
         print(" " * indent + k)
@@ -129,14 +135,20 @@ def hdf5_paths(ds, indent=0, maxlen=100):
 
 
 def numpy_to_cbf(np_array, index=0, header=None):
-    """Given a 3D numpy array, convert it to a CBF data object"""
+    """Deprecated: Given a 3D numpy array, convert it to a CBF data object"""
+    warn(
+        "The numpy_to_cbf and hdf5_to_cbf functions are deprecated and likely "
+        "to be removed. If you are using either of them, please contact "
+        "da-support@xfel.eu .", stacklevel=2,
+    )
+
     import fabio.cbfimage
     img_reduced = np_array[index, ...]
     return fabio.cbfimage.cbfimage(header=header or {}, data=img_reduced)
 
 
 def hdf5_to_cbf(in_h5file, cbf_filename, index, header=None):
-    """Conversion from HDF5 file to cbf binary image file"""
+    """Deprecated: Conversion from HDF5 file to cbf binary image file"""
     tmpf = h5py.File(in_h5file, 'r')
     paths = list(tmpf["METADATA/dataSourceId"])
     image_path = [p for p in paths if p.endswith(b"image")][0]

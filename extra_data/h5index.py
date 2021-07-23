@@ -1,7 +1,13 @@
 import csv
 import h5py
 import sys
+import warnings
 
+warnings.warn(
+    "extra_data.h5index is deprecated and likely to be removed. "
+    "If you are using it, please contact da-support@xfel.eu.",
+    stacklevel=2,
+)
 
 def hdf5_datasets(grp):
     """Print CSV data of all datasets in an HDF5 file.
