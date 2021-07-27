@@ -111,7 +111,7 @@ class KeyData:
             inc_suspect_trains=self.inc_suspect_trains,
         )
 
-    def drop_missing(self):
+    def drop_empty_trains(self):
         """Select only trains with data as a new :class:`KeyData` object."""
         counts = self.data_counts(labelled=False)
         tids = np.array(self.train_ids)[counts > 0]

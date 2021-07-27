@@ -130,7 +130,7 @@ def test_select_by(mock_spb_raw_run):
     assert subrun.keys_for_source(am0.source) == {am0.key}
 
 
-def test_drop_missing(mock_sa3_control_data):
+def test_drop_empty_trains(mock_sa3_control_data):
     f = H5File(mock_sa3_control_data)
     beamview = f['SA3_XTD10_IMGFEL/CAM/BEAMVIEW2:daqOutput', 'data.image.dims']
 
@@ -141,7 +141,7 @@ def test_drop_missing(mock_sa3_control_data):
     assert frame_counts.shape == (500,)
     assert frame_counts.min() == 0
 
-    beamview_w_data = beamview.drop_missing()
+    beamview_w_data = beamview.drop_empty_trains()
     assert len(beamview_w_data.train_ids) == 250
     np.testing.assert_array_equal(beamview_w_data.ndarray(), a1)
     frame_counts = beamview_w_data.data_counts(labelled=False)
