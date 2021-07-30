@@ -130,9 +130,13 @@ below, e.g.::
          An example using Dask with EuXFEL data
 
    .. automethod:: select_trains
-
+   
    .. automethod:: split_trains
 
+      .. versionadded:: 1.7
+      
+   .. automethod:: drop_missing
+   
       .. versionadded:: 1.7
 
 The run or file object (a :class:`DataCollection`) also has methods to load

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from extra_data import RunDirectory
+from extra_data import RunDirectory, H5File
 from extra_data.exceptions import TrainIDError
 
 def test_get_keydata(mock_spb_raw_run):
@@ -128,3 +128,22 @@ def test_select_by(mock_spb_raw_run):
     subrun = run.select(am0)
     assert subrun.all_sources == {am0.source}
     assert subrun.keys_for_source(am0.source) == {am0.key}
+
+
+def test_drop_empty_trains(mock_sa3_control_data):
+    f = H5File(mock_sa3_control_data)
+    beamview = f['SA3_XTD10_IMGFEL/CAM/BEAMVIEW2:daqOutput', 'data.image.dims']
+
+    assert len(beamview.train_ids) == 500
+    a1 = beamview.ndarray()
+    assert a1.shape == (250, 2)
+    frame_counts = beamview.data_counts(labelled=False)
+    assert frame_counts.shape == (500,)
+    assert frame_counts.min() == 0
+
+    beamview_w_data = beamview.drop_empty_trains()
+    assert len(beamview_w_data.train_ids) == 250
+    np.testing.assert_array_equal(beamview_w_data.ndarray(), a1)
+    frame_counts = beamview_w_data.data_counts(labelled=False)
+    assert frame_counts.shape == (250,)
+    assert frame_counts.min() == 1
