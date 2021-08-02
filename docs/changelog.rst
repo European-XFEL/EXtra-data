@@ -1,6 +1,30 @@
 Release Notes
 =============
 
+1.7
+---
+
+- New methods to split data into chunks with a similar number of trains in
+  each: :meth:`.DataCollection.split_trains` and :meth:`.KeyData.split_trains`
+  (:ghpull:`184`).
+- New method :meth:`.KeyData.drop_empty_trains` to select only trains with
+  data for a given key (:ghpull:`193`).
+- Virtual CXI files can now be made for multi-module JUNGFRAU detectors
+  (:ghpull:`62`).
+- ``extra-data-validate`` now checks INDEX for control sources as well as
+  instrument sources (:ghpull:`188`).
+- Fix opening some files written by a test version of the DAQ, marked with
+  format version 1.1 (:ghpull:`198`).
+- Fix making virtual CXI files with h5py 3.3 (:ghpull:`195`).
+
+Deprecations & potentially breaking changes:
+
+- Remove special behaviour for :meth:`~.get_series` with big detector data,
+  deprecated in 1.4 (:ghpull:`196`).
+- Deprecated some functions for converting data to CBF format, and the
+  ``h5index`` module (:ghpull:`197`). We believe these were unused.
+
+
 1.6.1
 -----
 
