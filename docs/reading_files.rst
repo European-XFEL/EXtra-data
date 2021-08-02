@@ -135,7 +135,7 @@ below, e.g.::
 
       .. versionadded:: 1.7
       
-   .. automethod:: drop_missing
+   .. automethod:: drop_empty_trains
    
       .. versionadded:: 1.7
 
