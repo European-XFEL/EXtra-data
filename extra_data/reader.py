@@ -46,6 +46,7 @@ from .read_machinery import (
     find_proposal,
 )
 from .run_files_map import RunFilesMap
+from .sourcedata import SourceData
 from . import locality
 from .file_access import FileAccess
 
@@ -228,37 +229,37 @@ class DataCollection:
         combine two runs where the source was configured differently, the
         result can be unpredictable.
         """
-        selected_keys = self.selection[source]
-        if selected_keys is not None:
-            return selected_keys
-
-        # The same source may be in multiple files, but this assumes it has
-        # the same keys in all files that it appears in.
-        for f in self._source_index[source]:
-            return f.get_keys(source)
+        return self._get_source_data(source).keys()
 
     # Leave old name in case anything external was using it:
     _keys_for_source = keys_for_source
 
     def _get_key_data(self, source, key):
-        self._check_field(source, key)
-        section = 'INSTRUMENT' if source in self.instrument_sources else 'CONTROL'
+        return self._get_source_data(source)[key]
+
+    def _get_source_data(self, source):
+        if source in self.control_sources:
+            section = 'CONTROL'
+        elif source in self.instrument_sources:
+            section = 'INSTRUMENT'
+        else:
+            raise SourceNameError(source)
+
         files = self._source_index[source]
-        ds0 = files[0].file[f"{section}/{source}/{key.replace('.', '/')}"]
-        return KeyData(
+        return SourceData(
             source,
-            key,
+            sel_keys=self.selection[source],
             train_ids=self.train_ids,
             files=files,
             section=section,
-            dtype=ds0.dtype,
-            eshape=ds0.shape[1:],
             inc_suspect_trains=self.inc_suspect_trains,
         )
 
     def __getitem__(self, item):
         if isinstance(item, tuple) and len(item) == 2:
             return self._get_key_data(*item)
+        elif isinstance(item, str):
+            return self._get_source_data(item)
 
         raise TypeError("Expected data[source, key]")
 
