@@ -207,16 +207,8 @@ class DataCollection:
         if source not in self.all_sources:
             raise SourceNameError(source)
 
-        if not self._has_source_key(source, key):
+        if key not in self[source]:
             raise PropertyNameError(key, source)
-
-    def _has_source_key(self, source, key):
-        selected_keys = self.selection[source]
-        if selected_keys is not None:
-            return key in selected_keys
-
-        for f in self._source_index[source]:
-            return f.has_source_key(source, key)
 
     def keys_for_source(self, source):
         """Get a set of key names for the given source
@@ -624,7 +616,7 @@ class DataCollection:
                     # If a specific set of keys is selected, make sure
                     # they are all valid.
                     for key in in_keys:
-                        if not self._has_source_key(source, key):
+                        if key not in self[source]:
                             raise PropertyNameError(key, source)
                 else:
                     # Catches both an empty set and None.
