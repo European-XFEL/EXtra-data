@@ -593,7 +593,11 @@ class DataCollection:
         files = set(self.files)
         train_ids = set(self.train_ids)
 
-        dc_run_num = self.run_metadata()["runNumber"] if self.is_single_run else None  # noqa
+        run_num = self.run_metadata()[
+            "runNumber"] if self.is_single_run else None
+
+        proposal_num = self.run_metadata()[
+            "proposalNumber"] if self.is_single_run else None
 
         for other in others:
             files.update(other.files)
@@ -603,9 +607,11 @@ class DataCollection:
 
             if not (
                 other.is_single_run and
-                other.run_metadata()["runNumber"] == dc_run_num
+                other.run_metadata()["runNumber"] == run_num and
+                other.run_metadata()["proposalNumber"] == proposal_num
             ):
                 self.is_single_run = False
+
         train_ids = sorted(train_ids)
         selection = union_selections(
             [self.selection] + [o.selection for o in others])
