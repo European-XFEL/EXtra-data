@@ -16,6 +16,10 @@ def test_keys(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
     xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
 
+    # Control keys can omit .value suffix, but .keys() will not list that.
     assert 'beamPosition.ixPos.value' in xgm
+    assert 'beamPosition.ixPos' in xgm
     assert 'beamPosition.ixPos.value' in xgm.keys()
+    assert 'beamPosition.ixPos' not in xgm.keys()
     assert xgm['beamPosition.ixPos.value'].dtype == np.dtype('f4')
+    assert xgm['beamPosition.ixPos'].dtype == np.dtype('f4')

@@ -1,5 +1,7 @@
 from typing import List
 
+import h5py
+
 from .exceptions import PropertyNameError
 from .file_access import FileAccess
 from .keydata import KeyData
@@ -20,12 +22,18 @@ class SourceData:
         self.section = section
         self.inc_suspect_trains = inc_suspect_trains
 
-    def __contains__(self, key):
+    def _has_exact_key(self, key):
         if self.sel_keys is not None:
             return key in self.sel_keys
 
         for f in self.files:
             return f.has_source_key(self.source, key)
+
+    def __contains__(self, key):
+        res = self._has_exact_key(key)
+        if (not res) and (self.section == 'CONTROL'):
+            res = self._has_exact_key(key + '.value')
+        return res
 
     def __getitem__(self, key):
         if key not in self:
@@ -33,6 +41,11 @@ class SourceData:
         ds0 = self.files[0].file[
             f"{self.section}/{self.source}/{key.replace('.', '/')}"
         ]
+        if isinstance(ds0, h5py.Group):
+            # This can only occur with a CONTROL key missing its .value suffix
+            ds0 = ds0['value']
+            key += '.value'
+
         return KeyData(
             self.source,
             key,
