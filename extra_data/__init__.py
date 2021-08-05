@@ -41,6 +41,7 @@ from .exceptions import (
 )
 from .keydata import KeyData
 from .reader import *
+from .sourcedata import SourceData
 from .stacking import *
 from .utils import *
 
