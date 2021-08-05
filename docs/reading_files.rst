@@ -78,6 +78,13 @@ to refer to all data associated with that 0.1 second window.
 Getting data by source & key
 ----------------------------
 
+Selecting a source in a run gives a :class:`.SourceData` object.
+You can use this to find keys belonging to that source::
+
+    xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
+    xgm.keys()  # List the available keys
+    beam_x = xgm['beamPosition.ixPos']  # Get a KeyData object
+
 Selecting a single source & key in a run gives a :class:`.KeyData` object.
 You can get the data from this in various forms with the methods described
 below, e.g.::
