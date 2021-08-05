@@ -47,14 +47,16 @@ setup(name="EXtra-data",
       install_requires=[
           'fabio',
           'h5py>=2.10',
-          'karabo-bridge >=0.6',
           'matplotlib',
           'numpy',
           'pandas',
-          'psutil',
           'xarray',
       ],
       extras_require={
+          'bridge': [
+              'karabo-bridge >=0.6',
+              'psutil',
+          ],
           'docs': [
               'sphinx',
               'nbsphinx',

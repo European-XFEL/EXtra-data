@@ -8,7 +8,7 @@ You should have received a copy of the 3-Clause BSD License along with this
 program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 """
 
-from psutil import net_if_addrs
+import os
 from socket import AF_INET
 from warnings import warn
 
@@ -164,8 +164,20 @@ def find_infiniband_ip():
     :returns: str
         IP of the first infiniband interface if it exists else '*'
     """
+    from psutil import net_if_addrs
     addrs = net_if_addrs()
     for addr in addrs.get('ib0', ()):
         if addr.family is AF_INET:
             return addr.address
     return '*'
+
+
+def available_cpu_cores():
+    # This process may be restricted to a subset of the cores on the machine;
+    # sched_getaffinity() tells us which on some Unix flavours (inc Linux)
+    if hasattr(os, 'sched_getaffinity'):
+        return len(os.sched_getaffinity(0))
+    else:
+        # Fallback, inc on Windows
+        ncpu = os.cpu_count() or 2
+        return min(ncpu, 8)
