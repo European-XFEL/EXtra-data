@@ -60,7 +60,7 @@ class KeyData:
 
     def __repr__(self):
         return f"<extra_data.KeyData source={self.source!r} key={self.key!r} " \
-               f"for {len(self.train_ids)} trains"
+               f"for {len(self.train_ids)} trains>"
 
     @property
     def _key_group(self):

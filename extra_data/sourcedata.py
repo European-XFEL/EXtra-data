@@ -22,6 +22,10 @@ class SourceData:
         self.section = section
         self.inc_suspect_trains = inc_suspect_trains
 
+    def __repr__(self):
+        return f"<extra_data.SourceData source={self.source!r} " \
+               f"for {len(self.train_ids)} trains>"
+
     def _has_exact_key(self, key):
         if self.sel_keys is not None:
             return key in self.sel_keys
