@@ -46,4 +46,6 @@ from .stacking import *
 from .utils import *
 
 
-__all__ = reader.__all__ + utils.__all__ + stacking.__all__
+__all__ = reader.__all__ + utils.__all__ + stacking.__all__ + [
+    'SourceData', 'KeyData'
+]
