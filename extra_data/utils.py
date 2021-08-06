@@ -8,8 +8,7 @@ You should have received a copy of the 3-Clause BSD License along with this
 program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 """
 
-from psutil import net_if_addrs
-from socket import AF_INET
+import os
 from warnings import warn
 
 import h5py
@@ -158,14 +157,12 @@ def hdf5_to_cbf(in_h5file, cbf_filename, index, header=None):
     print("Convert {} index {} to {}".format(in_h5file, index, cbf_filename))
 
 
-def find_infiniband_ip():
-    """Find the first infiniband IP address
-
-    :returns: str
-        IP of the first infiniband interface if it exists else '*'
-    """
-    addrs = net_if_addrs()
-    for addr in addrs.get('ib0', ()):
-        if addr.family is AF_INET:
-            return addr.address
-    return '*'
+def available_cpu_cores():
+    # This process may be restricted to a subset of the cores on the machine;
+    # sched_getaffinity() tells us which on some Unix flavours (inc Linux)
+    if hasattr(os, 'sched_getaffinity'):
+        return len(os.sched_getaffinity(0))
+    else:
+        # Fallback, inc on Windows
+        ncpu = os.cpu_count() or 2
+        return min(ncpu, 8)

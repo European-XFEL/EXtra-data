@@ -22,7 +22,6 @@ import numpy as np
 from operator import index
 import os
 import os.path as osp
-import psutil
 import re
 import signal
 import sys
@@ -48,6 +47,7 @@ from .read_machinery import (
 from .run_files_map import RunFilesMap
 from . import locality
 from .file_access import FileAccess
+from .utils import available_cpu_cores
 
 __all__ = [
     'H5File',
@@ -151,9 +151,7 @@ class DataCollection:
                 # prevent child processes from receiving KeyboardInterrupt
                 signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-            # cpu_affinity give a list of cpu cores we can use, can be all or a
-            # subset of the cores the machine has.
-            nproc = min(len(psutil.Process().cpu_affinity()), len(uncached))
+            nproc = min(available_cpu_cores(), len(uncached))
             with Pool(processes=nproc, initializer=initializer) as pool:
                 for fname, fa in pool.imap_unordered(cls._open_file, uncached):
                     if isinstance(fa, FileAccess):

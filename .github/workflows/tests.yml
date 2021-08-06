@@ -30,7 +30,7 @@ jobs:
     - name: Install dependencies
       run: |
         python3 -m pip install --upgrade pip
-        python3 -m pip install .[test] --constraint .github/dependabot/constraints.txt
+        python3 -m pip install .[bridge,test] --constraint .github/dependabot/constraints.txt
 
     - name: Test with pytest
       run: |

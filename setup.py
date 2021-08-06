@@ -38,7 +38,7 @@ setup(name="EXtra-data",
       entry_points={
           "console_scripts": [
               "lsxfel = extra_data.lsxfel:main",
-              "karabo-bridge-serve-files = extra_data.export:main",
+              "karabo-bridge-serve-files = extra_data.cli.serve_files:main",
               "extra-data-validate = extra_data.validation:main",
               "extra-data-make-virtual-cxi = extra_data.cli.make_virtual_cxi:main",
               "extra-data-locality = extra_data.locality:main",
@@ -47,14 +47,16 @@ setup(name="EXtra-data",
       install_requires=[
           'fabio',
           'h5py>=2.10',
-          'karabo-bridge >=0.6',
           'matplotlib',
           'numpy',
           'pandas',
-          'psutil',
           'xarray',
       ],
       extras_require={
+          'bridge': [
+              'karabo-bridge >=0.6',
+              'psutil',
+          ],
           'docs': [
               'sphinx',
               'nbsphinx',
