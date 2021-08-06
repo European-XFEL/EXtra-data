@@ -45,7 +45,6 @@ setup(name="EXtra-data",
           ],
       },
       install_requires=[
-          'fabio',
           'h5py>=2.10',
           'matplotlib',
           'numpy',
