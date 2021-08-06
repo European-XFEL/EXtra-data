@@ -15,7 +15,7 @@ import h5py
 import numpy as np
 
 
-__all__ = ['hdf5_paths', 'hdf5_to_cbf', 'numpy_to_cbf', 'QuickView']
+__all__ = ['hdf5_paths', 'QuickView']
 
 
 class QuickView:
