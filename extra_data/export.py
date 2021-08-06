@@ -10,7 +10,6 @@ You should have received a copy of the 3-Clause BSD License along with this
 program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 """
 
-from argparse import ArgumentParser
 import os.path as osp
 from socket import AF_INET
 from warnings import warn
@@ -36,7 +35,7 @@ def find_infiniband_ip():
     """
     addrs = net_if_addrs()
     for addr in addrs.get('ib0', ()):
-        if addr.family is AF_INET:
+        if addr.family == AF_INET:
             return addr.address
     return '*'
 
