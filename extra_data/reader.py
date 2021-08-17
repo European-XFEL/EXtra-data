@@ -592,17 +592,24 @@ class DataCollection:
         """
         files = set(self.files)
         train_ids = set(self.train_ids)
+        is_single_run = self.is_single_run
+        run_num = None
+        proposal_num = None
 
-        run_num = self.run_metadata()[
-            "runNumber"] if self.is_single_run else None
-
-        proposal_num = self.run_metadata()[
-            "proposalNumber"] if self.is_single_run else None
+        # Account for old runs (file format 0.5),
+        # which doesn't have these information.
+        if (
+            "runNumber" in self.run_metadata().keys() and
+            "proposalNumber" in self.run_metadata().keys()
+        ):
+            if self.is_single_run:
+                run_num = self.run_metadata()["runNumber"]
+                proposal_num = self.run_metadata()["proposalNumber"]
 
         for other in others:
             files.update(other.files)
             train_ids.update(other.train_ids)
-            # Set self.is_single_run to False
+            # Set other.is_single_run to False
             # in case of Unioning multiple run DataCollections.
 
             if not (
@@ -610,7 +617,7 @@ class DataCollection:
                 other.run_metadata()["runNumber"] == run_num and
                 other.run_metadata()["proposalNumber"] == proposal_num
             ):
-                self.is_single_run = False
+                is_single_run = False
 
         train_ids = sorted(train_ids)
         selection = union_selections(
@@ -619,7 +626,7 @@ class DataCollection:
         return DataCollection(
             files, selection=selection, train_ids=train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
-            is_single_run = self.is_single_run,
+            is_single_run = is_single_run,
         )
 
     def _expand_selection(self, selection):
