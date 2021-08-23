@@ -592,32 +592,37 @@ class DataCollection:
         """
         files = set(self.files)
         train_ids = set(self.train_ids)
-        is_single_run = self.is_single_run
-        run_num = None
-        proposal_num = None
+        md = self.run_metadata()
 
         # Account for old runs (file format 0.5),
-        # which doesn't have these information.
-        if (
-            "runNumber" in self.run_metadata().keys() and
-            "proposalNumber" in self.run_metadata().keys()
-        ):
-            if self.is_single_run:
-                run_num = self.run_metadata()["runNumber"]
-                proposal_num = self.run_metadata()["proposalNumber"]
+        # which doesn't have runNumber and proposalNumber metadata.
+
+        # DataCollection union of format version = 0.5 is not considered
+        # a single run.
+        single_run_cond = []
+        for dc in (self,) + others:
+            single_run_cond += [
+                dc.is_single_run,
+                dc.run_metadata()["dataFormatVersion"] != '0.5'
+            ]
+
+        is_single_run = all(single_run_cond)
+
+        if is_single_run:
+            run_num = md["runNumber"]
+            proposal_num = md["proposalNumber"]
 
         for other in others:
             files.update(other.files)
             train_ids.update(other.train_ids)
-            # Set other.is_single_run to False
-            # in case of Unioning multiple run DataCollections.
 
-            if not (
-                other.is_single_run and
-                other.run_metadata()["runNumber"] == run_num and
-                other.run_metadata()["proposalNumber"] == proposal_num
-            ):
-                is_single_run = False
+            if is_single_run:
+                other_md = other.run_metadata()
+                if (
+                    other_md["runNumber"] != run_num or
+                    other_md["proposalNumber"] != proposal_num
+                ):
+                    is_single_run = False
 
         train_ids = sorted(train_ids)
         selection = union_selections(
@@ -626,7 +631,7 @@ class DataCollection:
         return DataCollection(
             files, selection=selection, train_ids=train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
-            is_single_run = is_single_run,
+            is_single_run=is_single_run,
         )
 
     def _expand_selection(self, selection):
