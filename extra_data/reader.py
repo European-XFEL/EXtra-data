@@ -1057,11 +1057,12 @@ class DataCollection:
             print('  -', s)
             if any(p.match(s) for p in details_sources_re):
                 # Detail for control sources: list keys
-                ctrl_keys = self.keys_for_source(s)
+                ctrl_keys = self[s].keys(inc_timestamps=False)
                 print('    - Control keys (1 entry per train):')
                 keys_detail(s, sorted(ctrl_keys), prefix='      - ')
 
                 run_keys = self._source_index[s][0].get_run_keys(s)
+                run_keys = {k[:-6] for k in run_keys if k.endswith('.value')}
                 run_only_keys = run_keys - ctrl_keys
                 if run_only_keys:
                     print('    - Additional run keys (1 entry per run):')
