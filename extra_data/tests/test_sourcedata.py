@@ -20,6 +20,12 @@ def test_keys(mock_spb_raw_run):
     assert 'beamPosition.ixPos.value' in xgm
     assert 'beamPosition.ixPos' in xgm
     assert 'beamPosition.ixPos.value' in xgm.keys()
+    assert 'beamPosition.ixPos.timestamp' in xgm.keys()
     assert 'beamPosition.ixPos' not in xgm.keys()
     assert xgm['beamPosition.ixPos.value'].dtype == np.dtype('f4')
     assert xgm['beamPosition.ixPos'].dtype == np.dtype('f4')
+
+    # .keys(inc_timestamp=False) will give us only the name before '.value'
+    assert 'beamPosition.ixPos.value' not in xgm.keys(inc_timestamps=False)
+    assert 'beamPosition.ixPos.timestamp' not in xgm.keys(inc_timestamps=False)
+    assert 'beamPosition.ixPos' in xgm.keys(inc_timestamps=False)

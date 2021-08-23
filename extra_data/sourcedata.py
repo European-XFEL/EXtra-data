@@ -77,7 +77,7 @@ class SourceData:
         combine two runs where the source was configured differently, the
         result can be unpredictable.
         """
-        if not inc_timestamps:
+        if (not inc_timestamps) and (self.section == 'CONTROL'):
             return {k[:-6] for k in self.keys() if k.endswith('.value')}
 
         if self.sel_keys is not None:
