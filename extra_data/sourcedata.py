@@ -61,17 +61,25 @@ class SourceData:
             inc_suspect_trains=self.inc_suspect_trains,
         )
 
-    def keys(self):
+    def keys(self, inc_timestamps=True):
         """Get a set of key names for this source
 
         If you have used :meth:`select` to filter keys, only selected keys
         are returned.
+
+        For control sources, each Karabo property is stored in the file as two
+        keys, with '.value' and '.timestamp' suffixes. By default, these are
+        given separately. Pass ``inc_timestamps=False`` to ignore timestamps and
+        drop the '.value' suffix, giving names as used in Karabo.
 
         Only one file is used to find the keys. Within a run, all files should
         have the same keys for a given source, but if you use :meth:`union` to
         combine two runs where the source was configured differently, the
         result can be unpredictable.
         """
+        if not inc_timestamps:
+            return {k[:-6] for k in self.keys() if k.endswith('.value')}
+
         if self.sel_keys is not None:
             return self.sel_keys
 
