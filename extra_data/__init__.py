@@ -41,8 +41,11 @@ from .exceptions import (
 )
 from .keydata import KeyData
 from .reader import *
+from .sourcedata import SourceData
 from .stacking import *
 from .utils import *
 
 
-__all__ = reader.__all__ + utils.__all__ + stacking.__all__
+__all__ = reader.__all__ + utils.__all__ + stacking.__all__ + [
+    'SourceData', 'KeyData'
+]
