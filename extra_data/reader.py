@@ -597,32 +597,25 @@ class DataCollection:
         # Account for old runs (file format 0.5),
         # which doesn't have runNumber and proposalNumber metadata.
 
-        # DataCollection union of format version = 0.5 is not considered
-        # a single run.
-        single_run_cond = []
-        for dc in (self,) + others:
-            single_run_cond += [
-                dc.is_single_run,
-                dc.run_metadata()["dataFormatVersion"] != '0.5'
-            ]
-
-        is_single_run = all(single_run_cond)
-
-        if is_single_run:
-            run_num = md["runNumber"]
-            proposal_num = md["proposalNumber"]
+        # DataCollection union of format version = 0.5 is
+        # not considered a single run.
+        single_run_cond = [
+            dc.is_single_run and (dc.run_metadata()["dataFormatVersion"] != '0.5')  # noqa
+            for dc in (self,) + others
+        ]
+        check_same_run = all(single_run_cond)
 
         for other in others:
             files.update(other.files)
             train_ids.update(other.train_ids)
 
-            if is_single_run:
+            if check_same_run:
                 other_md = other.run_metadata()
                 if (
-                    other_md["runNumber"] != run_num or
-                    other_md["proposalNumber"] != proposal_num
+                    other_md["runNumber"] != md["runNumber"] or
+                    other_md["proposalNumber"] != md["proposalNumber"]
                 ):
-                    is_single_run = False
+                    check_same_run = False
 
         train_ids = sorted(train_ids)
         selection = union_selections(
@@ -631,7 +624,7 @@ class DataCollection:
         return DataCollection(
             files, selection=selection, train_ids=train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
-            is_single_run=is_single_run,
+            is_single_run=check_same_run,
         )
 
     def _expand_selection(self, selection):
