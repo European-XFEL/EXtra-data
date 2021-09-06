@@ -71,6 +71,11 @@ def test_train_info(mock_lpd_data, capsys):
         assert "FXE_DET_LPD1M-1/DET/0CH0:xtdf" in out
 
 
+def test_info(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    run.info(details_for_sources='*/DOOCS/*')  # Smoketest
+
+
 def test_iterate_trains_fxe(mock_fxe_control_data):
     with H5File(mock_fxe_control_data) as f:
         for train_id, data in islice(f.trains(), 10):
