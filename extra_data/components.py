@@ -1,5 +1,6 @@
 """Interfaces to data from specific instruments
 """
+import h5py
 import logging
 import numpy as np
 import pandas as pd
@@ -298,6 +299,13 @@ class XtdfDetectorBase(MultimodDetectorBase):
                  *, min_modules=1):
         super().__init__(data, detector_name, modules, min_modules=min_modules)
 
+        self.train_ids_perframe = np.repeat(
+            self.frame_counts.index.values, self.frame_counts.values.astype(np.intp)
+        )
+
+        # Cumulative sum gives the end of each train, subtract to get start
+        self.train_id_to_ix = self.frame_counts.cumsum() - self.frame_counts
+
     @staticmethod
     def _select_pulse_ids(pulses, data_pulse_ids):
         """Select pulses by ID across a chunk of trains
@@ -305,39 +313,30 @@ class XtdfDetectorBase(MultimodDetectorBase):
         Returns an array or slice of the indexes to include.
         """
         if isinstance(pulses.value, slice):
-            if pulses.value == slice(0, MAX_PULSES, 1):
-                # All pulses included
-                return slice(0, len(data_pulse_ids))
-            else:
-                s = pulses.value
-                desired = np.arange(s.start, s.stop, step=s.step, dtype=np.uint64)
+            s = pulses.value
+            desired = np.arange(s.start, s.stop, step=s.step, dtype=np.uint64)
         else:
             desired = pulses.value
 
-        return np.nonzero(np.isin(data_pulse_ids, desired))[0]
+        return np.isin(data_pulse_ids, desired)
 
     @staticmethod
-    def _select_pulse_indices(pulses, firsts, counts):
+    def _select_pulse_indices(pulses, counts):
         """Select pulses by index across a chunk of trains
 
-        Returns an array or slice of the indexes to include.
+        Returns a boolean array of frames to include.
         """
-        if isinstance(pulses.value, slice):
-            if pulses.value == slice(0, MAX_PULSES, 1):
-                # All pulses included
-                return slice(0, counts.sum())
-            else:
-                s = pulses.value
-                desired = np.arange(s.start, s.stop, step=s.step, dtype=np.uint64)
-        else:
-            desired = pulses.value
+        sel_frames = np.zeros(counts.sum(), dtype=np.bool_)
+        cursor = 0
+        for count in counts:
+            sel_in_train = pulses.value
+            if isinstance(sel_in_train, np.ndarray):
+                # Ignore any indices after the end of the train
+                sel_in_train = sel_in_train[sel_in_train < count]
+            sel_frames[cursor:cursor + count][sel_in_train] = 1
+            cursor += count
 
-        positions = []
-        for first, count in zip(firsts, counts):
-            train_desired = desired[desired < count]
-            positions.append(first + train_desired)
-
-        return np.concatenate(positions)
+        return sel_frames
 
     def _make_image_index(self, tids, inner_ids, inner_name='pulse'):
         """
@@ -363,133 +362,215 @@ class XtdfDetectorBase(MultimodDetectorBase):
         )
 
     @staticmethod
-    def _guess_axes(data, train_pulse_ids, unstack_pulses):
+    def _guess_axes(data, train_pulse_ids, unstack_pulses, modnos=None):
+        shape = data.shape
+        if modnos is not None:
+            shape = shape[1:]
+        ndim = len(shape)
+
         # Raw files have a spurious extra dimension
-        if data.ndim >= 2 and data.shape[1] == 1:
-            data = data[:, 0]
+        if ndim >= 2 and shape[1] == 1:
+            if modnos is None:
+                data = data[:, 0]
+            else:
+                data = data[:, :, 0]
+            ndim -= 1
 
         # TODO: this assumes we can tell what the axes are just from the
         # number of dimensions. Works for the data we've seen, but we
         # should look for a more reliable way.
-        if data.ndim == 4:
+        if ndim == 4:
             # image.data in raw data
             dims = ['train_pulse', 'data_gain', 'slow_scan', 'fast_scan']
-        elif data.ndim == 3:
+        elif ndim == 3:
             # image.data, image.gain, image.mask in calibrated data
             dims = ['train_pulse', 'slow_scan', 'fast_scan']
         else:
             # Everything else seems to be 1D
             dims = ['train_pulse']
 
-        arr = xarray.DataArray(data, {'train_pulse': train_pulse_ids},
-                               dims=dims)
+        coords = {'train_pulse': train_pulse_ids}
+        if modnos is not None:
+            dims = ['module'] + dims
+            coords['module'] = modnos
+
+        arr = xarray.DataArray(data, coords=coords, dims=dims)
 
         if unstack_pulses:
             # Separate train & pulse dimensions, and arrange dimensions
             # so that the data is contiguous in memory.
-            dim_order = train_pulse_ids.names + dims[1:]
+            if modnos is None:
+                dim_order = train_pulse_ids.names + dims[1:]
+            else:
+                dim_order = ['module'] + train_pulse_ids.names + dims[2:]
             return arr.unstack('train_pulse').transpose(*dim_order)
         else:
             return arr
 
-    def _get_module_pulse_data(self, source, key, pulses, unstack_pulses,
-                               inner_index='pulseId', roi=()):
-        def get_inner_ids(f, data_slice, ix_name='pulseId'):
-            ids = f.file[f'/INSTRUMENT/{source}/{group}/{ix_name}'][
-                data_slice
-            ]
-            # Raw files have a spurious extra dimension
-            if ids.ndim >= 2 and ids.shape[1] == 1:
-                ids = ids[:, 0]
-            return ids
+    def _collect_inner_ids(self, field='pulseId'):
+        """
+        Gather pulse/cell ID labels for all modules and check consistency.
 
-        seq_arrays = []
-        data_path = "/INSTRUMENT/{}/{}".format(source, key.replace('.', '/'))
-        for f in self.data._source_index[source]:
-            group = key.partition('.')[0]
-            firsts, counts = f.get_index(source, group)
+        Raises
+        ------
+        Exception:
+          Some data has no pulse ID values for any module.
+        Exception:
+          Inconsistent pulse IDs between detector modules.
 
-            for chunk_tids in self.train_id_chunks:
-                if chunk_tids[-1] < f.train_ids[0] or chunk_tids[0] > f.train_ids[-1]:
-                    # No overlap
-                    continue
-                first_tid = max(chunk_tids[0], f.train_ids[0])
-                first_train_idx = np.nonzero(f.train_ids == first_tid)[0][0]
-                last_tid = min(chunk_tids[-1], f.train_ids[-1])
-                last_train_idx = np.nonzero(f.train_ids == last_tid)[0][0]
-                chunk_firsts = firsts[first_train_idx : last_train_idx + 1]
-                chunk_counts = counts[first_train_idx : last_train_idx + 1]
-                data_slice = slice(
-                    chunk_firsts[0], int(chunk_firsts[-1] + chunk_counts[-1])
-                )
-
-                inner_ids = get_inner_ids(f, data_slice, inner_index)
-
-                trainids = np.repeat(
-                    np.arange(first_tid, last_tid + 1, dtype=np.uint64),
-                    chunk_counts.astype(np.intp),
-                )
-                index = self._make_image_index(
-                    trainids, inner_ids, inner_index[:-2]
-                )
-
-                if isinstance(pulses, by_id):
-                    # Get the pulse ID values out of the MultiIndex rather than
-                    # using inner_ids, because LPD1M in parallel_gain mode
-                    # makes the MultiIndex differently, repeating pulse IDs.
-                    if inner_index == 'pulseId':
-                        pulse_id = index.get_level_values('pulse')
-                    else:
-                        pulse_id = self._make_image_index(
-                            trainids, get_inner_ids(f, data_slice, 'pulseId'),
-                        ).get_level_values('pulse')
-                    positions = self._select_pulse_ids(pulses, pulse_id)
-                else:  # by_index
-                    positions = self._select_pulse_indices(
-                        pulses, chunk_firsts - data_slice.start, chunk_counts
-                    )
-
-                index = index[positions]
-
-                if isinstance(positions, slice):
-                    data_positions = slice(
-                        int(data_slice.start + positions.start),
-                        int(data_slice.start + positions.stop),
-                        positions.step
-                    )
-                else:  # ndarray
-                    data_positions = data_slice.start + positions
-
-                dset = f.file[data_path]
-                if dset.ndim >= 2 and dset.shape[1] == 1:
-                    # Ensure ROI applies to pixel dimensions, not the extra
-                    # dim in raw data (except AGIPD, where it is data/gain)
-                    sel_args = (data_positions, np.s_[:]) + roi
-                else:
-                    sel_args = (data_positions,) + roi
-
-                data = f.file[data_path][sel_args]
-
-                arr = self._guess_axes(data, index, unstack_pulses)
-
-                seq_arrays.append(arr)
-
-        non_empty = [a for a in seq_arrays if (a.size > 0)]
-        if not non_empty:
-            if seq_arrays:
-                # All per-file arrays are empty, so just return the first one.
-                return seq_arrays[0]
-
-            raise Exception(
-                "Unable to get data for source {!r}, key {!r}. "
-                "Please report an issue so we can investigate"
-                    .format(source, key)
-            )
-
-        return xarray.concat(
-            sorted(non_empty, key=lambda a: a.coords['train'][0]),
-            dim=('train' if unstack_pulses else 'train_pulse'),
+        Returns
+        -------
+        inner_ids: np.array
+          Array of pulse/cell IDs per frame common for all detector modules.
+        """
+        # Gather pulse IDs
+        NO_PULSE_ID = 9999
+        inner_ids = np.full((
+            self.frame_counts.sum(), self.n_modules), NO_PULSE_ID, dtype=np.uint64
         )
+
+        for source, modno in self.source_to_modno.items():
+            for chunk in self.data._find_data_chunks(source, 'image.' + field):
+                dset = chunk.dataset
+                unwanted_dim = (dset.ndim > 1)  and (dset.shape[1] == 1)
+                for tgt_slice, chunk_slice in self._split_align_chunks(chunk):
+                    # Select the matching data and add it to pulse_ids
+                    # In some cases, there's an extra dimension of length 1.
+                    matched = chunk.dataset[chunk_slice]
+                    if unwanted_dim:
+                        matched = matched[:, 0]
+                    inner_ids[tgt_slice, modno] = matched
+
+        # Sanity checks on pulse IDs
+        inner_ids_min = inner_ids.min(axis=1)
+        if (inner_ids_min == NO_PULSE_ID).any():
+            raise Exception(f"Failed to find {field} for some data")
+        inner_ids[inner_ids == NO_PULSE_ID] = 0
+        if (inner_ids_min != inner_ids.max(axis=1)).any():
+            raise Exception(f"Inconsistent {field} for different modules")
+
+        # Pulse IDs make sense. Drop the modules dimension, giving one
+        # pulse ID for each frame.
+        return inner_ids_min
+
+    cells_per_entry = 1
+
+    def _split_align_chunks(self, chunk):
+        """
+        Map data from chunk into target.
+
+        Chunk points to contiguous source data, but if this misses a train,
+        it might not correspond to a contiguous region in the output. So this
+        may perform multiple mappings.
+
+        Parameters
+        ----------
+        chunk: read_machinery::DataChunk
+          Reference to a contiguous chunk of data to be mapped.
+        """
+        # Expand the list of train IDs to one per frame
+        chunk_tids = np.repeat(chunk.train_ids, chunk.counts.astype(np.intp))
+
+        chunk_match_start = int(chunk.first)
+
+        while chunk_tids.size > 0:
+            # Look up where the start of this chunk fits in the target
+            tgt_start = int(self.train_id_to_ix[chunk_tids[0]])
+
+            # Chunk train IDs organized in the same way as in the target
+            chunk_tids_target = np.repeat(chunk_tids, self.cells_per_entry)
+
+            target_tids = self.train_ids_perframe[
+                tgt_start : tgt_start + len(chunk_tids)*self.cells_per_entry
+            ]
+            assert target_tids.shape == chunk_tids_target.shape, \
+                f"{target_tids.shape} != {chunk_tids_target.shape}"
+            assert target_tids[0] == chunk_tids[0], \
+                f"{target_tids[0]} != {chunk_tids[0]}"
+
+            # How much of this chunk can be mapped in one go?
+            mismatches = (chunk_tids_target != target_tids).nonzero()[0]
+            if mismatches.size > 0:
+                n_match = mismatches[0] // self.cells_per_entry
+            else:
+                n_match = len(chunk_tids)
+
+            # Select the matching data
+            chunk_match_end = chunk_match_start + n_match
+            tgt_end = tgt_start + (n_match * self.cells_per_entry)
+
+            yield np.s_[tgt_start:tgt_end], np.s_[chunk_match_start:chunk_match_end]
+
+            # Prepare remaining data in the chunk for the next match
+            chunk_match_start = chunk_match_end
+            chunk_tids = chunk_tids[n_match:]
+
+    def _get_pulse_data(self, key, pulses, unstack_pulses=True,
+                        fill_value=None, subtrain_index='pulseId', roi=(),
+                        astype=None):
+        pulses = _check_pulse_selection(pulses)
+
+        if isinstance(pulses, by_index):
+            sel_frames = self._select_pulse_indices(pulses, self.frame_counts)
+            pulse_ids = None
+        else:  # by_id
+            pulse_ids = self._collect_inner_ids('pulseId')
+            sel_frames = self._select_pulse_ids(pulses, pulse_ids)
+
+        nframes_sel = sel_frames.sum()
+
+        eg_src = min(self.source_to_modno)
+        eg_keydata = self.data[eg_src, key]
+
+        if eg_keydata.ndim >= 2 and eg_keydata.entry_shape[0] == 1:
+            # Ensure ROI applies to pixel dimensions, not the extra
+            # dim in raw data (except AGIPD, where it is data/gain)
+            roi = np.index_exp[:] + roi
+
+        # Find the shape of 1 frame for 1 module with the ROI applied
+        roi_dummy = np.zeros((0,) + eg_keydata.entry_shape)
+        roi_shape = roi_dummy[np.index_exp[:] + roi].shape[1:]
+
+        out_shape = (len(self.modno_to_source), nframes_sel) + roi_shape
+
+        dtype = eg_keydata.dtype if astype is None else np.dtype(astype)
+        if fill_value is None:
+            fill_value = np.nan if dtype.kind == 'f' else 0
+        fill_value = dtype.type(fill_value)
+
+        if fill_value == 0:
+            out = np.zeros(out_shape, dtype=dtype)
+        else:
+            out = np.full(out_shape, fill_value, dtype=dtype)
+
+        modnos = []
+        for mod_ix, (modno, source) in enumerate(sorted(self.modno_to_source.items())):
+            for chunk in self.data._find_data_chunks(source, key):
+                for tgt_slice, chunk_slice in self._split_align_chunks(chunk):
+                    inc_pulses_chunk = sel_frames[tgt_slice]
+                    if inc_pulses_chunk.all():
+                        src_pulse_sel = chunk_slice
+                    elif (inc_pulses_chunk == 0).all():
+                        continue
+                    else:
+                        src_pulse_sel = np.nonzero(inc_pulses_chunk)[0] + chunk.first
+                    chunk.dataset.read_direct(
+                        out[mod_ix, tgt_slice], source_sel=(src_pulse_sel,) + roi
+                    )
+            modnos.append(modno)
+        
+        if (subtrain_index == 'pulseId') and (pulse_ids is not None):
+            inner_ids = pulse_ids
+        else:
+            inner_ids = self._collect_inner_ids(subtrain_index)
+
+        index = self._make_image_index(
+            self.train_ids_perframe, inner_ids, subtrain_index[:-2]
+        )[sel_frames]
+        
+        print(f"{out.shape=}")
+
+        return self._guess_axes(out, index, unstack_pulses, modnos=modnos)
 
     def get_array(self, key, pulses=np.s_[:], unstack_pulses=True, *,
                   fill_value=None, subtrain_index='pulseId', roi=(),
@@ -532,16 +613,10 @@ class XtdfDetectorBase(MultimodDetectorBase):
             roi = (roi,)
 
         if key.startswith('image.'):
-            pulses = _check_pulse_selection(pulses)
-
-            arrays, modnos = [], []
-            for modno, source in sorted(self.modno_to_source.items()):
-                arrays.append(self._get_module_pulse_data(
-                    source, key, pulses, unstack_pulses, subtrain_index, roi=roi
-                ))
-                modnos.append(modno)
-
-            return self._concat(arrays, modnos, fill_value, astype)
+            return self._get_pulse_data(
+                key, pulses, unstack_pulses, fill_value=fill_value,
+                subtrain_index=subtrain_index, roi=roi, astype=astype,
+            )
         else:
             return super().get_array(
                 key, fill_value=fill_value, roi=roi, astype=astype
@@ -1072,54 +1147,68 @@ class LPD1M(XtdfDetectorBase):
                     "parallel_gain=True needs the frames in each train to be divisible by 3"
                 )
 
-    def _select_pulse_indices(self, pulses, firsts, counts):
+    def _collect_inner_ids(self, field='pulseId'):
+        inner_ids = super()._collect_inner_ids(field)
+
         if not self.parallel_gain:
-            return super()._select_pulse_indices(pulses, firsts, counts)
+            return inner_ids
 
-        if isinstance(pulses.value, slice):
-            if pulses.value == slice(0, MAX_PULSES, 1):
-                # All pulses included
-                return slice(0, counts.sum())
-            else:
-                s = pulses.value
-                desired = np.arange(s.start, s.stop, step=s.step, dtype=np.uint64)
-        else:
-            desired = pulses.value
+        # In 'parallel gain' mode, the first 1/3 of pulse/cell IDs in each train
+        # are valid, but the remaining 2/3 are junk. So we'll repeat the valid
+        # ones 3 times (in inner_ids_fixed).
+        inner_ids_fixed = np.zeros_like(inner_ids)
 
-        positions = []
-        for ix, frames in zip(firsts, counts):
-            n_per_gain_stage = int(frames // 3)
-            train_desired = desired[desired < n_per_gain_stage]
+        cursor = 0
+        for count in self.frame_counts:  # Iterate through trains
+            n_per_gain_stage = int(count // 3)
+            train_inner_ids = inner_ids[cursor: cursor + n_per_gain_stage]
             for stage in range(3):
-                start = ix + np.uint64(stage * n_per_gain_stage)
-                positions.append(start + train_desired)
+                end = cursor + n_per_gain_stage
+                inner_ids_fixed[cursor:end] = train_inner_ids
+                cursor = end
+        return inner_ids_fixed
 
-        return np.concatenate(positions)
+    def _select_pulse_indices(self, pulses, counts):
+        """Select pulses by index across a chunk of trains
+
+        Returns a boolean array of frames to include.
+        """
+        if not self.parallel_gain:
+            return super()._select_pulse_indices(pulses, counts)
+
+        sel_frames = np.zeros(counts.sum(), dtype=np.bool_)
+        cursor = 0
+        for count in counts:
+            n_per_gain_stage = int(count // 3)
+            sel_in_train = pulses.value
+            if isinstance(sel_in_train, np.ndarray):
+                # Ignore any indices after the end of the gain stage
+                sel_in_train = sel_in_train[sel_in_train < n_per_gain_stage]
+
+            for stage in range(3):
+                sel_frames[cursor:cursor + n_per_gain_stage][sel_in_train] = 1
+                cursor += n_per_gain_stage
+
+        return sel_frames
 
     def _make_image_index(self, tids, inner_ids, inner_name='pulse'):
         if not self.parallel_gain:
             return super()._make_image_index(tids, inner_ids, inner_name)
 
-        # In 'parallel gain' mode, the first 1/3 of pulse/cell IDs in each train
-        # are valid, but the remaining 2/3 are junk. So we'll repeat the valid
-        # ones 3 times (in inner_ids_fixed). At the same time, we make a gain
-        # stage index (0-2), so each frame has a unique entry in the MultiIndex
-        # (train ID, gain, pulse/cell ID)
+        # Make a gain stage index (0-2), so each frame has a unique entry in
+        # the MultiIndex (train ID, gain, pulse/cell ID)
         gain = np.zeros_like(inner_ids, dtype=np.uint8)
-        inner_ids_fixed = np.zeros_like(inner_ids)
 
         _, firsts, counts = np.unique(tids, return_index=True, return_counts=True)
         for ix, frames in zip(firsts, counts):  # Iterate through trains
             n_per_gain_stage = int(frames // 3)
-            train_inner_ids = inner_ids[ix: ix + n_per_gain_stage]
             for stage in range(3):
                 start = ix + (stage * n_per_gain_stage)
                 end = start + n_per_gain_stage
                 gain[start:end] = stage
-                inner_ids_fixed[start:end] = train_inner_ids
 
         return pd.MultiIndex.from_arrays(
-            [tids, gain, inner_ids_fixed], names=['train', 'gain', inner_name]
+            [tids, gain, inner_ids], names=['train', 'gain', inner_name]
         )
 
 
