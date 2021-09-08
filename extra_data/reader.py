@@ -1065,7 +1065,9 @@ class DataCollection:
                 if run_only_keys:
                     print('    - Additional run keys (1 entry per run):')
                     for k in sorted(run_only_keys):
-                        ds = self._source_index[s][0].file[f"/RUN/{s}/{k.replace('.', '/')}"]
+                        ds = self._source_index[s][0].file[
+                            f"/RUN/{s}/{k.replace('.', '/')}/value"
+                        ]
                         entry_shape = ds.shape[1:]
                         if entry_shape:
                             entry_info = f", entry shape {entry_shape}"
