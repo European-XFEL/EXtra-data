@@ -579,14 +579,21 @@ class XtdfDetectorBase(MultimodDetectorBase):
                         chunk, self.train_ids_perframe
                 ):
                     inc_pulses_chunk = sel_frames[tgt_slice]
-                    if inc_pulses_chunk.all():
+                    if inc_pulses_chunk.all():  # All pulses in chunk
                         src_pulse_sel = chunk_slice
+                        tgt_pulse_sel = tgt_slice
                     elif (inc_pulses_chunk == 0).all():
-                        continue
+                        continue  # No pulses selected
                     else:
+                        # Apply pulse selection to this chunk
                         src_pulse_sel = np.nonzero(inc_pulses_chunk)[0] + chunk.first
+                        tgt_start_ix = sel_frames[:tgt_slice.start].sum()
+                        tgt_pulse_sel = slice(
+                            tgt_start_ix, tgt_start_ix + inc_pulses_chunk.sum()
+                        )
+
                     chunk.dataset.read_direct(
-                        out[mod_ix, tgt_slice], source_sel=(src_pulse_sel,) + roi
+                        out[mod_ix, tgt_pulse_sel], source_sel=(src_pulse_sel,) + roi
                     )
             modnos.append(modno)
         
