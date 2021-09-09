@@ -5,7 +5,7 @@ import numpy as np
 from .exceptions import TrainIDError
 from .file_access import FileAccess
 from .read_machinery import (
-    contiguous_regions, DataChunk, select_train_ids, split_trains,
+    contiguous_regions, DataChunk, select_train_ids, split_trains, roi_shape
 )
 
 class KeyData:
@@ -174,11 +174,9 @@ class KeyData:
         if not isinstance(roi, tuple):
             roi = (roi,)
 
-        # Find the shape of the array with the ROI applied
-        roi_dummy = np.zeros((0,) + self.entry_shape) # extra 0 dim: use less memory
-        roi_shape = roi_dummy[np.index_exp[:] + roi].shape[1:]
-
-        out = np.empty(self.shape[:1] + roi_shape, dtype=self.dtype)
+        out = np.empty(
+            self.shape[:1] + roi_shape(self.entry_shape, roi), dtype=self.dtype
+        )
 
         # Read the data from each chunk into the result array
         dest_cursor = 0

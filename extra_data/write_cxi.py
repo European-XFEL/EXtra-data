@@ -131,7 +131,9 @@ class VirtualCXIWriterBase:
           with data. Defaults to None.
         """
         # Expand the list of train IDs to one per frame
-        for tgt_slice, chunk_slice in self.detdata._split_align_chunk(chunk):
+        for tgt_slice, chunk_slice in self.detdata._split_align_chunk(
+                chunk, self.detdata.train_ids_perframe
+        ):
             tgt_start = tgt_slice.start * self.cells_per_entry
             tgt_end = tgt_slice.stop * self.cells_per_entry
 

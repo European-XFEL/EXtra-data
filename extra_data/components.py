@@ -1,6 +1,5 @@
 """Interfaces to data from specific instruments
 """
-import h5py
 import logging
 import numpy as np
 import pandas as pd
@@ -9,6 +8,7 @@ import xarray
 
 from .exceptions import SourceNameError
 from .reader import DataCollection, by_id, by_index
+from .read_machinery import roi_shape
 from .writer import FileWriter
 from .write_cxi import XtdfCXIWriter, JUNGFRAUCXIWriter
 
@@ -195,7 +195,8 @@ class MultimodDetectorBase:
         train_ids = mod_data_counts.index.values
         return data.select_trains(by_id[train_ids])
 
-    def _split_align_chunk(self, chunk):
+    @staticmethod
+    def _split_align_chunk(chunk, target_train_ids: np.ndarray):
         """
         Split up a source chunk to align with parts of a joined array.
 
@@ -208,6 +209,9 @@ class MultimodDetectorBase:
         ----------
         chunk: read_machinery::DataChunk
           Reference to a contiguous chunk of data to be mapped.
+        target_train_ids: numpy.ndarray
+          Train ID index for target array to align chunk data to. Train IDs may
+          occur more than once in here.
         """
         # Expand the list of train IDs to one per frame
         chunk_tids = np.repeat(chunk.train_ids, chunk.counts.astype(np.intp))
@@ -216,9 +220,9 @@ class MultimodDetectorBase:
 
         while chunk_tids.size > 0:
             # Look up where the start of this chunk fits in the target
-            tgt_start = int(self.train_id_to_ix[chunk_tids[0]])
+            tgt_start = (target_train_ids == chunk_tids[0]).nonzero()[0][0]
 
-            target_tids = self.train_ids_perframe[
+            target_tids = target_train_ids[
                 tgt_start : tgt_start + len(chunk_tids)
             ]
             assert target_tids.shape == chunk_tids.shape, \
@@ -237,7 +241,7 @@ class MultimodDetectorBase:
             chunk_match_end = chunk_match_start + n_match
             tgt_end = tgt_start + n_match
 
-            yield np.s_[tgt_start:tgt_end], np.s_[chunk_match_start:chunk_match_end]
+            yield slice(tgt_start, tgt_end), slice(chunk_match_start, chunk_match_end)
 
             # Prepare remaining data in the chunk for the next match
             chunk_match_start = chunk_match_end
@@ -272,6 +276,17 @@ class MultimodDetectorBase:
             fill_value=fill_value
         )
 
+    @staticmethod
+    def _out_array(shape, dtype, fill_value=None):
+        if fill_value is None:
+            fill_value = np.nan if dtype.kind == 'f' else 0
+        fill_value = dtype.type(fill_value)
+
+        if fill_value == 0:
+            return np.zeros(shape, dtype=dtype)
+        else:
+            return np.full(shape, fill_value, dtype=dtype)
+
     def get_array(self, key, *, fill_value=None, roi=(), astype=None):
         """Get a labelled array of detector data
 
@@ -290,13 +305,37 @@ class MultimodDetectorBase:
           Data type of the output array. If None (default) the dtype matches the
           input array dtype
         """
-        arrays = []
+        train_ids = np.asarray(self.data.train_ids)
+
+        eg_src = min(self.source_to_modno)
+        eg_keydata = self.data[eg_src, key]
+
+        # Find the shape of 1 frame for 1 module with the ROI applied
+        out_shape = ((len(self.modno_to_source), len(train_ids))
+                     + roi_shape(eg_keydata.entry_shape, roi))
+
+        dtype = eg_keydata.dtype if astype is None else np.dtype(astype)
+        out = self._out_array(out_shape, dtype, fill_value=fill_value)
+
+
         modnos = []
-        for modno, source in sorted(self.modno_to_source.items()):
-            arrays.append(self.data.get_array(source, key, roi=roi))
+        for mod_ix, (modno, source) in enumerate(sorted(self.modno_to_source.items())):
+            for chunk in self.data._find_data_chunks(source, key):
+                for tgt_slice, chunk_slice in self._split_align_chunk(chunk, train_ids):
+                    chunk.dataset.read_direct(
+                        out[mod_ix, tgt_slice], source_sel=(chunk_slice,) + roi
+                    )
+
             modnos.append(modno)
 
-        return self._concat(arrays, modnos, fill_value, astype)
+        # Dimension labels
+        dims = ['module', 'trainId'] + ['dim_%d' % i for i in range(out.ndim - 2)]
+
+        # Train ID index
+        coords = {'module': modnos, 'trainId': train_ids}
+
+        return xarray.DataArray(out, dims=dims, coords=coords)
+
 
     def get_dask_array(self, key, fill_value=None, astype=None):
         """Get a labelled Dask array of detector data
@@ -481,7 +520,9 @@ class XtdfDetectorBase(MultimodDetectorBase):
             for chunk in self.data._find_data_chunks(source, 'image.' + field):
                 dset = chunk.dataset
                 unwanted_dim = (dset.ndim > 1)  and (dset.shape[1] == 1)
-                for tgt_slice, chunk_slice in self._split_align_chunks(chunk):
+                for tgt_slice, chunk_slice in self._split_align_chunk(
+                        chunk, self.train_ids_perframe
+                ):
                     # Select the matching data and add it to pulse_ids
                     # In some cases, there's an extra dimension of length 1.
                     matched = chunk.dataset[chunk_slice]
@@ -490,7 +531,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
                     inner_ids[tgt_slice, modno] = matched
 
         # Sanity checks on pulse IDs
-        inner_ids_min = inner_ids.min(axis=1)
+        inner_ids_min: np.ndarray = inner_ids.min(axis=1)
         if (inner_ids_min == NO_PULSE_ID).any():
             raise Exception(f"Failed to find {field} for some data")
         inner_ids[inner_ids == NO_PULSE_ID] = 0
@@ -504,6 +545,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
     def _get_pulse_data(self, key, pulses, unstack_pulses=True,
                         fill_value=None, subtrain_index='pulseId', roi=(),
                         astype=None):
+        """Get a labelled array of per-pulse data (image.*) for xtdf detector"""
         pulses = _check_pulse_selection(pulses)
 
         if isinstance(pulses, by_index):
@@ -523,26 +565,19 @@ class XtdfDetectorBase(MultimodDetectorBase):
             # dim in raw data (except AGIPD, where it is data/gain)
             roi = np.index_exp[:] + roi
 
-        # Find the shape of 1 frame for 1 module with the ROI applied
-        roi_dummy = np.zeros((0,) + eg_keydata.entry_shape)
-        roi_shape = roi_dummy[np.index_exp[:] + roi].shape[1:]
-
-        out_shape = (len(self.modno_to_source), nframes_sel) + roi_shape
+        out_shape = (len(self.modno_to_source), nframes_sel) + roi_shape(
+            eg_keydata.entry_shape, roi
+        )
 
         dtype = eg_keydata.dtype if astype is None else np.dtype(astype)
-        if fill_value is None:
-            fill_value = np.nan if dtype.kind == 'f' else 0
-        fill_value = dtype.type(fill_value)
-
-        if fill_value == 0:
-            out = np.zeros(out_shape, dtype=dtype)
-        else:
-            out = np.full(out_shape, fill_value, dtype=dtype)
+        out = self._out_array(out_shape, dtype, fill_value=fill_value)
 
         modnos = []
         for mod_ix, (modno, source) in enumerate(sorted(self.modno_to_source.items())):
             for chunk in self.data._find_data_chunks(source, key):
-                for tgt_slice, chunk_slice in self._split_align_chunks(chunk):
+                for tgt_slice, chunk_slice in self._split_align_chunk(
+                        chunk, self.train_ids_perframe
+                ):
                     inc_pulses_chunk = sel_frames[tgt_slice]
                     if inc_pulses_chunk.all():
                         src_pulse_sel = chunk_slice
@@ -564,8 +599,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
             self.train_ids_perframe, inner_ids, subtrain_index[:-2]
         )[sel_frames]
         
-        print(f"{out.shape=}")
-
         return self._guess_axes(out, index, unstack_pulses, modnos=modnos)
 
     def get_array(self, key, pulses=np.s_[:], unstack_pulses=True, *,
