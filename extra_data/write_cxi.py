@@ -131,46 +131,21 @@ class VirtualCXIWriterBase:
           with data. Defaults to None.
         """
         # Expand the list of train IDs to one per frame
-        chunk_tids = np.repeat(chunk.train_ids, chunk.counts.astype(np.intp))
+        for tgt_slice, chunk_slice in self.detdata._split_align_chunk(chunk):
+            tgt_start = tgt_slice.start * self.cells_per_entry
+            tgt_end = tgt_slice.stop * self.cells_per_entry
 
-        chunk_match_start = int(chunk.first)
-
-        while chunk_tids.size > 0:
-            # Look up where the start of this chunk fits in the target
-            tgt_start = int(self.train_id_to_ix[chunk_tids[0]])
-
-            # Chunk train IDs organized in the same way as in the target
-            chunk_tids_target = np.repeat(chunk_tids, self.cells_per_entry)
-
-            target_tids = self.train_ids_perframe[
-                tgt_start : tgt_start + len(chunk_tids)*self.cells_per_entry
-            ]
-            assert target_tids.shape == chunk_tids_target.shape, \
-                f"{target_tids.shape} != {chunk_tids_target.shape}"
-            assert target_tids[0] == chunk_tids[0], \
-                f"{target_tids[0]} != {chunk_tids[0]}"
-
-            # How much of this chunk can be mapped in one go?
-            mismatches = (chunk_tids_target != target_tids).nonzero()[0]
-            if mismatches.size > 0:
-                n_match = mismatches[0] // self.cells_per_entry
-            else:
-                n_match = len(chunk_tids)
-
-            # Select the matching data and add it to the target
-            chunk_match_end = chunk_match_start + n_match
-            tgt_end = tgt_start + (n_match*self.cells_per_entry)
             if self.cells_per_entry == 1:
                 # In some cases, there's an extra dimension of length 1.
                 # E.g. JUNGFRAU data with 1 memory cell per train or
                 # DSSC/LPD raw data.
                 if (len(chunk_data.shape) > 1 and chunk_data.shape[1] == 1):
-                    matched = chunk_data[chunk_match_start:chunk_match_end, 0]
+                    matched = chunk_data[chunk_slice, 0]
                 else:
-                    matched = chunk_data[chunk_match_start:chunk_match_end]
+                    matched = chunk_data[chunk_slice]
                 target[tgt_start:tgt_end, tgt_ax1] = matched
             else:
-                matched = chunk_data[chunk_match_start:chunk_match_end]
+                matched = chunk_data[chunk_slice]
                 if isinstance(chunk_data, h5py.VirtualSource):
                     # Use broadcasting of h5py.VirtualSource
                     target[tgt_start:tgt_end, tgt_ax1] = matched
@@ -181,10 +156,6 @@ class VirtualCXIWriterBase:
             # Fill in the map of what data we have
             if have_data is not None:
                 have_data[tgt_start:tgt_end, tgt_ax1] = True
-
-            # Prepare remaining data in the chunk for the next match
-            chunk_match_start = chunk_match_end
-            chunk_tids = chunk_tids[n_match:]
 
     def _map_layouts(self, layouts):
         """

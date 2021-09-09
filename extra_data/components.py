@@ -139,6 +139,13 @@ class MultimodDetectorBase:
         self.train_id_chunks = np.split(train_id_arr, split_indices)
         self.frame_counts = frame_counts[train_id_arr]
 
+        self.train_ids_perframe = np.repeat(
+            self.frame_counts.index.values, self.frame_counts.values.astype(np.intp)
+        )
+
+        # Cumulative sum gives the end of each train, subtract to get start
+        self.train_id_to_ix = self.frame_counts.cumsum() - self.frame_counts
+
     @classmethod
     def _find_detector_name(cls, data):
         detector_names = set()
@@ -187,6 +194,54 @@ class MultimodDetectorBase:
                  ntrains, min_modules)
         train_ids = mod_data_counts.index.values
         return data.select_trains(by_id[train_ids])
+
+    def _split_align_chunk(self, chunk):
+        """
+        Split up a source chunk to align with parts of a joined array.
+
+        Chunk points to contiguous source data, but if this misses a train,
+        it might not correspond to a contiguous region in the output. This
+        yields pairs of (target_slice, source_slice) describing chunks that can
+        be copied/mapped to a similar block in the output.
+
+        Parameters
+        ----------
+        chunk: read_machinery::DataChunk
+          Reference to a contiguous chunk of data to be mapped.
+        """
+        # Expand the list of train IDs to one per frame
+        chunk_tids = np.repeat(chunk.train_ids, chunk.counts.astype(np.intp))
+
+        chunk_match_start = int(chunk.first)
+
+        while chunk_tids.size > 0:
+            # Look up where the start of this chunk fits in the target
+            tgt_start = int(self.train_id_to_ix[chunk_tids[0]])
+
+            target_tids = self.train_ids_perframe[
+                tgt_start : tgt_start + len(chunk_tids)
+            ]
+            assert target_tids.shape == chunk_tids.shape, \
+                f"{target_tids.shape} != {chunk_tids.shape}"
+            assert target_tids[0] == chunk_tids[0], \
+                f"{target_tids[0]} != {chunk_tids[0]}"
+
+            # How much of this chunk can be mapped in one go?
+            mismatches = (chunk_tids != target_tids).nonzero()[0]
+            if mismatches.size > 0:
+                n_match = mismatches[0]
+            else:
+                n_match = len(chunk_tids)
+
+            # Select the matching data
+            chunk_match_end = chunk_match_start + n_match
+            tgt_end = tgt_start + n_match
+
+            yield np.s_[tgt_start:tgt_end], np.s_[chunk_match_start:chunk_match_end]
+
+            # Prepare remaining data in the chunk for the next match
+            chunk_match_start = chunk_match_end
+            chunk_tids = chunk_tids[n_match:]
 
     @property
     def train_ids(self):
@@ -298,13 +353,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
                  *, min_modules=1):
         super().__init__(data, detector_name, modules, min_modules=min_modules)
-
-        self.train_ids_perframe = np.repeat(
-            self.frame_counts.index.values, self.frame_counts.values.astype(np.intp)
-        )
-
-        # Cumulative sum gives the end of each train, subtract to get start
-        self.train_id_to_ix = self.frame_counts.cumsum() - self.frame_counts
 
     @staticmethod
     def _select_pulse_ids(pulses, data_pulse_ids):
@@ -452,58 +500,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
         # Pulse IDs make sense. Drop the modules dimension, giving one
         # pulse ID for each frame.
         return inner_ids_min
-
-    cells_per_entry = 1
-
-    def _split_align_chunks(self, chunk):
-        """
-        Map data from chunk into target.
-
-        Chunk points to contiguous source data, but if this misses a train,
-        it might not correspond to a contiguous region in the output. So this
-        may perform multiple mappings.
-
-        Parameters
-        ----------
-        chunk: read_machinery::DataChunk
-          Reference to a contiguous chunk of data to be mapped.
-        """
-        # Expand the list of train IDs to one per frame
-        chunk_tids = np.repeat(chunk.train_ids, chunk.counts.astype(np.intp))
-
-        chunk_match_start = int(chunk.first)
-
-        while chunk_tids.size > 0:
-            # Look up where the start of this chunk fits in the target
-            tgt_start = int(self.train_id_to_ix[chunk_tids[0]])
-
-            # Chunk train IDs organized in the same way as in the target
-            chunk_tids_target = np.repeat(chunk_tids, self.cells_per_entry)
-
-            target_tids = self.train_ids_perframe[
-                tgt_start : tgt_start + len(chunk_tids)*self.cells_per_entry
-            ]
-            assert target_tids.shape == chunk_tids_target.shape, \
-                f"{target_tids.shape} != {chunk_tids_target.shape}"
-            assert target_tids[0] == chunk_tids[0], \
-                f"{target_tids[0]} != {chunk_tids[0]}"
-
-            # How much of this chunk can be mapped in one go?
-            mismatches = (chunk_tids_target != target_tids).nonzero()[0]
-            if mismatches.size > 0:
-                n_match = mismatches[0] // self.cells_per_entry
-            else:
-                n_match = len(chunk_tids)
-
-            # Select the matching data
-            chunk_match_end = chunk_match_start + n_match
-            tgt_end = tgt_start + (n_match * self.cells_per_entry)
-
-            yield np.s_[tgt_start:tgt_end], np.s_[chunk_match_start:chunk_match_end]
-
-            # Prepare remaining data in the chunk for the next match
-            chunk_match_start = chunk_match_end
-            chunk_tids = chunk_tids[n_match:]
 
     def _get_pulse_data(self, key, pulses, unstack_pulses=True,
                         fill_value=None, subtrain_index='pulseId', roi=(),
