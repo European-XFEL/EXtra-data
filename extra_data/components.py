@@ -1231,20 +1231,26 @@ class LPD1M(XtdfDetectorBase):
         if not self.parallel_gain:
             return super()._make_image_index(tids, inner_ids, inner_name)
 
-        # Make a gain stage index (0-2), so each frame has a unique entry in
-        # the MultiIndex (train ID, gain, pulse/cell ID)
+        # In 'parallel gain' mode, the first 1/3 of pulse/cell IDs in each train
+        # are valid, but the remaining 2/3 are junk. So we'll repeat the valid
+        # ones 3 times (in inner_ids_fixed). At the same time, we make a gain
+        # stage index (0-2), so each frame has a unique entry in the MultiIndex
+        # (train ID, gain, pulse/cell ID)
         gain = np.zeros_like(inner_ids, dtype=np.uint8)
+        inner_ids_fixed = np.zeros_like(inner_ids)
 
         _, firsts, counts = np.unique(tids, return_index=True, return_counts=True)
         for ix, frames in zip(firsts, counts):  # Iterate through trains
             n_per_gain_stage = int(frames // 3)
+            train_inner_ids = inner_ids[ix: ix + n_per_gain_stage]
             for stage in range(3):
                 start = ix + (stage * n_per_gain_stage)
                 end = start + n_per_gain_stage
                 gain[start:end] = stage
+                inner_ids_fixed[start:end] = train_inner_ids
 
         return pd.MultiIndex.from_arrays(
-            [tids, gain, inner_ids], names=['train', 'gain', inner_name]
+            [tids, gain, inner_ids_fixed], names=['train', 'gain', inner_name]
         )
 
 
