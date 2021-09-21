@@ -24,6 +24,7 @@ __all__ = [
 log = logging.getLogger(__name__)
 
 MAX_PULSES = 2700
+NO_PULSE_ID = 9999
 
 
 def multimod_detectors(detector_cls):
@@ -494,24 +495,11 @@ class XtdfDetectorBase(MultimodDetectorBase):
         else:
             return arr
 
-    def _collect_inner_ids(self, field='pulseId'):
-        """
-        Gather pulse/cell ID labels for all modules and check consistency.
+    def _read_inner_ids(self, field='pulseId'):
+        """Read pulse/cell IDs into a 2D array (frames, modules)
 
-        Raises
-        ------
-        Exception:
-          Some data has no pulse ID values for any module.
-        Exception:
-          Inconsistent pulse IDs between detector modules.
-
-        Returns
-        -------
-        inner_ids: np.array
-          Array of pulse/cell IDs per frame common for all detector modules.
+        Overridden by LPD1M for parallel gain mode.
         """
-        # Gather pulse IDs
-        NO_PULSE_ID = 9999
         inner_ids = np.full((
             self.frame_counts.sum(), self.n_modules), NO_PULSE_ID, dtype=np.uint64
         )
@@ -530,6 +518,25 @@ class XtdfDetectorBase(MultimodDetectorBase):
                         matched = matched[:, 0]
                     inner_ids[tgt_slice, modno] = matched
 
+        return inner_ids
+
+    def _collect_inner_ids(self, field='pulseId'):
+        """
+        Gather pulse/cell ID labels for all modules and check consistency.
+
+        Raises
+        ------
+        Exception:
+          Some data has no pulse ID values for any module.
+        Exception:
+          Inconsistent pulse IDs between detector modules.
+
+        Returns
+        -------
+        inner_ids: np.array
+          Array of pulse/cell IDs per frame common for all detector modules.
+        """
+        inner_ids = self._read_inner_ids(field)
         # Sanity checks on pulse IDs
         inner_ids_min: np.ndarray = inner_ids.min(axis=1)
         if (inner_ids_min == NO_PULSE_ID).any():
@@ -1183,8 +1190,8 @@ class LPD1M(XtdfDetectorBase):
                     "parallel_gain=True needs the frames in each train to be divisible by 3"
                 )
 
-    def _collect_inner_ids(self, field='pulseId'):
-        inner_ids = super()._collect_inner_ids(field)
+    def _read_inner_ids(self, field='pulseId'):
+        inner_ids = super()._read_inner_ids(field)
 
         if not self.parallel_gain:
             return inner_ids
