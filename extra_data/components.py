@@ -590,12 +590,27 @@ class XtdfDetectorBase(MultimodDetectorBase):
                             out[mod_ix, tgt_slice], source_sel=(chunk_slice,) + roi
                         )
                     elif inc_pulses_chunk.sum() > 0:
+                        # Reading a non-contiguous selection in HDF5 seems to be
+                        # slow: https://forum.hdfgroup.org/t/performance-reading-data-with-non-contiguous-selection/8979
+                        # Except it's fast if you read the data to a matching
+                        # selection in memory (one weird trick).
+                        # So as a workaround, this allocates a temporary array
+                        # of the same shape as the dataset, reads into it, and
+                        # then copies the selected data to the output array.
+                        # The extra memory copy is not optimal, but it's better
+                        # than the HDF5 performance issue, at least in some
+                        # realistic cases.
+                        # N.B. tmp should only use memory for the data it
+                        # contains, because zeros() uses calloc, so the OS can
+                        # do virtual memory tricks.
+                        # Don't change this to zeros_like() !
                         tmp = np.zeros(chunk.dataset.shape, chunk.dataset.dtype)
                         pulse_sel = np.nonzero(inc_pulses_chunk)[0] + chunk.first
                         sel_region = (pulse_sel,) + roi
                         chunk.dataset.read_direct(
                             tmp, source_sel=sel_region, dest_sel=sel_region,
                         )
+                        # Where does this data go in the target array?
                         tgt_start_ix = sel_frames[:tgt_slice.start].sum()
                         tgt_pulse_sel = slice(
                             tgt_start_ix, tgt_start_ix + inc_pulses_chunk.sum()
