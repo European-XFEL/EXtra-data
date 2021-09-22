@@ -572,9 +572,8 @@ class XtdfDetectorBase(MultimodDetectorBase):
             # dim in raw data (except AGIPD, where it is data/gain)
             roi = np.index_exp[:] + roi
 
-        out_shape = (len(self.modno_to_source), nframes_sel) + roi_shape(
-            eg_keydata.entry_shape, roi
-        )
+        _roi_shape = roi_shape(eg_keydata.entry_shape, roi)
+        out_shape = (len(self.modno_to_source), nframes_sel) + _roi_shape
 
         dtype = eg_keydata.dtype if astype is None else np.dtype(astype)
         out = self._out_array(out_shape, dtype, fill_value=fill_value)
@@ -587,21 +586,28 @@ class XtdfDetectorBase(MultimodDetectorBase):
                 ):
                     inc_pulses_chunk = sel_frames[tgt_slice]
                     if inc_pulses_chunk.all():  # All pulses in chunk
-                        src_pulse_sel = chunk_slice
-                        tgt_pulse_sel = tgt_slice
-                    elif (inc_pulses_chunk == 0).all():
-                        continue  # No pulses selected
-                    else:
-                        # Apply pulse selection to this chunk
-                        src_pulse_sel = np.nonzero(inc_pulses_chunk)[0] + chunk.first
+                        chunk.dataset.read_direct(
+                            out[mod_ix, tgt_slice], source_sel=(chunk_slice,) + roi
+                        )
+                    elif inc_pulses_chunk.sum() > 0:
+                        tmp = np.zeros(chunk.dataset.shape, chunk.dataset.dtype)
+                        pulse_sel = np.nonzero(inc_pulses_chunk)[0] + chunk.first
+                        sel_region = (pulse_sel,) + roi
+                        chunk.dataset.read_direct(
+                            tmp, source_sel=sel_region, dest_sel=sel_region,
+                        )
                         tgt_start_ix = sel_frames[:tgt_slice.start].sum()
                         tgt_pulse_sel = slice(
                             tgt_start_ix, tgt_start_ix + inc_pulses_chunk.sum()
                         )
+                        # Copy data from temp array to output array
+                        tmp_frames_mask = np.zeros(len(tmp), dtype=np.bool_)
+                        tmp_frames_mask[pulse_sel] = True
+                        np.compress(
+                            tmp_frames_mask, tmp[np.index_exp[:] + roi],
+                            axis=0, out=out[mod_ix, tgt_pulse_sel]
+                        )
 
-                    chunk.dataset.read_direct(
-                        out[mod_ix, tgt_pulse_sel], source_sel=(src_pulse_sel,) + roi
-                    )
             modnos.append(modno)
         
         if (subtrain_index == 'pulseId') and (pulse_ids is not None):
