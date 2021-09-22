@@ -1,6 +1,8 @@
 """Interfaces to data from specific instruments
 """
 import logging
+
+import h5py
 import numpy as np
 import pandas as pd
 import re
@@ -398,7 +400,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
     def _select_pulse_ids(pulses, data_pulse_ids):
         """Select pulses by ID across a chunk of trains
 
-        Returns an array or slice of the indexes to include.
+        Returns a boolean array of the indexes to include.
         """
         if isinstance(pulses.value, slice):
             s = pulses.value
@@ -549,6 +551,60 @@ class XtdfDetectorBase(MultimodDetectorBase):
         # pulse ID for each frame.
         return inner_ids_min
 
+    def _identify_repeat(self):
+        uniq_counts = set(self.frame_counts.unique()) - {0}
+        if len(uniq_counts) == 1:
+            return int(uniq_counts.pop())
+        return None
+
+    _repeat_n_frames = -1
+
+    def _identify_repeating_slice(self, sel_frames_chunk, start_ix):
+        """Make an h5py MultiBlockSlice for the source selection if possible.
+        """
+        if self._repeat_n_frames == -1:
+            self._repeat_n_frames = self._identify_repeat()
+        rpt = self._repeat_n_frames
+        if rpt is None:
+            return None  # Varying num frames per train
+
+        sel_frames_2d = sel_frames_chunk.reshape(-1, rpt)
+        sel_frames_per_train = sel_frames_2d[0]
+        if not np.array_equiv(sel_frames_per_train, sel_frames_2d):
+            return None  # Varying selected frames per train
+
+        start = np.nonzero(sel_frames_per_train)[0][0]
+        # Find index of 1st unselected frame after selected ones
+        excluded = np.nonzero(sel_frames_per_train == False)[0]
+        excluded_end = excluded[excluded > start]
+        end = (start + excluded_end[0]) if len(excluded_end) else rpt
+
+        if np.any(sel_frames_per_train[end:]):
+            return None  # Selection not suitable for slicing
+
+        n_blocks = sel_frames_2d.shape[0]
+        return h5py.MultiBlockSlice(
+            start=start + start_ix, stride=rpt, count=n_blocks, block=(end - start)
+        )
+
+    def _frame_selection_in_chunk(self, sel_frames, tgt_slice, chunk_slice):
+        sel_frames_chunk = sel_frames[tgt_slice]
+        if sel_frames_chunk.all():  # All pulses in chunk
+            return tgt_slice, chunk_slice
+        elif sel_frames_chunk.sum() == 0:
+            return None, None  # No pulses selected
+
+        src_pulse_sel = self._identify_repeating_slice(sel_frames_chunk, chunk_slice.start)
+        if src_pulse_sel is None:
+            # Slice selection not possible, select source data using an array
+            src_pulse_sel = np.nonzero(sel_frames_chunk)[0] + chunk_slice.start
+
+        tgt_start_ix = sel_frames[:tgt_slice.start].sum()
+        tgt_pulse_sel = slice(
+            tgt_start_ix, tgt_start_ix + sel_frames_chunk.sum()
+        )
+        return tgt_pulse_sel, src_pulse_sel
+
     def _get_pulse_data(self, key, pulses, unstack_pulses=True,
                         fill_value=None, subtrain_index='pulseId', roi=(),
                         astype=None):
@@ -585,19 +641,11 @@ class XtdfDetectorBase(MultimodDetectorBase):
                 for tgt_slice, chunk_slice in self._split_align_chunk(
                         chunk, self.train_ids_perframe
                 ):
-                    inc_pulses_chunk = sel_frames[tgt_slice]
-                    if inc_pulses_chunk.all():  # All pulses in chunk
-                        src_pulse_sel = chunk_slice
-                        tgt_pulse_sel = tgt_slice
-                    elif (inc_pulses_chunk == 0).all():
+                    tgt_pulse_sel, src_pulse_sel = self._frame_selection_in_chunk(
+                        sel_frames, tgt_slice, chunk_slice
+                    )
+                    if src_pulse_sel is None:
                         continue  # No pulses selected
-                    else:
-                        # Apply pulse selection to this chunk
-                        src_pulse_sel = np.nonzero(inc_pulses_chunk)[0] + chunk.first
-                        tgt_start_ix = sel_frames[:tgt_slice.start].sum()
-                        tgt_pulse_sel = slice(
-                            tgt_start_ix, tgt_start_ix + inc_pulses_chunk.sum()
-                        )
 
                     chunk.dataset.read_direct(
                         out[mod_ix, tgt_pulse_sel], source_sel=(src_pulse_sel,) + roi
@@ -1259,6 +1307,13 @@ class LPD1M(XtdfDetectorBase):
         return pd.MultiIndex.from_arrays(
             [tids, gain, inner_ids_fixed], names=['train', 'gain', inner_name]
         )
+
+    def _identify_repeat(self):
+        n = super()._identify_repeat()
+        if self.parallel_gain and (n is not None):
+            assert (n % 3) == 0, f"{n} pulses not divisible by 3"
+            return n // 3
+        return n
 
 
 @multimod_detectors
