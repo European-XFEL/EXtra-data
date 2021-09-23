@@ -8,7 +8,7 @@ import xarray
 
 from .exceptions import SourceNameError
 from .reader import DataCollection, by_id, by_index
-from .read_machinery import roi_shape
+from .read_machinery import roi_shape, DataChunk
 from .writer import FileWriter
 from .write_cxi import XtdfCXIWriter, JUNGFRAUCXIWriter
 
@@ -549,6 +549,53 @@ class XtdfDetectorBase(MultimodDetectorBase):
         # pulse ID for each frame.
         return inner_ids_min
 
+    def _read_chunk(self, chunk: DataChunk, sel_frames, mod_out, roi):
+        """Read per-pulse data from file into an output array (of 1 module)"""
+        for tgt_slice, chunk_slice in self._split_align_chunk(
+                chunk, self.train_ids_perframe
+        ):
+            inc_pulses_chunk = sel_frames[tgt_slice]
+            if inc_pulses_chunk.sum() == 0:  # No data from this chunk selected
+                return
+            elif inc_pulses_chunk.all():  # All pulses in chunk
+                chunk.dataset.read_direct(
+                    mod_out[tgt_slice], source_sel=(chunk_slice,) + roi
+                )
+                return
+
+            # Read a subset of pulses from the chunk:
+
+            # Reading a non-contiguous selection in HDF5 seems to be slow:
+            # https://forum.hdfgroup.org/t/performance-reading-data-with-non-contiguous-selection/8979
+            # Except it's fast if you read the data to a matching selection in
+            # memory (one weird trick).
+            # So as a workaround, this allocates a temporary array of the same
+            # shape as the dataset, reads into it, and then copies the selected
+            # data to the output array. The extra memory copy is not optimal,
+            # but it's better than the HDF5 performance issue, at least in some
+            # realistic cases.
+            # N.B. tmp should only use memory for the data it contains -
+            # zeros() uses calloc, so the OS can do virtual memory tricks.
+            # Don't change this to zeros_like() !
+            tmp = np.zeros(chunk.dataset.shape, chunk.dataset.dtype)
+            pulse_sel = np.nonzero(inc_pulses_chunk)[0] + chunk.first
+            sel_region = (pulse_sel,) + roi
+            chunk.dataset.read_direct(
+                tmp, source_sel=sel_region, dest_sel=sel_region,
+            )
+            # Where does this data go in the target array?
+            tgt_start_ix = sel_frames[:tgt_slice.start].sum()
+            tgt_pulse_sel = slice(
+                tgt_start_ix, tgt_start_ix + inc_pulses_chunk.sum()
+            )
+            # Copy data from temp array to output array
+            tmp_frames_mask = np.zeros(len(tmp), dtype=np.bool_)
+            tmp_frames_mask[pulse_sel] = True
+            np.compress(
+                tmp_frames_mask, tmp[np.index_exp[:] + roi],
+                axis=0, out=mod_out[tgt_pulse_sel]
+            )
+
     def _get_pulse_data(self, key, pulses, unstack_pulses=True,
                         fill_value=None, subtrain_index='pulseId', roi=(),
                         astype=None):
@@ -581,47 +628,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
         modnos = []
         for mod_ix, (modno, source) in enumerate(sorted(self.modno_to_source.items())):
             for chunk in self.data._find_data_chunks(source, key):
-                for tgt_slice, chunk_slice in self._split_align_chunk(
-                        chunk, self.train_ids_perframe
-                ):
-                    inc_pulses_chunk = sel_frames[tgt_slice]
-                    if inc_pulses_chunk.all():  # All pulses in chunk
-                        chunk.dataset.read_direct(
-                            out[mod_ix, tgt_slice], source_sel=(chunk_slice,) + roi
-                        )
-                    elif inc_pulses_chunk.sum() > 0:
-                        # Reading a non-contiguous selection in HDF5 seems to be
-                        # slow: https://forum.hdfgroup.org/t/performance-reading-data-with-non-contiguous-selection/8979
-                        # Except it's fast if you read the data to a matching
-                        # selection in memory (one weird trick).
-                        # So as a workaround, this allocates a temporary array
-                        # of the same shape as the dataset, reads into it, and
-                        # then copies the selected data to the output array.
-                        # The extra memory copy is not optimal, but it's better
-                        # than the HDF5 performance issue, at least in some
-                        # realistic cases.
-                        # N.B. tmp should only use memory for the data it
-                        # contains, because zeros() uses calloc, so the OS can
-                        # do virtual memory tricks.
-                        # Don't change this to zeros_like() !
-                        tmp = np.zeros(chunk.dataset.shape, chunk.dataset.dtype)
-                        pulse_sel = np.nonzero(inc_pulses_chunk)[0] + chunk.first
-                        sel_region = (pulse_sel,) + roi
-                        chunk.dataset.read_direct(
-                            tmp, source_sel=sel_region, dest_sel=sel_region,
-                        )
-                        # Where does this data go in the target array?
-                        tgt_start_ix = sel_frames[:tgt_slice.start].sum()
-                        tgt_pulse_sel = slice(
-                            tgt_start_ix, tgt_start_ix + inc_pulses_chunk.sum()
-                        )
-                        # Copy data from temp array to output array
-                        tmp_frames_mask = np.zeros(len(tmp), dtype=np.bool_)
-                        tmp_frames_mask[pulse_sel] = True
-                        np.compress(
-                            tmp_frames_mask, tmp[np.index_exp[:] + roi],
-                            axis=0, out=out[mod_ix, tgt_pulse_sel]
-                        )
+                self._read_chunk(chunk, sel_frames, out[mod_ix], roi)
 
             modnos.append(modno)
         
