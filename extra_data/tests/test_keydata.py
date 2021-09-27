@@ -121,6 +121,19 @@ def test_data_counts(mock_reduced_spb_proc_run):
     assert count.values.sum() == mod.shape[0]
 
 
+def test_data_counts_empty(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    cam_nodata = run['FXE_XAD_GEC/CAM/CAMERA_NODATA:daqOutput', 'data.image.pixels']
+
+    count_ser = cam_nodata.data_counts(labelled=True)
+    assert len(count_ser) == 480
+    assert count_ser.sum() == 0
+
+    count_arr = cam_nodata.data_counts(labelled=False)
+    assert len(count_arr) == 480
+    assert count_arr.sum() == 0
+
+
 def test_select_by(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
     am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.data']
