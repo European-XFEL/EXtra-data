@@ -53,10 +53,13 @@ class KeyData:
         """An ordered list of chunks containing data"""
         if self._cached_chunks is None:
             self._cached_chunks = sorted(
-                [c for c in self._find_chunks() if c.total_count],
-                key=lambda c: c.train_ids[0]
+                self._find_chunks(), key=lambda c: c.train_ids[0]
             )
         return self._cached_chunks
+
+    @property
+    def _data_chunks_nonempty(self) -> List[DataChunk]:
+        return [c for c in self._data_chunks if c.total_count]
 
     def __repr__(self):
         return f"<extra_data.KeyData source={self.source!r} key={self.key!r} " \
@@ -182,7 +185,7 @@ class KeyData:
 
         # Read the data from each chunk into the result array
         dest_cursor = 0
-        for chunk in self._data_chunks:
+        for chunk in self._data_chunks_nonempty:
             dest_chunk_end = dest_cursor + chunk.total_count
 
             slices = (chunk.slice,) + roi
@@ -287,7 +290,7 @@ class KeyData:
 
         chunks_darrs = []
 
-        for chunk in self._data_chunks:
+        for chunk in self._data_chunks_nonempty:
             chunk_dim0 = chunk.total_count
             chunk_shape = (chunk_dim0,) + chunk.dataset.shape[1:]
             itemsize = chunk.dataset.dtype.itemsize
@@ -369,7 +372,7 @@ class KeyData:
 
         Yields pairs of (train ID, array). Skips trains where data is missing.
         """
-        for chunk in self._data_chunks:
+        for chunk in self._data_chunks_nonempty:
             start = chunk.first
             ds = chunk.dataset
             for tid, count in zip(chunk.train_ids, chunk.counts):
