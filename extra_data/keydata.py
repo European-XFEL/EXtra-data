@@ -53,10 +53,13 @@ class KeyData:
         """An ordered list of chunks containing data"""
         if self._cached_chunks is None:
             self._cached_chunks = sorted(
-                [c for c in self._find_chunks() if c.total_count],
-                key=lambda c: c.train_ids[0]
+                self._find_chunks(), key=lambda c: c.train_ids[0]
             )
         return self._cached_chunks
+
+    @property
+    def _data_chunks_nonempty(self) -> List[DataChunk]:
+        return [c for c in self._data_chunks if c.total_count]
 
     def __repr__(self):
         return f"<extra_data.KeyData source={self.source!r} key={self.key!r} " \
@@ -148,8 +151,11 @@ class KeyData:
         If *labelled* is True, returns a pandas series with an index of train
         IDs. Otherwise, returns a NumPy array of counts to match ``.train_ids``.
         """
-        train_ids = np.concatenate([c.train_ids for c in self._data_chunks])
-        counts = np.concatenate([c.counts for c in self._data_chunks])
+        if self._data_chunks:
+            train_ids = np.concatenate([c.train_ids for c in self._data_chunks])
+            counts = np.concatenate([c.counts for c in self._data_chunks])
+        else:
+            train_ids = counts = np.zeros(0, dtype=np.uint64)
 
         if labelled:
             import pandas as pd
@@ -182,7 +188,7 @@ class KeyData:
 
         # Read the data from each chunk into the result array
         dest_cursor = 0
-        for chunk in self._data_chunks:
+        for chunk in self._data_chunks_nonempty:
             dest_chunk_end = dest_cursor + chunk.total_count
 
             slices = (chunk.slice,) + roi
@@ -195,6 +201,8 @@ class KeyData:
 
     def _trainid_index(self):
         """A 1D array of train IDs, corresponding to self.shape[0]"""
+        if not self._data_chunks:
+            return np.zeros(0, dtype=np.uint64)
         chunks_trainids = [
             np.repeat(chunk.train_ids, chunk.counts.astype(np.intp))
             for chunk in self._data_chunks
@@ -234,9 +242,7 @@ class KeyData:
         dims = ['trainId'] + extra_dims
 
         # Train ID index
-        coords = {}
-        if self.shape[0]:
-            coords = {'trainId': self._trainid_index()}
+        coords = {'trainId': self._trainid_index()}
 
         if name is None:
             name = f'{self.source}.{self.key}'
@@ -287,7 +293,7 @@ class KeyData:
 
         chunks_darrs = []
 
-        for chunk in self._data_chunks:
+        for chunk in self._data_chunks_nonempty:
             chunk_dim0 = chunk.total_count
             chunk_shape = (chunk_dim0,) + chunk.dataset.shape[1:]
             itemsize = chunk.dataset.dtype.itemsize
@@ -310,7 +316,11 @@ class KeyData:
                 )[chunk.slice]
             )
 
-        dask_arr = da.concatenate(chunks_darrs, axis=0)
+        if chunks_darrs:
+            dask_arr = da.concatenate(chunks_darrs, axis=0)
+        else:
+            shape = (0,) + self.entry_shape
+            dask_arr = da.zeros(shape=shape, dtype=self.dtype, chunks=shape)
 
         if labelled:
             # Dimension labels
@@ -369,7 +379,7 @@ class KeyData:
 
         Yields pairs of (train ID, array). Skips trains where data is missing.
         """
-        for chunk in self._data_chunks:
+        for chunk in self._data_chunks_nonempty:
             start = chunk.first
             ds = chunk.dataset
             for tid, count in zip(chunk.train_ids, chunk.counts):

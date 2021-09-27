@@ -68,6 +68,10 @@ def test_nodata(mock_fxe_raw_run):
     assert arr.shape == (0, 255, 1024)
     assert arr.dtype == np.dtype('u2')
 
+    dask_arr = cam_pix.dask_array(labelled=True)
+    assert dask_arr.shape == (0, 255, 1024)
+    assert dask_arr.dtype == np.dtype('u2')
+
     assert list(cam_pix.trains()) == []
     tid, data = cam_pix.train_from_id(10010)
     assert tid == 10010
@@ -120,6 +124,24 @@ def test_data_counts(mock_reduced_spb_proc_run):
     assert count.index.tolist() == mod.train_ids
     assert count.values.sum() == mod.shape[0]
 
+
+def test_data_counts_empty(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    cam_nodata = run['FXE_XAD_GEC/CAM/CAMERA_NODATA:daqOutput', 'data.image.pixels']
+
+    count_ser = cam_nodata.data_counts(labelled=True)
+    assert len(count_ser) == 480
+    assert count_ser.sum() == 0
+
+    count_arr = cam_nodata.data_counts(labelled=False)
+    assert len(count_arr) == 480
+    assert count_arr.sum() == 0
+
+    count_none_ser = cam_nodata.drop_empty_trains().data_counts(labelled=True)
+    assert len(count_none_ser) == 0
+
+    count_none_arr = cam_nodata.drop_empty_trains().data_counts(labelled=False)
+    assert len(count_none_arr) == 0
 
 def test_select_by(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
