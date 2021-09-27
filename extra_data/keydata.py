@@ -151,8 +151,11 @@ class KeyData:
         If *labelled* is True, returns a pandas series with an index of train
         IDs. Otherwise, returns a NumPy array of counts to match ``.train_ids``.
         """
-        train_ids = np.concatenate([c.train_ids for c in self._data_chunks])
-        counts = np.concatenate([c.counts for c in self._data_chunks])
+        if self._data_chunks:
+            train_ids = np.concatenate([c.train_ids for c in self._data_chunks])
+            counts = np.concatenate([c.counts for c in self._data_chunks])
+        else:
+            train_ids = counts = np.zeros(0, dtype=np.uint64)
 
         if labelled:
             import pandas as pd
@@ -198,6 +201,8 @@ class KeyData:
 
     def _trainid_index(self):
         """A 1D array of train IDs, corresponding to self.shape[0]"""
+        if not self._data_chunks:
+            return np.zeros(0, dtype=np.uint64)
         chunks_trainids = [
             np.repeat(chunk.train_ids, chunk.counts.astype(np.intp))
             for chunk in self._data_chunks
@@ -237,9 +242,7 @@ class KeyData:
         dims = ['trainId'] + extra_dims
 
         # Train ID index
-        coords = {}
-        if self.shape[0]:
-            coords = {'trainId': self._trainid_index()}
+        coords = {'trainId': self._trainid_index()}
 
         if name is None:
             name = f'{self.source}.{self.key}'
@@ -313,7 +316,11 @@ class KeyData:
                 )[chunk.slice]
             )
 
-        dask_arr = da.concatenate(chunks_darrs, axis=0)
+        if chunks_darrs:
+            dask_arr = da.concatenate(chunks_darrs, axis=0)
+        else:
+            shape = (0,) + self.entry_shape
+            dask_arr = da.zeros(shape=shape, dtype=self.dtype, chunks=shape)
 
         if labelled:
             # Dimension labels

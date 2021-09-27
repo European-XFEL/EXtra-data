@@ -68,6 +68,10 @@ def test_nodata(mock_fxe_raw_run):
     assert arr.shape == (0, 255, 1024)
     assert arr.dtype == np.dtype('u2')
 
+    dask_arr = cam_pix.dask_array(labelled=True)
+    assert dask_arr.shape == (0, 255, 1024)
+    assert dask_arr.dtype == np.dtype('u2')
+
     assert list(cam_pix.trains()) == []
     tid, data = cam_pix.train_from_id(10010)
     assert tid == 10010
@@ -133,6 +137,11 @@ def test_data_counts_empty(mock_fxe_raw_run):
     assert len(count_arr) == 480
     assert count_arr.sum() == 0
 
+    count_none_ser = cam_nodata.drop_empty_trains().data_counts(labelled=True)
+    assert len(count_none_ser) == 0
+
+    count_none_arr = cam_nodata.drop_empty_trains().data_counts(labelled=False)
+    assert len(count_none_arr) == 0
 
 def test_select_by(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
