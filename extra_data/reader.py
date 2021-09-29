@@ -45,6 +45,7 @@ from .read_machinery import (
     find_proposal,
 )
 from .run_files_map import RunFilesMap
+from .sourcedata import SourceData
 from . import locality
 from .file_access import FileAccess
 from .utils import available_cpu_cores
@@ -204,16 +205,8 @@ class DataCollection:
         if source not in self.all_sources:
             raise SourceNameError(source)
 
-        if not self._has_source_key(source, key):
+        if key not in self[source]:
             raise PropertyNameError(key, source)
-
-    def _has_source_key(self, source, key):
-        selected_keys = self.selection[source]
-        if selected_keys is not None:
-            return key in selected_keys
-
-        for f in self._source_index[source]:
-            return f.has_source_key(source, key)
 
     def keys_for_source(self, source):
         """Get a set of key names for the given source
@@ -226,37 +219,37 @@ class DataCollection:
         combine two runs where the source was configured differently, the
         result can be unpredictable.
         """
-        selected_keys = self.selection[source]
-        if selected_keys is not None:
-            return selected_keys
-
-        # The same source may be in multiple files, but this assumes it has
-        # the same keys in all files that it appears in.
-        for f in self._source_index[source]:
-            return f.get_keys(source)
+        return self._get_source_data(source).keys()
 
     # Leave old name in case anything external was using it:
     _keys_for_source = keys_for_source
 
     def _get_key_data(self, source, key):
-        self._check_field(source, key)
-        section = 'INSTRUMENT' if source in self.instrument_sources else 'CONTROL'
+        return self._get_source_data(source)[key]
+
+    def _get_source_data(self, source):
+        if source in self.control_sources:
+            section = 'CONTROL'
+        elif source in self.instrument_sources:
+            section = 'INSTRUMENT'
+        else:
+            raise SourceNameError(source)
+
         files = self._source_index[source]
-        ds0 = files[0].file[f"{section}/{source}/{key.replace('.', '/')}"]
-        return KeyData(
+        return SourceData(
             source,
-            key,
+            sel_keys=self.selection[source],
             train_ids=self.train_ids,
             files=files,
             section=section,
-            dtype=ds0.dtype,
-            eshape=ds0.shape[1:],
             inc_suspect_trains=self.inc_suspect_trains,
         )
 
     def __getitem__(self, item):
         if isinstance(item, tuple) and len(item) == 2:
             return self._get_key_data(*item)
+        elif isinstance(item, str):
+            return self._get_source_data(item)
 
         raise TypeError("Expected data[source, key]")
 
@@ -590,18 +583,39 @@ class DataCollection:
         """
         files = set(self.files)
         train_ids = set(self.train_ids)
+        md = self.run_metadata()
+
+        # Account for old runs (file format 0.5),
+        # which doesn't have runNumber and proposalNumber metadata.
+
+        # DataCollection union of format version = 0.5 is
+        # not considered a single run.
+        single_run_cond = [
+            dc.is_single_run and (dc.run_metadata()["dataFormatVersion"] != '0.5')  # noqa
+            for dc in (self,) + others
+        ]
+        check_same_run = all(single_run_cond)
 
         for other in others:
             files.update(other.files)
             train_ids.update(other.train_ids)
 
+            if check_same_run:
+                other_md = other.run_metadata()
+                if (
+                    other_md["runNumber"] != md["runNumber"] or
+                    other_md["proposalNumber"] != md["proposalNumber"]
+                ):
+                    check_same_run = False
+
         train_ids = sorted(train_ids)
-        selection = union_selections([self.selection] +
-                                     [o.selection for o in others])
+        selection = union_selections(
+            [self.selection] + [o.selection for o in others])
 
         return DataCollection(
             files, selection=selection, train_ids=train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=check_same_run,
         )
 
     def _expand_selection(self, selection):
@@ -621,7 +635,7 @@ class DataCollection:
                     # If a specific set of keys is selected, make sure
                     # they are all valid.
                     for key in in_keys:
-                        if not self._has_source_key(source, key):
+                        if key not in self[source]:
                             raise PropertyNameError(key, source)
                 else:
                     # Catches both an empty set and None.
@@ -1062,16 +1076,19 @@ class DataCollection:
             print('  -', s)
             if any(p.match(s) for p in details_sources_re):
                 # Detail for control sources: list keys
-                ctrl_keys = self.keys_for_source(s)
+                ctrl_keys = self[s].keys(inc_timestamps=False)
                 print('    - Control keys (1 entry per train):')
                 keys_detail(s, sorted(ctrl_keys), prefix='      - ')
 
                 run_keys = self._source_index[s][0].get_run_keys(s)
+                run_keys = {k[:-6] for k in run_keys if k.endswith('.value')}
                 run_only_keys = run_keys - ctrl_keys
                 if run_only_keys:
                     print('    - Additional run keys (1 entry per run):')
                     for k in sorted(run_only_keys):
-                        ds = self._source_index[s][0].file[f"/RUN/{s}/{k.replace('.', '/')}"]
+                        ds = self._source_index[s][0].file[
+                            f"/RUN/{s}/{k.replace('.', '/')}/value"
+                        ]
                         entry_shape = ds.shape[1:]
                         if entry_shape:
                             entry_info = f", entry shape {entry_shape}"

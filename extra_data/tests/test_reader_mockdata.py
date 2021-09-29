@@ -71,6 +71,11 @@ def test_train_info(mock_lpd_data, capsys):
         assert "FXE_DET_LPD1M-1/DET/0CH0:xtdf" in out
 
 
+def test_info(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    run.info(details_for_sources='*/DOOCS/*')  # Smoketest
+
+
 def test_iterate_trains_fxe(mock_fxe_control_data):
     with H5File(mock_fxe_control_data) as f:
         for train_id, data in islice(f.trains(), 10):
@@ -787,15 +792,31 @@ def test_get_run_value(mock_fxe_control_data):
         f.get_run_value(src, 'non.existant')
 
 
-def test_get_run_value_union(mock_fxe_control_data, mock_sa3_control_data):
+def test_get_run_value_union_multirun(mock_fxe_control_data, mock_lpd_data):
     f = H5File(mock_fxe_control_data)
-    f2 = H5File(mock_sa3_control_data)
+    f2 = H5File(mock_lpd_data)
     data = f.union(f2)
     with pytest.raises(MultiRunError):
         data.get_run_value('FXE_XAD_GEC/CAM/CAMERA', 'firmwareVersion')
 
     with pytest.raises(MultiRunError):
         data.get_run_values('FXE_XAD_GEC/CAM/CAMERA')
+
+
+def test_get_run_value_union(mock_fxe_control_data, mock_sa3_control_data):
+    f = H5File(mock_fxe_control_data)
+    f2 = H5File(mock_sa3_control_data)
+    data = f.union(f2)
+    if data.files[0].format_version != '0.5':
+        assert data.get_run_value(
+            'FXE_XAD_GEC/CAM/CAMERA', 'firmwareVersion') == 0
+
+        assert (
+            data.run_metadata()["runNumber"] ==
+            f.run_metadata()["runNumber"] ==
+            f2.run_metadata()["runNumber"]
+        )
+
 
 def test_get_run_values(mock_fxe_control_data):
     f = H5File(mock_fxe_control_data)

@@ -381,7 +381,7 @@ class FileAccess:
                 res.add(key.replace('/', '.'))
 
         self.file['/RUN/' + source].visititems(add_key)
-        self._keys_cache[source] = res
+        self._run_keys_cache[source] = res
         return res
 
     def has_source_key(self, source, key):
