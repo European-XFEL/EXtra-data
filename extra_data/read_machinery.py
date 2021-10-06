@@ -213,6 +213,12 @@ def union_selections(selections):
     }
 
 
+def roi_shape(orig_shape: tuple, roi: tuple) -> tuple:
+    """Find array shape after slicing ROI"""
+    dummy = np.zeros((0,) + orig_shape)  # Extra 0 dim -> minimal memory use
+    return dummy[np.index_exp[:] + roi].shape[1:]
+
+
 class FilenameInfo:
     is_detector = False
     detector_name = None
