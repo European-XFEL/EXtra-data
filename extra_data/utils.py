@@ -15,7 +15,7 @@ import h5py
 import numpy as np
 
 
-__all__ = ['hdf5_paths', 'hdf5_to_cbf', 'numpy_to_cbf', 'QuickView']
+__all__ = ['hdf5_paths', 'QuickView']
 
 
 class QuickView:
@@ -131,30 +131,6 @@ def hdf5_paths(ds, indent=0, maxlen=100):
             hdf5_paths(ds[k], indent + 4, maxlen)
         else:
             print(" " * indent + k)
-
-
-def numpy_to_cbf(np_array, index=0, header=None):
-    """Deprecated: Given a 3D numpy array, convert it to a CBF data object"""
-    warn(
-        "The numpy_to_cbf and hdf5_to_cbf functions are deprecated and likely "
-        "to be removed. If you are using either of them, please contact "
-        "da-support@xfel.eu .", stacklevel=2,
-    )
-
-    import fabio.cbfimage
-    img_reduced = np_array[index, ...]
-    return fabio.cbfimage.cbfimage(header=header or {}, data=img_reduced)
-
-
-def hdf5_to_cbf(in_h5file, cbf_filename, index, header=None):
-    """Deprecated: Conversion from HDF5 file to cbf binary image file"""
-    tmpf = h5py.File(in_h5file, 'r')
-    paths = list(tmpf["METADATA/dataSourceId"])
-    image_path = [p for p in paths if p.endswith(b"image")][0]
-    images = tmpf[image_path + b"/data"]
-    cbf_out = numpy_to_cbf(images, index=index)
-    cbf_out.write(cbf_filename)
-    print("Convert {} index {} to {}".format(in_h5file, index, cbf_filename))
 
 
 def available_cpu_cores():
