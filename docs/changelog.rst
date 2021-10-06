@@ -1,6 +1,35 @@
 Release Notes
 =============
 
+1.8
+---
+
+- New API for inspecting the data associated with a single source (:ghpull:`206`).
+  Use a source name to get a :class:`.SourceData` object::
+
+    xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
+    xgm.keys()  # List the available keys
+    beam_x = xgm['beamPosition.ixPos'].ndarray()
+
+  See :ref:`data-by-source-and-key` for more details.
+- Combining data from the same run with :meth:`~.union` now preserves
+  'single run' status, so :meth:`~.run_metadata` still works (:ghpull:`208`).
+  This only works with more recent data (file format version 1.0 and above).
+- Reading data for multi-module detectors with :meth:`~.LPD1M.get_array` is
+  now faster, especially when selecting a subset of pulses (:ghpull:`218`,
+  :ghpull:`220`).
+- Fix :meth:`~.data_counts` when data is missing for some selected trains
+  (:ghpull:`222`).
+
+Deprecations & potentially breaking changes:
+
+- The ``numpy_to_cbf`` and ``hdf5_to_cbf`` functions have been removed
+  (:ghpull:`213`), after they were deprecated in 1.7. If you need to create CBF
+  files, consult the `Fabio package <http://www.silx.org/doc/fabio/latest/>`_.
+- Some packages required for :ref:`cmd-serve-files` are no longer installed
+  along with EXtra-data by default (:ghpull:`211`). Install with
+  ``pip install extra-data[bridge]`` if you need this functionality.
+
 1.7
 ---
 
