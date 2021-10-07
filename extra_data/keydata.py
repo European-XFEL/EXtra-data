@@ -30,6 +30,9 @@ class KeyData:
     def _find_chunks(self):
         """Find contiguous chunks of data for this key, in any order."""
         for file in self.files:
+            if len(file.train_ids) == 0:
+                continue
+
             firsts, counts = file.get_index(self.source, self._key_group)
 
             # Of trains in this file, which are in selection
