@@ -136,6 +136,8 @@ below, e.g.::
        :doc:`dask_averaging`
          An example using Dask with EuXFEL data
 
+   .. automethod:: train_ids_for_data
+
    .. automethod:: select_trains
    
    .. automethod:: split_trains
