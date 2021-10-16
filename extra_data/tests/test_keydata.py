@@ -169,3 +169,37 @@ def test_drop_empty_trains(mock_sa3_control_data):
     frame_counts = beamview_w_data.data_counts(labelled=False)
     assert frame_counts.shape == (250,)
     assert frame_counts.min() == 1
+
+def test_single_value(mock_sa3_control_data, monkeypatch):
+    f = H5File(mock_sa3_control_data)
+    flux = f['SA3_XTD10_XGM/XGM/DOOCS', 'pulseEnergy.photonFlux']
+
+    # Monkeypatch some actual data into the KeyData object
+    data = np.arange(flux.shape[0])
+    monkeypatch.setattr(flux, 'ndarray', lambda: data)
+
+    with pytest.raises(ValueError):
+        # Try some tolerances that have to fail.
+        flux.single_value()
+        flux.single_value(atol=1)
+        flux.single_value(rtol=0.1)
+
+    # Try with large enough tolerances.
+    assert flux.single_value(atol=len(data)/2) == np.median(data)
+    assert flux.single_value(rtol=0.5, atol=len(data)/4) == np.median(data)
+    assert flux.single_value(rtol=1) == np.median(data)
+
+    # Other reduction options
+    assert flux.single_value(rtol=1, reduce_by='mean') == np.mean(data)
+    assert flux.single_value(rtol=1, reduce_by=np.mean) == np.mean(data)
+    assert flux.single_value(atol=len(data)-1, reduce_by='first') == 0
+
+    # Try vector data.
+    intensity = f['SA3_XTD10_XGM/XGM/DOOCS:output', 'data.intensityTD']
+    data = np.repeat(data, intensity.shape[1]).reshape(-1, intensity.shape[-1])
+    monkeypatch.setattr(intensity, 'ndarray', lambda: data)
+
+    with pytest.raises(ValueError):
+        intensity.single_value()
+
+    np.testing.assert_equal(intensity.single_value(rtol=1), np.median(data))

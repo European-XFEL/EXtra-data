@@ -169,6 +169,42 @@ class KeyData:
             idxs = np.argsort(train_ids)
             return counts[idxs]
 
+    def single_value(self, rtol=1e-5, atol=0.0, reduce_by='median'):
+        """Retrieve a single reduced value if within tolerances.
+
+        The relative and absolute tolerances *rtol* and *atol* work the
+        same way as in ``numpy.allclose``. The default relative tolerance
+        is 1e-5 with no absolute tolerance. The data for this key is compared
+        against a reduced value obtained by the method described in *reduce_by*.
+
+        This may be a callable taking the key data, the string value of a
+        global symbol in the numpy packge such as 'median' or 'first' to use
+        the first value encountered. By default, 'median' is used.
+
+        If within tolerances, the reduced value is returned.
+        """
+
+        data = self.ndarray()
+
+        if callable(reduce_by):
+            value = reduce_by(data)
+        elif isinstance(reduce_by, str) and hasattr(np, reduce_by):
+            value = getattr(np, reduce_by)(data, axis=0)
+        elif reduce_by == 'first':
+            value = data[0]
+        else:
+            raise ValueError('invalid reduction method (may be callable, '
+                             'global numpy symbol or "first")')
+
+        if not np.allclose(data, value, rtol=rtol, atol=atol):
+            adev = np.max(np.abs(data - value))
+            rdev = np.max(np.abs(adev / value))
+
+            raise ValueError(f'data values are not within tolerance '
+                             f'(absolute: {adev:.3g}, relative: {rdev:.3g})')
+
+        return value
+
     # Getting data as different kinds of array: -------------------------------
 
     def ndarray(self, roi=()):
