@@ -197,11 +197,11 @@ class KeyData:
 
         return out
 
-    def train_ids_for_data(self):
+    def train_id_coordinates(self):
         """Make an array of train IDs to use alongside data from ``.ndarray()``.
 
         :attr:`train_ids` includes each selected train ID once, including trains
-        where data is missing. :meth:`train_ids_for_data` excludes missing
+        where data is missing. :meth:`train_id_coordinates` excludes missing
         trains, and repeats train IDs if the source has multiple entries
         per train. The result will be the same length as the first dimension
         of an array from :meth:`ndarray`, and tells you which train each entry
@@ -252,7 +252,7 @@ class KeyData:
         dims = ['trainId'] + extra_dims
 
         # Train ID index
-        coords = {'trainId': self.train_ids_for_data()}
+        coords = {'trainId': self.train_id_coordinates()}
 
         if name is None:
             name = f'{self.source}.{self.key}'
@@ -274,7 +274,7 @@ class KeyData:
         if name.endswith('.value') and self.section == 'CONTROL':
             name = name[:-6]
 
-        index = pd.Index(self.train_ids_for_data(), name='trainId')
+        index = pd.Index(self.train_id_coordinates(), name='trainId')
         data = self.ndarray()
         return pd.Series(data, name=name, index=index)
 
@@ -337,7 +337,7 @@ class KeyData:
             dims = ['trainId'] + ['dim_%d' % i for i in range(dask_arr.ndim - 1)]
 
             # Train ID index
-            coords = {'trainId': self.train_ids_for_data()}
+            coords = {'trainId': self.train_id_coordinates()}
 
             import xarray
             return xarray.DataArray(dask_arr, dims=dims, coords=coords)
