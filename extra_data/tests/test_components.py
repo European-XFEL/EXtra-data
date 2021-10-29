@@ -134,6 +134,22 @@ def test_get_array_pulse_indexes_reduced_data(mock_reduced_spb_proc_run):
     assert np.isin(arr.coords['pulse'], [1, 7, 15, 23]).all()
 
 
+def test_get_array_gap(mock_lpd_mini_gap_run):
+    run = RunDirectory(mock_lpd_mini_gap_run)
+    det = LPD1M(run, modules=[0, 1])
+
+    # All pulses
+    arr = det.get_array('image.data')
+    assert arr.shape == (2, 5, 10, 256, 256)
+    np.testing.assert_array_equal(arr[1, :, 8, 0, 0], [1, 2, 0, 3, 4])
+
+    # Selected pulses
+    arr = det.get_array('image.data', pulses=[8])
+    assert arr.shape == (2, 5, 1, 256, 256)
+    np.testing.assert_array_equal(arr[1, :, 0, 0, 0], [1, 2, 0, 3, 4])
+
+
+
 def test_get_array_roi(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run.select_trains(by_index[:3]))

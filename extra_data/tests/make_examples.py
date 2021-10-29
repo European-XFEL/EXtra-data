@@ -244,6 +244,24 @@ def make_lpd_parallelgain_run(dir_path, raw=True, format_version='0.5'):
                       frames_per_train=300)
         ], ntrains=100, chunksize=32, format_version=format_version)
 
+def make_lpd_run_mini_missed_train(dir_path):
+    write_file(osp.join(dir_path, 'RAW-R0450-LPD00-S00000.h5'), [
+        LPDModule('FXE_DET_LPD1M-1/DET/0CH0', frames_per_train=10),
+    ], ntrains=5, chunksize=5, format_version='1.0')
+    mod1_f = osp.join(dir_path, 'RAW-R0450-LPD01-S00000.h5')
+    write_file(mod1_f, [
+        LPDModule('FXE_DET_LPD1M-1/DET/1CH0', frames_per_train=10),
+    ], ntrains=4, chunksize=5, format_version='1.0')
+
+    # Modify the file for module 1, as if it missed train 10002
+    # & fill some data to check in the test.
+    with h5py.File(mod1_f, 'r+') as f:
+        f['INDEX/trainId'][:4] = [10000, 10001, 10003, 10004]
+        mod1_dset = f['INSTRUMENT/FXE_DET_LPD1M-1/DET/1CH0:xtdf/image/data']
+        print(mod1_dset.shape)
+        mod1_dset[8::10, 0, 0, 0] = np.arange(1, 5)
+
+
 def make_spb_run(dir_path, raw=True, sensor_size=(1024, 768), format_version='0.5'):
     prefix = 'RAW' if raw else 'CORR'
     for modno in range(16):
