@@ -1493,9 +1493,15 @@ def open_run(
         raw_extra = raw_dc.deselect(
             [(src, '*') for src in raw_dc.all_sources & proc_dc.all_sources])
 
-        # Merge extra raw sources into proc sources and re-enable is_single_run.
-        dc = proc_dc.union(raw_extra)
-        dc.is_single_run = True
+        if raw_extra.files:
+            # If raw is not a subset of proc, merge the "extra" raw
+            # sources into proc sources and re-enable is_single_run.
+            dc = proc_dc.union(raw_extra)
+            dc.is_single_run = True
+        else:
+            # If raw is a subset of proc, just use proc.
+            dc = proc_dc
+
         return dc
 
     if isinstance(proposal, str):
