@@ -578,7 +578,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
             # zeros() uses calloc, so the OS can do virtual memory tricks.
             # Don't change this to zeros_like() !
             tmp = np.zeros(chunk.dataset.shape, chunk.dataset.dtype)
-            pulse_sel = np.nonzero(inc_pulses_chunk)[0] + chunk.first
+            pulse_sel = np.nonzero(inc_pulses_chunk)[0] + chunk_slice.start
             sel_region = (pulse_sel,) + roi
             chunk.dataset.read_direct(
                 tmp, source_sel=sel_region, dest_sel=sel_region,
