@@ -556,12 +556,12 @@ class XtdfDetectorBase(MultimodDetectorBase):
         ):
             inc_pulses_chunk = sel_frames[tgt_slice]
             if inc_pulses_chunk.sum() == 0:  # No data from this chunk selected
-                return
+                continue
             elif inc_pulses_chunk.all():  # All pulses in chunk
                 chunk.dataset.read_direct(
                     mod_out[tgt_slice], source_sel=(chunk_slice,) + roi
                 )
-                return
+                continue
 
             # Read a subset of pulses from the chunk:
 
@@ -578,7 +578,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
             # zeros() uses calloc, so the OS can do virtual memory tricks.
             # Don't change this to zeros_like() !
             tmp = np.zeros(chunk.dataset.shape, chunk.dataset.dtype)
-            pulse_sel = np.nonzero(inc_pulses_chunk)[0] + chunk.first
+            pulse_sel = np.nonzero(inc_pulses_chunk)[0] + chunk_slice.start
             sel_region = (pulse_sel,) + roi
             chunk.dataset.read_direct(
                 tmp, source_sel=sel_region, dest_sel=sel_region,

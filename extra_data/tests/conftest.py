@@ -70,6 +70,13 @@ def mock_lpd_parallelgain_run():
 
 
 @pytest.fixture(scope='session')
+def mock_lpd_mini_gap_run():
+    with TemporaryDirectory() as td:
+        make_examples.make_lpd_run_mini_missed_train(td)
+        yield td
+
+
+@pytest.fixture(scope='session')
 def mock_spb_proc_run(format_version):
     with TemporaryDirectory() as td:
         make_examples.make_spb_run(td, raw=False, format_version=format_version)
