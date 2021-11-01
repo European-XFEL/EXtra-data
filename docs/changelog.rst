@@ -1,6 +1,15 @@
 Release Notes
 =============
 
+1.8.1
+-----
+
+- Fixed two different bugs introduced in 1.8 affecting loading data for
+  multi-module detectors with :meth:`~.LPD1M.get_array` when only some of the
+  modules captured data for a given train (:ghpull:`234`).
+- Fix ``open_run(..., data='all')`` when all sources in the raw data are copied
+  to the corrected run folder (:ghpull:`236`).
+
 1.8
 ---
 
