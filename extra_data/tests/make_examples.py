@@ -258,7 +258,6 @@ def make_lpd_run_mini_missed_train(dir_path):
     with h5py.File(mod1_f, 'r+') as f:
         f['INDEX/trainId'][:4] = [10000, 10001, 10003, 10004]
         mod1_dset = f['INSTRUMENT/FXE_DET_LPD1M-1/DET/1CH0:xtdf/image/data']
-        print(mod1_dset.shape)
         mod1_dset[8::10, 0, 0, 0] = np.arange(1, 5)
 
 
