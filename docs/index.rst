@@ -1,13 +1,8 @@
 EXtra-data
 ==========
 
-**EXtra-data** is a Python library for accessing and working with data
+**EXtra-data** is a Python library for accessing saved data
 produced at `European XFEL <https://www.xfel.eu/>`_.
-
-.. note::
-   EXtra-data is the new name for karabo_data.
-   The code to work with detector geometry has been separated as
-   `EXtra-geom <https://github.com/European-XFEL/EXtra-geom>`__.
 
 Installation
 ------------
@@ -16,7 +11,7 @@ EXtra-data is available on our Anaconda installation on the Maxwell cluster::
 
     module load exfel exfel_anaconda3
 
-You can also install it `from PyPI <https://pypi.org/project/karabo-data/>`__
+You can also install it `from PyPI <https://pypi.org/project/EXtra-data/>`__
 to use in other environments with Python 3.6 or later::
 
     pip install extra_data
