@@ -26,40 +26,34 @@ If you get a permissions error, add the ``--user`` flag to that command.
 Quickstart
 ----------
 
-Open a run or a file - see :ref:`opening-files` for more::
+Open a run on the Maxwell cluster::
 
-    from extra_data import open_run, RunDirectory, H5File
+    from extra_data import open_run
 
-    # Find a run on the Maxwell cluster
     run = open_run(proposal=700000, run=1)
 
-    # Open a run with a directory path
-    run = RunDirectory("/gpfs/exfel/exp/XMPL/201750/p700000/raw/r0001")
+You can also specify a run directory, or open an individual file - see
+:ref:`opening-files` for details. The same methods to access data work with any
+of these options.
 
-    # Open an individual file
-    file = H5File("RAW-R0017-DA01-S00000.h5")
+Load data as a NumPy array for a given source & key::
 
-After this step, you'll use the same methods to get data whether you opened a
-run or a file.
+    arr = run["SA3_XTD10_PES/ADC/1:network", "digitizers.channel_4_A.raw.samples"].ndarray()
 
-Load data into memory - see :ref:`data-by-source-and-key` for more::
+You can load only a region of interest, get a labelled array with train IDs,
+or load 1D data as columns in a pandas dataframe. See :doc:`xpd_examples`
+(example) and :ref:`data-by-source-and-key` (reference) for more information.
 
-    # Get a labelled array
-    arr = run["SA3_XTD10_PES/ADC/1:network", "digitizers.channel_4_A.raw.samples"].xarray()
-
-    # Get a pandas dataframe of 1D fields
-    df = run.get_dataframe(fields=[
-        ("*_XGM/*", "*.i[xy]Pos"),
-        ("*_XGM/*", "*.photonFlux")
-    ])
-
-Iterate through data for each pulse train - see :ref:`data-by-train` for more::
+For data that's too big to fit in memory at once, you can read one pulse train
+at a time::
 
     for train_id, data in run.select("*/DET/*", "image.data").trains():
         mod0 = data["FXE_DET_LPD1M-1/DET/0CH0:xtdf"]["image.data"]
 
-These are not the only ways to get data: :doc:`reading_files` describes
-various other options.
+Other options to work with large data volumes include breaking the run into
+smaller parts with :meth:`~.DataCollection.split_trains` before loading data,
+and automatic chunking with the `Dask <https://dask.org/>`_ framework and
+:meth:`~.dask_array`.
 
 Documentation contents
 ----------------------
