@@ -60,6 +60,7 @@ Documentation contents
    xpd_examples
    inspection
    iterate_trains
+   aligning_trains
    dask_averaging
    parallel_example
    lpd_data
