@@ -9,13 +9,11 @@ program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 """
 
 import os
-from warnings import warn
 
-import h5py
 import numpy as np
 
 
-__all__ = ['hdf5_paths', 'QuickView']
+__all__ = ['QuickView']
 
 
 class QuickView:
@@ -115,22 +113,6 @@ class QuickView:
 
     def __len__(self):
         return self._data.shape[0]
-
-
-def hdf5_paths(ds, indent=0, maxlen=100):
-    """Deprecated: Visit and print name of all element in HDF5 file (from S Hauf)"""
-    warn(
-        "hdf5_paths is deprecated and likely to be removed. Try our h5glance "
-        "package for a similar view of HDF5 files. If this is a problem, "
-        "please contact da-support@xfel.eu .", stacklevel=2,
-    )
-
-    for k in list(ds.keys())[:maxlen]:
-        print(" " * indent + k)
-        if isinstance(ds[k], h5py.Group):
-            hdf5_paths(ds[k], indent + 4, maxlen)
-        else:
-            print(" " * indent + k)
 
 
 def available_cpu_cores():
