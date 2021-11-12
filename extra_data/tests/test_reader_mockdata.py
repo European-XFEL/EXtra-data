@@ -826,6 +826,28 @@ def test_get_run_values(mock_fxe_control_data):
     assert isinstance(d['enableShutter.value'], np.uint8)
 
 
+def test_get_run_values_no_trains(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    sel = run.select_trains(np.s_[:0])
+    d = sel.get_run_values('SPB_IRDA_JF4M/MDL/POWER')
+    assert isinstance(d['voltage.value'], np.float64)
+
+
+def test_inspect_key_no_trains(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    sel = run.select_trains(np.s_[:0])
+
+    # CONTROL
+    jf_pwr_voltage = sel['SPB_IRDA_JF4M/MDL/POWER', 'voltage']
+    assert jf_pwr_voltage.shape == (0,)
+    assert jf_pwr_voltage.dtype == np.dtype(np.float64)
+
+    # INSTRUMENT
+    jf_m1_data = sel['SPB_IRDA_JF4M/DET/JNGFR01:daqOutput', 'data.adc']
+    assert jf_m1_data.shape == (0, 16, 512, 1024)
+    assert jf_m1_data.dtype == np.dtype(np.uint16)
+
+
 def test_run_metadata(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
     md = run.run_metadata()
@@ -839,3 +861,9 @@ def test_run_metadata(mock_spb_raw_run):
             'sample', 'sequenceNumber',
         }
         assert isinstance(md['creationDate'], str)
+
+def test_run_metadata_no_trains(mock_scs_run):
+    run = RunDirectory(mock_scs_run)
+    sel = run.select_trains(np.s_[:0])
+    md = sel.run_metadata()
+    assert md['dataFormatVersion'] == '1.0'
