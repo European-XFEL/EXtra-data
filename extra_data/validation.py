@@ -28,7 +28,7 @@ class ValidationError(Exception):
 
 
 class FileValidator:
-    def __init__(self, file: FileAccess):
+    def __init__(self, file: FileAccess, timestamp=False):
         self.file = file
         self.filename = file.filename
         self.problems = []
