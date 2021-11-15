@@ -28,10 +28,9 @@ class ValidationError(Exception):
 
 
 class FileValidator:
-    def __init__(self, file: FileAccess, timestamp=False):
+    def __init__(self, file: FileAccess):
         self.file = file
         self.filename = file.filename
-        self.extras = {'timestamp': timestamp}
         self.problems = []
 
     def validate(self):
@@ -43,9 +42,7 @@ class FileValidator:
         self.problems = []
         self.check_indices()
         self.check_trainids()
-        for check, do in self.extras.items():
-            if do:
-                getattr(self, f'check_{check}')()
+        self.check_timestamps()
 
         return self.problems
 
@@ -159,7 +156,9 @@ class FileValidator:
 
         check_index_contiguous(first, count, record)
 
-    def check_timestamp(self):
+    def check_timestamps(self):
+        """Check that CONTROL value's timestamps are monotonically increasing.
+        """
         for source in self.file.control_sources:
             for key in self.file.get_keys(source):
                 if not key.endswith('.timestamp'):
@@ -329,10 +328,6 @@ def main(argv=None):
 
     ap = ArgumentParser(prog='extra-data-validate')
     ap.add_argument('path', help="HDF5 file or run directory of HDF5 files.")
-    ap.add_argument(
-        '-ts', '--timestamp', action='store_true',
-        help='check that timestamps are increasing on control data sources'
-    )
     args = ap.parse_args(argv)
 
     path = args.path

@@ -2,6 +2,7 @@ import os.path as osp
 from pathlib import Path
 
 from h5py import File
+import numpy as np
 from pytest import fixture, raises
 from tempfile import TemporaryDirectory
 
@@ -154,3 +155,18 @@ def test_gaps(agipd_file):
 
 def test_file_without_data(mock_empty_file):
     FileValidator(FileAccess(mock_empty_file)).validate()
+
+
+def test_control_data_timestamps(data_aggregator_file):
+    with File(data_aggregator_file, 'r+') as f:
+        # control data timestamp is not in data
+        ts = f['CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/pulseEnergy/photonFlux/timestamp']
+        ts[:] = np.arange(len(ts)) + 1
+        ts[10] = 5
+
+    with raises(ValidationError) as excinfo:
+        FileValidator(FileAccess(data_aggregator_file)).validate()
+    problem = excinfo.value.problems.pop()
+    assert problem['msg'] == 'Timestamp is decreasing, e.g. at 10 (5 < 10)'
+    assert problem['dataset'] == 'CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/pulseEnergy/photonFlux/timestamp'
+    assert 'RAW-R0450-DA01-S00001.h5' in problem['file']
