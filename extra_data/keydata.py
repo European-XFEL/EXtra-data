@@ -2,7 +2,7 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from .exceptions import TrainIDError
+from .exceptions import TrainIDError, NoDataError
 from .file_access import FileAccess
 from .read_machinery import (
     contiguous_regions, DataChunk, select_train_ids, split_trains, roi_shape
@@ -185,6 +185,9 @@ class KeyData:
         """
 
         data = self.ndarray()
+
+        if len(data) == 0:
+            raise NoDataError(self.source, self.key)
 
         if callable(reduce_by):
             value = reduce_by(data)

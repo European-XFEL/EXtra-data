@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from extra_data import RunDirectory, H5File
-from extra_data.exceptions import TrainIDError
+from extra_data.exceptions import TrainIDError, NoDataError
 
 def test_get_keydata(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
@@ -172,7 +172,13 @@ def test_drop_empty_trains(mock_sa3_control_data):
 
 def test_single_value(mock_sa3_control_data, monkeypatch):
     f = H5File(mock_sa3_control_data)
+
+    imager = f['SA3_XTD10_IMGFEL/CAM/BEAMVIEW:daqOutput', 'data.image.pixels']
     flux = f['SA3_XTD10_XGM/XGM/DOOCS', 'pulseEnergy.photonFlux']
+
+    with pytest.raises(NoDataError):
+        imager.as_single_value()  # FEL imager with no data.
+        flux[:0].as_single_value()  # No data through selection.
 
     # Monkeypatch some actual data into the KeyData object
     data = np.arange(flux.shape[0])

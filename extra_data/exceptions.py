@@ -37,3 +37,16 @@ class MultiRunError(ValueError):
             "because you have used .union() to combine data. Please retrieve "
             "this information before combining."
         )
+
+
+class NoDataError(ValueError):
+    def __init__(self, source, key=None):
+        self.source = source
+        self.key = key
+
+    def __str__(self):
+        if self.key is not None:
+            return 'This data is empty for key {!r} of source {!r}'.format(
+                self.key, self.source)
+        else:
+            return 'This data is empty for source {!r}'.format(self.source)
