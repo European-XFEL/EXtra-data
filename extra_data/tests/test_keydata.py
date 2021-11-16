@@ -180,19 +180,19 @@ def test_single_value(mock_sa3_control_data, monkeypatch):
 
     with pytest.raises(ValueError):
         # Try some tolerances that have to fail.
-        flux.single_value()
-        flux.single_value(atol=1)
-        flux.single_value(rtol=0.1)
+        flux.as_single_value()
+        flux.as_single_value(atol=1)
+        flux.as_single_value(rtol=0.1)
 
     # Try with large enough tolerances.
-    assert flux.single_value(atol=len(data)/2) == np.median(data)
-    assert flux.single_value(rtol=0.5, atol=len(data)/4) == np.median(data)
-    assert flux.single_value(rtol=1) == np.median(data)
+    assert flux.as_single_value(atol=len(data)/2) == np.median(data)
+    assert flux.as_single_value(rtol=0.5, atol=len(data)/4) == np.median(data)
+    assert flux.as_single_value(rtol=1) == np.median(data)
 
     # Other reduction options
-    assert flux.single_value(rtol=1, reduce_by='mean') == np.mean(data)
-    assert flux.single_value(rtol=1, reduce_by=np.mean) == np.mean(data)
-    assert flux.single_value(atol=len(data)-1, reduce_by='first') == 0
+    assert flux.as_single_value(rtol=1, reduce_by='mean') == np.mean(data)
+    assert flux.as_single_value(rtol=1, reduce_by=np.mean) == np.mean(data)
+    assert flux.as_single_value(atol=len(data)-1, reduce_by='first') == 0
 
     # Try vector data.
     intensity = f['SA3_XTD10_XGM/XGM/DOOCS:output', 'data.intensityTD']
@@ -200,6 +200,6 @@ def test_single_value(mock_sa3_control_data, monkeypatch):
     monkeypatch.setattr(intensity, 'ndarray', lambda: data)
 
     with pytest.raises(ValueError):
-        intensity.single_value()
+        intensity.as_single_value()
 
-    np.testing.assert_equal(intensity.single_value(rtol=1), np.median(data))
+    np.testing.assert_equal(intensity.as_single_value(rtol=1), np.median(data))

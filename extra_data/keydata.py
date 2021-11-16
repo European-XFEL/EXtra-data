@@ -169,7 +169,7 @@ class KeyData:
             idxs = np.argsort(train_ids)
             return counts[idxs]
 
-    def single_value(self, rtol=1e-5, atol=0.0, reduce_by='median'):
+    def as_single_value(self, rtol=1e-5, atol=0.0, reduce_by='median'):
         """Retrieve a single reduced value if within tolerances.
 
         The relative and absolute tolerances *rtol* and *atol* work the
