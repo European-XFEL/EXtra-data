@@ -42,6 +42,8 @@ class FileValidator:
         self.problems = []
         self.check_indices()
         self.check_trainids()
+        self.check_timestamps()
+
         return self.problems
 
     def record(self, msg, **kwargs):
@@ -153,6 +155,37 @@ class FileValidator:
             )
 
         check_index_contiguous(first, count, record)
+
+    def check_timestamps(self):
+        """Check that CONTROL value's timestamps are monotonically increasing.
+        """
+        for source in self.file.control_sources:
+            for key in self.file.get_keys(source):
+                if not key.endswith('.timestamp'):
+                    continue
+
+                ds_path = f'CONTROL/{source}/{key.replace(".", "/")}'
+                ts = self.file.file[ds_path][:]
+
+                if (ts == 0).any():
+                    first0 = np.where(ts == 0)[0][0]
+                    if not (ts[first0:] == 0).all():
+                        self.record(
+                            'Zeroes in Timestamp before last train ID',
+                            dataset=ds_path
+                        )
+                    nonzero_ts = ts[:first0]
+                else:
+                    nonzero_ts = ts
+
+                non_incr = (nonzero_ts[1:] < nonzero_ts[:-1]).nonzero()[0]
+                if non_incr.size > 0:
+                    pos = non_incr[0]
+                    self.record(
+                        f'Timestamp is decreasing, e.g. at '
+                        f'{pos + 1} ({ts[pos + 1]} < {ts[pos]})',
+                        dataset=ds_path,
+                    )
 
 
 def check_index_contiguous(firsts, counts, record):
