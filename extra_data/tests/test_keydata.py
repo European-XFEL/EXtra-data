@@ -176,18 +176,25 @@ def test_single_value(mock_sa3_control_data, monkeypatch):
     imager = f['SA3_XTD10_IMGFEL/CAM/BEAMVIEW:daqOutput', 'data.image.pixels']
     flux = f['SA3_XTD10_XGM/XGM/DOOCS', 'pulseEnergy.photonFlux']
 
+    # Try without data for a source and key.
     with pytest.raises(NoDataError):
         imager.as_single_value()  # FEL imager with no data.
+
+    with pytest.raises(NoDataError):
         flux[:0].as_single_value()  # No data through selection.
 
     # Monkeypatch some actual data into the KeyData object
     data = np.arange(flux.shape[0])
     monkeypatch.setattr(flux, 'ndarray', lambda: data)
 
+    # Try some tolerances that have to fail.
     with pytest.raises(ValueError):
-        # Try some tolerances that have to fail.
         flux.as_single_value()
+
+    with pytest.raises(ValueError):
         flux.as_single_value(atol=1)
+
+    with pytest.raises(ValueError):
         flux.as_single_value(rtol=0.1)
 
     # Try with large enough tolerances.
