@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from extra_data import RunDirectory, H5File
-from extra_data.exceptions import TrainIDError
+from extra_data.exceptions import TrainIDError, NoDataError
 
 def test_get_keydata(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
@@ -169,3 +169,50 @@ def test_drop_empty_trains(mock_sa3_control_data):
     frame_counts = beamview_w_data.data_counts(labelled=False)
     assert frame_counts.shape == (250,)
     assert frame_counts.min() == 1
+
+def test_single_value(mock_sa3_control_data, monkeypatch):
+    f = H5File(mock_sa3_control_data)
+
+    imager = f['SA3_XTD10_IMGFEL/CAM/BEAMVIEW:daqOutput', 'data.image.pixels']
+    flux = f['SA3_XTD10_XGM/XGM/DOOCS', 'pulseEnergy.photonFlux']
+
+    # Try without data for a source and key.
+    with pytest.raises(NoDataError):
+        imager.as_single_value()  # FEL imager with no data.
+
+    with pytest.raises(NoDataError):
+        flux[:0].as_single_value()  # No data through selection.
+
+    # Monkeypatch some actual data into the KeyData object
+    data = np.arange(flux.shape[0])
+    monkeypatch.setattr(flux, 'ndarray', lambda: data)
+
+    # Try some tolerances that have to fail.
+    with pytest.raises(ValueError):
+        flux.as_single_value()
+
+    with pytest.raises(ValueError):
+        flux.as_single_value(atol=1)
+
+    with pytest.raises(ValueError):
+        flux.as_single_value(rtol=0.1)
+
+    # Try with large enough tolerances.
+    assert flux.as_single_value(atol=len(data)/2) == np.median(data)
+    assert flux.as_single_value(rtol=0.5, atol=len(data)/4) == np.median(data)
+    assert flux.as_single_value(rtol=1) == np.median(data)
+
+    # Other reduction options
+    assert flux.as_single_value(rtol=1, reduce_by='mean') == np.mean(data)
+    assert flux.as_single_value(rtol=1, reduce_by=np.mean) == np.mean(data)
+    assert flux.as_single_value(atol=len(data)-1, reduce_by='first') == 0
+
+    # Try vector data.
+    intensity = f['SA3_XTD10_XGM/XGM/DOOCS:output', 'data.intensityTD']
+    data = np.repeat(data, intensity.shape[1]).reshape(-1, intensity.shape[-1])
+    monkeypatch.setattr(intensity, 'ndarray', lambda: data)
+
+    with pytest.raises(ValueError):
+        intensity.as_single_value()
+
+    np.testing.assert_equal(intensity.as_single_value(rtol=1), np.median(data))
