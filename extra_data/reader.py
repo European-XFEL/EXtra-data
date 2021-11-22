@@ -43,6 +43,7 @@ from .read_machinery import (
     split_trains,
     union_selections,
     find_proposal,
+    glob_wildcards_re,
 )
 from .run_files_map import RunFilesMap
 from .sourcedata import SourceData
@@ -689,12 +690,12 @@ class DataCollection:
         source_re = re.compile(fnmatch.translate(source_glob))
         key_re = re.compile(fnmatch.translate(key_glob))
         if key_glob.endswith(('.value', '*')):
+            ctrl_key_glob = key_glob
             ctrl_key_re = key_re
         else:
-            # The translated pattern ends with "\Z" - insert before this
-            p = key_re.pattern
-            end_ix = p.rindex(r'\Z')
-            ctrl_key_re = re.compile(p[:end_ix] + r'(\.value)?' + p[end_ix:])
+            # Add .value suffix for keys of CONTROL sources
+            ctrl_key_glob = key_glob + '.value'
+            ctrl_key_re = re.compile(fnmatch.translate(ctrl_key_glob))
 
         matched = {}
         for source in self.all_sources:
@@ -710,6 +711,12 @@ class DataCollection:
                     matched[source] = None
                 else:
                     matched[source] = self.selection[source]
+            elif glob_wildcards_re.search(key_glob) is None:
+                # Selecting a single key (no wildcards in pattern)
+                # This check should be faster than scanning all keys:
+                k = ctrl_key_glob if source in self.control_sources else key_glob
+                if k in self._get_source_data(source):
+                    matched[source] = {k}
             else:
                 r = ctrl_key_re if source in self.control_sources else key_re
                 keys = set(filter(r.match, self.keys_for_source(source)))
