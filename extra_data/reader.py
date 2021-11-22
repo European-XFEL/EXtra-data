@@ -802,7 +802,8 @@ class DataCollection:
                     # many cases this is 'data', but not always.
                     if keys is None:
                         # All keys are selected.
-                        groups = self._source_index[source][0].index_group_names()
+                        f = self._source_index[source][0]
+                        groups = f.index_group_names(source)
                     else:
                         groups = {key.partition('.')[0] for key in keys}
                 else:
