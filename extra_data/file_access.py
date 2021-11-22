@@ -315,6 +315,15 @@ class FileAccess:
             counts = np.uint64((ix_group['last'][:ntrains] - firsts + 1) * status)
         return firsts, counts
 
+    def index_group_names(self, source):
+        """Get group names for index data, to use with .get_index()"""
+        if source in self.control_sources:
+            return {''}
+        elif source in self.instrument_sources:
+            return set(self.file[f'/INDEX/{source}'].keys())
+        else:
+            raise SourceNameError(source)
+
     def metadata(self) -> dict:
         """Get the contents of the METADATA group as a dict
 

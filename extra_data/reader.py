@@ -802,9 +802,9 @@ class DataCollection:
                     # many cases this is 'data', but not always.
                     if keys is None:
                         # All keys are selected.
-                        keys = self.keys_for_source(source)
-
-                    groups = {key.partition('.')[0] for key in keys}
+                        groups = self._source_index[source][0].index_group_names()
+                    else:
+                        groups = {key.partition('.')[0] for key in keys}
                 else:
                     # CONTROL data has no key group.
                     groups = ['']
