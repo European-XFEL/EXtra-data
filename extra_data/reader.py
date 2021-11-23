@@ -981,6 +981,10 @@ class DataCollection:
 
         return None, None
 
+    def __repr__(self):
+        return f"<extra_data.DataCollection for {len(self.all_sources)} " \
+               f"sources and {len(self.train_ids)} trains>"
+
     def info(self, details_for_sources=()):
         """Show information about the selected data.
         """
