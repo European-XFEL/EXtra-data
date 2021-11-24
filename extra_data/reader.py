@@ -827,8 +827,7 @@ class DataCollection:
                     train_ids = np.intersect1d(train_ids, source_tids)
 
             # Filtering may have eliminated previously selected files.
-            files = [f for f in files
-                     if f.has_train_ids(train_ids, self.inc_suspect_trains)]
+            files = self._filter_files_for_trains(files, train_ids, selection.keys())
 
             train_ids = list(train_ids)  # Convert back to a list.
 
@@ -908,14 +907,30 @@ class DataCollection:
         """
         new_train_ids = select_train_ids(self.train_ids, train_range)
 
-        files = [f for f in self.files
-                 if f.has_train_ids(new_train_ids, self.inc_suspect_trains)]
+        files = self._filter_files_for_trains(
+            self.files, new_train_ids, self.all_sources
+        )
 
         return DataCollection(
             files, selection=self.selection, train_ids=new_train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
             is_single_run=self.is_single_run,
         )
+
+    def _filter_files_for_trains(self, files, train_ids, sel_sources) -> list:
+        """Filter the files by trains, retaining >= 1 file for each source
+
+        This allows inspection, and access to RUN data, even if no data for that
+        source is selected.
+        """
+        files = {f for f in files
+                 if f.has_train_ids(train_ids, self.inc_suspect_trains)}
+
+        sources_in_files = set().union(f.all_sources for f in files)
+        for src in (sel_sources - sources_in_files):
+            files.add(self._source_index[src][0])
+
+        return sorted(files, key=lambda f: f.filename)
 
     def split_trains(self, parts=None, trains_per_part=None):
         """Split this data into chunks with a fraction of the trains each.
