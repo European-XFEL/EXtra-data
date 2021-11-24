@@ -1,8 +1,11 @@
+import os
 import numpy as np
 import pytest
 
 from extra_data import RunDirectory, H5File
 from extra_data.exceptions import TrainIDError, NoDataError
+from .mockdata import write_file
+from .mockdata.xgm import XGM
 
 def test_get_keydata(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
@@ -216,3 +219,21 @@ def test_single_value(mock_sa3_control_data, monkeypatch):
         intensity.as_single_value()
 
     np.testing.assert_equal(intensity.as_single_value(rtol=1), np.median(data))
+
+
+@pytest.fixture()
+def run_with_file_no_trains(mock_spb_raw_run):
+    extra_file = os.path.join(mock_spb_raw_run, 'RAW-R0238-DA01-S00002.h5')
+    write_file(extra_file, [
+        XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
+    ], ntrains=0)
+    try:
+        yield mock_spb_raw_run
+    finally:
+        os.unlink(extra_file)
+
+
+def test_file_no_trains(run_with_file_no_trains):
+    run = RunDirectory(run_with_file_no_trains)
+    xpos = run['SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos'].ndarray()
+    assert xpos.shape == (64,)
