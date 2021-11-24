@@ -260,3 +260,6 @@ def find_proposal(propno):
         return d
 
     raise Exception("Couldn't find proposal dir for {!r}".format(propno))
+
+
+glob_wildcards_re = re.compile(r'([*?[])')
