@@ -9,6 +9,7 @@ program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 """
 
 import os
+from warnings import warn
 
 import numpy as np
 
@@ -52,6 +53,11 @@ class QuickView:
     _current_index = 0
 
     def __init__(self, data=None):
+        warn(
+            'extra_data.QuickView is deprecated, and likely to be removed in a '
+            'future version. Please contact da-support@xfel.eu if you use it.',
+            stacklevel=2,
+        )
         if data:
             self.data = data
 
