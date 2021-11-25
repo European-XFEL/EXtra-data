@@ -42,7 +42,7 @@ Check the structure of an EuXFEL run or HDF5 file:
    extra-data-validate /gpfs/exfel/exp/XMPL/201750/p700000/raw/r0002
 
 If it finds problems with the data, the program will produce a list of them and
-exit with status 1.
+exit with status 1. See :doc:`validation` for details of what it checks.
 
 .. _cmd-serve-files:
 
