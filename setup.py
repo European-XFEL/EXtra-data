@@ -61,6 +61,8 @@ setup(name="EXtra-data",
               'nbsphinx',
               'ipython',  # For nbsphinx syntax highlighting
               'sphinxcontrib_github_alt',
+              'karabo-bridge',  # For autodoc of ZMQStreamer
+              'psutil',
           ],
           'test': [
               'coverage',

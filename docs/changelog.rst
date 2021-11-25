@@ -1,6 +1,32 @@
 Release Notes
 =============
 
+1.9
+---
+
+- New :meth:`.KeyData.as_single_value` method to check that a key remains
+  constant (within a specified tolerance) through the data, and return it as
+  a single value (:ghpull:`228`).
+- New :meth:`.KeyData.train_id_coordinates` method to get train IDs associated
+  with specific data as a NumPy array (:ghpull:`226`).
+- :ref:`cmd-validate` now checks that timestamps in control data are in
+  increasing order (:ghpull:`94`).
+- Ensure basic :class:`DataCollection` functionality, including getting values
+  from ``RUN`` and inspecting the shape & dtype of other data, works when no
+  trains are selected (:ghpull:`244`).
+- Fix reading data where some files in a run contain zero trains, as seen in
+  some of the oldest EuXFEL data (:ghpull:`225`).
+- Minor performance improvements for :meth:`~.DataCollection.select` when
+  selecting single keys (no wildcards) and when selecting all keys along with
+  ``require_all=True`` (:ghpull:`248`).
+
+Deprecations & potentially breaking changes:
+
+- The ``QuickView`` class is deprecated. We believe no-one is using this.
+  If you are, please get in touch with da-support@xfel.eu .
+- Removed the ``h5index`` module and the ``hdf5_paths`` function, which were
+  deprecated in 1.7.
+
 1.8.1
 -----
 
