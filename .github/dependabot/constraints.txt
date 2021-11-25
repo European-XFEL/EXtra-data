@@ -3,7 +3,7 @@ h5py<3.7.0
 karabo-bridge==0.6.1
 kiwisolver<1.4.0
 matplotlib<3.6.0
-msgpack==1.0.2
+msgpack==1.0.3
 msgpack-numpy==0.4.7.1
 numpy<1.22.0
 pandas<1.4.0
