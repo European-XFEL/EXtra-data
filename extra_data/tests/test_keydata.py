@@ -2,8 +2,11 @@ import os
 import numpy as np
 import pytest
 
+import h5py
+
 from extra_data import RunDirectory, H5File
 from extra_data.exceptions import TrainIDError, NoDataError
+from . import make_examples
 from .mockdata import write_file
 from .mockdata.xgm import XGM
 
@@ -145,6 +148,46 @@ def test_data_counts_empty(mock_fxe_raw_run):
 
     count_none_arr = cam_nodata.drop_empty_trains().data_counts(labelled=False)
     assert len(count_none_arr) == 0
+
+
+@pytest.fixture()
+def fxe_run_module_offset(tmp_path):
+    run_dir = tmp_path / 'fxe-run-mod-offset'
+    run_dir.mkdir()
+    make_examples.make_fxe_run(run_dir, format_version='1.0')
+
+    # Shift the train IDs for a module by 1, so it has data for a different set
+    # of train IDs to other sources.
+    with h5py.File(run_dir / 'RAW-R0450-LPD08-S00000.h5', 'r+') as f:
+        tids_dset = f['INDEX/trainId']
+        tids_dset[:] = tids_dset[:] + 1
+
+    return run_dir
+
+
+def test_data_counts_missing_train(fxe_run_module_offset):
+    run = RunDirectory(fxe_run_module_offset)
+    assert len(run.train_ids) == 481
+    lpd_m8 = run['FXE_DET_LPD1M-1/DET/8CH0:xtdf', 'image.cellId']
+
+    ser = lpd_m8.data_counts(labelled=True)
+    assert len(ser) == 480
+    np.testing.assert_array_equal(ser.index, run.train_ids[1:])
+
+    arr = lpd_m8.data_counts(labelled=False)
+    assert len(arr) == 481
+    assert arr[0] == 0
+    np.testing.assert_array_equal(arr[1:], 128)
+
+    lpd_m8_w_data = lpd_m8.drop_empty_trains()
+    ser = lpd_m8_w_data.data_counts(labelled=True)
+    assert len(ser) == 480
+    np.testing.assert_array_equal(ser.index, run.train_ids[1:])
+
+    arr = lpd_m8_w_data.data_counts(labelled=False)
+    assert len(arr) == 480
+    np.testing.assert_array_equal(arr, 128)
+
 
 def test_select_by(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
