@@ -164,13 +164,16 @@ class KeyData:
             import pandas as pd
             return pd.Series(counts, index=train_ids)
         else:
-            # self.train_ids is always sorted. The train IDs from chunks
-            # should be in order, but sometimes trains are written out of order.
-            # Reorder the counts to match self.train_ids.
-            assert len(train_ids) == len(self.train_ids)
+            # We may be missing some train IDs, if they're not in any file
+            # for this source, and they're sometimes out of order within chunks
+            # (they shouldn't be, but we try not to fail too badly if they are).
             assert np.isin(train_ids, self.train_ids).all()
-            idxs = np.argsort(train_ids)
-            return counts[idxs]
+            tid_to_ix = {t: i for (i, t) in enumerate(self.train_ids)}
+            res = np.zeros(len(self.train_ids), dtype=np.uint64)
+            for tid, ct in zip(train_ids, counts):
+                res[tid_to_ix[tid]] = ct
+
+            return res
 
     def as_single_value(self, rtol=1e-5, atol=0.0, reduce_by='median'):
         """Retrieve a single reduced value if within tolerances.
