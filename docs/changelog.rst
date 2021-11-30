@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+1.9.1
+-----
+
+- Fix errors from :meth:`~.KeyData.data_counts` and
+  :meth:`~.KeyData.drop_empty_trains` when different train IDs exist for
+  different sources (:ghpull:`257`).
+
 1.9
 ---
 
