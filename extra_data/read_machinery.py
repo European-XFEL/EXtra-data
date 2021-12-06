@@ -10,8 +10,8 @@ import numpy as np
 import os.path as osp
 import re
 import time
+from warnings import warn
 
-from .exceptions import SourceNameError
 
 log = logging.getLogger(__name__)
 
@@ -78,18 +78,28 @@ def _tid_to_slice_ix(tid, train_ids, stop=False):
     except ValueError:
         pass
 
+    if len(train_ids) == 0:
+        warn("Using train ID slice on data with no trains selected", stacklevel=4)
+        return 0
+
     if tid < train_ids[0]:
         if stop:
-            raise ValueError("Train ID {} is before this run (starts at {})"
-                             .format(tid, train_ids[0]))
+            warn(
+                f"Train ID {tid} is before this run (starts at {train_ids[0]})",
+                stacklevel=4,
+            )
+            return 0
         else:
             return None
     elif tid > train_ids[-1]:
         if stop:
             return None
         else:
-            raise ValueError("Train ID {} is after this run (ends at {})"
-                             .format(tid, train_ids[-1]))
+            warn(
+                f"Train ID {tid} is after this run (ends at {train_ids[-1]})",
+                stacklevel=4,
+            )
+            return len(train_ids)
     else:
         # This train ID is within the run, but doesn't have an entry.
         # Find the first ID in the run greater than the one given.
@@ -110,10 +120,10 @@ def select_train_ids(train_ids, sel):
     elif isinstance(sel, by_id) and isinstance(sel.value, (list, np.ndarray)):
         # Select a list of trains by train ID
         new_train_ids = sorted(set(train_ids).intersection(sel.value))
-        if not new_train_ids:
-            raise ValueError(
-                "Given train IDs not found among {} trains in "
-                "collection".format(len(train_ids))
+        if len(sel.value) and not new_train_ids:
+            warn(
+                f"Given train IDs not found among {len(train_ids)} trains in "
+                "collection", stacklevel=3,
             )
         return new_train_ids
     elif isinstance(sel, slice):
