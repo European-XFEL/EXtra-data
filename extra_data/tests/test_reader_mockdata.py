@@ -666,6 +666,28 @@ def test_union_raw_proc(mock_spb_raw_run, mock_spb_proc_run):
     run = raw_run.deselect('*AGIPD1M*').union(proc_run)
 
     assert run.all_sources == (raw_run.all_sources | proc_run.all_sources)
+    if raw_run.run_metadata()['dataFormatVersion'] != '0.5':
+        assert run.is_single_run
+
+
+def test_union_multiple_runs(mock_spb_raw_run, mock_jungfrau_run, mock_scs_run):
+    run_spb = RunDirectory(mock_spb_raw_run)
+    run_jf = RunDirectory(mock_jungfrau_run)
+    run_scs = RunDirectory(mock_scs_run)
+
+    assert run_spb.is_single_run
+    assert run_jf.is_single_run
+    assert run_scs.is_single_run
+
+    # Union in one go
+    u1 = run_spb.union(run_jf, run_scs)
+    assert u1.all_sources == (run_spb.all_sources | run_jf.all_sources | run_scs.all_sources)
+    assert not u1.is_single_run
+
+    # Union in two steps
+    u2 = run_scs.union(run_jf).union(run_spb)
+    assert u2.all_sources == u1.all_sources
+    assert not u1.is_single_run
 
 
 def test_read_skip_invalid(mock_lpd_data, empty_h5_file, capsys):
