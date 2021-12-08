@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from itertools import islice
+from warnings import catch_warnings
 
 import h5py
 import numpy as np
@@ -203,13 +204,15 @@ def test_iterate_select_trains(mock_fxe_raw_run):
     assert tids == [10478, 10479]
 
     # Not overlapping
-    with pytest.raises(ValueError) as excinfo:
-        list(run.trains(train_range=by_id[9000:9050]))
-    assert 'before' in str(excinfo.value)
+    with catch_warnings(record=True) as w:
+        tids = [tid for (tid, _) in run.trains(train_range=by_id[9000:9050])]
+        assert tids == []
+    assert 'before' in str(w[0].message)
 
-    with pytest.raises(ValueError) as excinfo:
-        list(run.trains(train_range=by_id[10500:10550]))
-    assert 'after' in str(excinfo.value)
+    with catch_warnings(record=True) as w:
+        tids = [tid for (tid, _) in run.trains(train_range=by_id[10500:10550])]
+        assert tids == []
+    assert 'after' in str(w[0].message)
 
     tids = [tid for (tid, _) in run.trains(train_range=by_index[4:6])]
     assert tids == [10004, 10005]
@@ -575,18 +578,27 @@ def test_select_trains(mock_fxe_raw_run):
     sel = run.select_trains(by_index[:10])
     assert sel.train_ids == list(range(10000, 10010))
 
-    with pytest.raises(ValueError):
-        run.select_trains(by_id[9000:9100])  # Before data
+    with catch_warnings(record=True) as w:
+        sel = run.select_trains(by_id[9000:9100])  # Before data
+        assert sel.train_ids == []
+        assert len(w) == 1
+        assert "before" in str(w[0].message)
 
-    with pytest.raises(ValueError):
-        run.select_trains(by_id[12000:12500])  # After data
+    with catch_warnings(record=True) as w:
+        sel = run.select_trains(by_id[12000:12500])  # After data
+        assert sel.train_ids == []
+        assert len(w) == 1
+        assert "after" in str(w[0].message)
 
     # Select a list of train IDs
     sel = run.select_trains(by_id[[9950, 10000, 10101, 10500]])
     assert sel.train_ids == [10000, 10101]
 
-    with pytest.raises(ValueError):
-        run.select_trains(by_id[[9900, 10600]])
+    with catch_warnings(record=True) as w:
+        sel = run.select_trains(by_id[[9900, 10600]])
+        assert sel.train_ids == []
+        assert len(w) == 1
+        assert "not found" in str(w[0].message)
 
     # Select a list of indexes
     sel = run.select_trains(by_index[[5, 25]])
