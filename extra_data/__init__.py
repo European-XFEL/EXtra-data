@@ -37,7 +37,8 @@ __version__ = "1.9.1"
 
 
 from .exceptions import (
-    SourceNameError, PropertyNameError, TrainIDError, MultiRunError
+    SourceNameError, PropertyNameError, TrainIDError, MultiRunError,
+    NoDataError
 )
 from .keydata import KeyData
 from .reader import *
