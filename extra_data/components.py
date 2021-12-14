@@ -165,9 +165,10 @@ class MultimodDetectorBase:
             )
         return detector_names.pop()
 
-    def _source_matches(self, data, detector_name):
+    @classmethod
+    def _source_matches(cls, data, detector_name):
         for source in data.instrument_sources:
-            m = self._source_re.match(source)
+            m = cls._source_re.match(source)
             if m and m.group('detname') == detector_name:
                 yield source, int(m.group('modno'))
 
@@ -426,6 +427,23 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
         return sel_frames
 
+    @staticmethod
+    def _get_memory_cell_count(detector_source):
+        """Determine number of memory cells in data.
+
+        Parameters
+        ----------
+        detector_source: SourceData
+          Fast data source of a detector module.
+
+        Returns
+        -------
+        int
+          Number of used memory cells.
+        """
+
+        return detector_source['image.cellId'].shape[0]
+
     def _make_image_index(self, tids, inner_ids, inner_name='pulse'):
         """
         Prepare indices for data per inner coordinate.
@@ -631,7 +649,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
                 self._read_chunk(chunk, sel_frames, out[mod_ix], roi)
 
             modnos.append(modno)
-        
+
         if (subtrain_index == 'pulseId') and (pulse_ids is not None):
             inner_ids = pulse_ids
         else:
@@ -640,7 +658,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
         index = self._make_image_index(
             self.train_ids_perframe, inner_ids, subtrain_index[:-2]
         )[sel_frames]
-        
+
         return self._guess_axes(out, index, unstack_pulses, modnos=modnos)
 
     def get_array(self, key, pulses=np.s_[:], unstack_pulses=True, *,
@@ -976,7 +994,7 @@ class MPxDetectorTrainIterator:
     def _get_pulse_data(self, source, key, tid):
         """
         Get an array of per pulse data corresponding to source, key,
-        and train id tid. Used only for AGIPD-like detectors, for 
+        and train id tid. Used only for AGIPD-like detectors, for
         JUNGFRAU-like per-cell data '_get_slow_data' is used.
 
         Parameters
@@ -1351,6 +1369,23 @@ class JUNGFRAU(MultimodDetectorBase):
         elif ndim_pertrain == 2:
             arr = arr.rename({'dim_0': 'cell'})
         return arr
+
+    @staticmethod
+    def _get_memory_cell_count(detector_source):
+        """Determine number of memory cells in data.
+
+        Parameters
+        ----------
+        detector_source: SourceData
+          Fast data source of a detector module.
+
+        Returns
+        -------
+        int
+          Number of used memory cells.
+        """
+
+        return detector_source['data.memoryCell'].shape[1]
 
     def get_array(self, key, *, fill_value=None, roi=(), astype=None):
         """Get a labelled array of detector data
