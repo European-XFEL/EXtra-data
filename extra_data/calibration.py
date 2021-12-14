@@ -12,22 +12,28 @@ import socket
 import numpy as np
 import h5py
 
-from . import SourceNameError, PropertyNameError, MultiRunError, NoDataError
+from .exceptions import SourceNameError, PropertyNameError, MultiRunError, \
+    NoDataError
 
-from calibration_client import CalibrationClient
-from calibration_client.modules import Detector, PhysicalDetectorUnit, \
-    Parameter, Calibration, CalibrationConstantVersion
+try:
+    from calibration_client import CalibrationClient
+    from calibration_client.modules import Detector, PhysicalDetectorUnit, \
+        Parameter, Calibration, CalibrationConstantVersion
+except ImportError as e:
+    raise RuntimeError(
+        '`calibration_client` not available, please install to enable '
+        'CorrectionData interface')
 
 
 __all__ = [
     'BadPixels',
     'CalCatError',
-    'AGIPD_CalibrationData',
-    'LPD_CalibrationData',
-    'DSSC_CalibrationData',
-    'JUNGFRAU_CalibrationData',
-    'PNCCD_CalibrationData',
-    'EPIX_CalibrationData',
+    'AGIPD_CorrectionData',
+    'LPD_CorrectionData',
+    'DSSC_CorrectionData',
+    'JUNGFRAU_CorrectionData',
+    'PNCCD_CorrectionData',
+    'EPIX_CorrectionData',
 ]
 
 
@@ -114,6 +120,13 @@ class OperatingCondition(dict):
 
         self._param_layers = param_layers
 
+    def __eq__(self, other):
+        """Compare two operating conditions."""
+
+        # Explicitly use the dict's default here, the layers are not
+        # considered for a comparison.
+        return super().__eq__(other)
+
     def set_required(self, db_name, default, key_name=None):
         """Set a required parameter.
 
@@ -179,14 +192,14 @@ class OperatingCondition(dict):
 class CCVMetadata(dict):
     """Dictionary for CCV metadata."""
 
-    def set_pdu_ccv(self, modno, calibration_name, entry):
+    def set_ccv(self, modno, calibration, entry):
         """Set a PDU CCV entry.
 
         Convenience method to handle insertion of keys if missing.
         """
 
         pdu_metadata = self.get(modno, dict())
-        pdu_metadata[calibration_name] = entry
+        pdu_metadata[calibration] = entry
         self[modno] = pdu_metadata
 
     def __str__(self):
@@ -194,8 +207,8 @@ class CCVMetadata(dict):
 
         import pandas as pd
 
-        res = {pdu_idx: {cal_name: ccv_data['ccv_name']
-                         for cal_name, ccv_data in pdu_data.items()}
+        res = {pdu_idx: {calibration: ccv_data['ccv_name']
+                         for calibration, ccv_data in pdu_data.items()}
                for pdu_idx, pdu_data in self.items()}
 
         return str(pd.DataFrame.from_dict(res, orient='index'))
@@ -208,8 +221,8 @@ class CalCatError(RuntimeError):
         super().__init__(response['info'])
 
 
-class CalibrationData:
-    """Calibration data for detectors.
+class CorrectionData:
+    """Correction constants data for detectors.
 
     European XFEL uses a web app and database to store records about the
     characterization of detectors and the data necessary to their
@@ -252,9 +265,9 @@ class CalibrationData:
 
     client = None
 
-    def __init__(self, detector_name, modules=None, client=None,
-                 **condition_params):
-        """Initialize a new CalibrationData object.
+    def __init__(self, detector_name, modules=None, client=None, event_at=None,
+                 snapshot_at=None, **condition_params):
+        """Initialize a new CorrectionData object.
 
         Args:
             detector_name (str): Name of detector in CalCat.
@@ -262,9 +275,16 @@ class CalibrationData:
                 query for or None for all available (default).
             client (CalibrationClient, optional): Client for CalCat
                 communication, global one by default.
+            event_at (datetime, date, str or None): Default time at which the
+                CCVs should have been valid, now if omitted
+            snapshot_at (datetime, date, str or None): Default time of
+                database state to look at, now if omitted.
             **condition_params: Operating condition parameters defined
                 on an instance level.
         """
+
+        self.detector_name = detector_name
+        self.modules = modules
 
         if client is None:
             client = self.__class__.client
@@ -275,8 +295,9 @@ class CalibrationData:
                                  f'.new_client')
 
         self.client = client
-        self.detector_name = detector_name
-        self.modules = modules
+
+        self.event_at = event_at
+        self.snapshot_at = snapshot_at
 
         self._condition_params = condition_params
         self._detector = None
@@ -285,10 +306,10 @@ class CalibrationData:
     @classmethod
     def new_client(cls, client_id, client_secret, user_email, installation='',
                    base_url='https://in.xfel.eu/{}calibration'):
-        """Create a new calibration client object.
+        """Create a new calibration-client object.
 
         The client object is saved as a class property and is
-        automatically to any future CalibrationData objects created, if
+        automatically to any future CorrectionData objects created, if
         no other client is passed explicitly.
 
         Arguments:
@@ -449,9 +470,11 @@ class CalibrationData:
                 condition to query CCVs for, may be None to use
                 .condition() with any additional keywords passed.
             event_at (datetime, date, str or None): Time at which the
-                CCVs should have been valid, now of omitted.
+                CCVs should have been valid, now or default value passed at
+                initialization time if omitted.
             snapshot_at (datetime, date, str or None): Time of database
-                state to look at.
+                state to look at, now or default value passed at
+                initialization time if omitted.
             **condition_params: Additional operating condition
                 parameters defined only for this query, ignored if
                 condition is passed.
@@ -465,7 +488,7 @@ class CalibrationData:
             metadata,
             calibrations or self.calibrations,
             condition or self.condition(**condition_params),
-            event_at, snapshot_at)
+            event_at or self.event_at, snapshot_at or self.snapshot_at)
 
         return metadata
 
@@ -518,7 +541,7 @@ class CalibrationData:
         """Parse different ways to specify time to CalCat."""
 
         if isinstance(dt, datetime):
-            return dt.astimezone(timezone.utc).strftime('%Y%m%dT%H%M%S%z')
+            return dt.astimezone(timezone.utc).strftime('%Y%m%dT%H%M%S%Z')
         elif isinstance(dt, date):
             return cls._api_format_time(datetime.combine(dt, time()))
 
@@ -556,10 +579,9 @@ class CalibrationData:
                 metadata[modno] = metadata.get(modno, dict())
             return
 
-        cal_id_to_name = {
-            self.calibration_id(calibration_name): calibration_name
-            for calibration_name in calibrations}
-        calibration_ids = list(cal_id_to_name.keys())
+        cal_id_map = {self.calibration_id(calibration): calibration
+                      for calibration in calibrations}
+        calibration_ids = list(cal_id_map.keys())
 
         resp_versions = CalibrationConstantVersion.get_closest_by_time_by_detector_conditions(  # noqa
             self.client,
@@ -581,9 +603,7 @@ class CalibrationData:
                 continue
 
             cc = ccv['calibration_constant']
-
-            # Manually build the result dict with expressive keys.
-            entry = dict(
+            metadata.set_ccv(modno, cal_id_map[cc['calibration_id']], dict(
                 cc_id=cc['id'],
                 cc_name=cc['name'],
                 condition_id=cc['condition_id'],
@@ -595,14 +615,56 @@ class CalibrationData:
                 end_validity_at=ccv['end_validity_at'],
                 raw_data_location=ccv['raw_data_location'],
                 start_idx=ccv['start_idx'],
-                end_idx=ccv['end_idx'])
+                end_idx=ccv['end_idx']
+            ))
 
-            metadata.set_pdu_ccv(
-                modno, cal_id_to_name[cc['calibration_id']], entry)
+    @classmethod
+    def _from_data(cls, det_cls, data, detector, modules, client,
+                  *extra_args, **condition_params):
+        if isinstance(detector, det_cls):
+            detector_name = detector.detector_name
+        elif detector is None:
+            detector_name = det_cls._find_detector_name(data)
+        elif isinstance(detector, str):
+            detector_name = detector
+        else:
+            raise ValueError(f'detector may be an object of type '
+                             f'{type(cls)}, a string or None')
+
+        source_to_modno = dict(det_cls._source_matches(data, detector_name))
+
+        # SourceData object for a detector source item
+        detector_source = data[next(iter(source_to_modno.keys()))]
+
+        if modules is None:
+            modules = sorted(source_to_modno.values())
+
+        # Create new CorrectionData object.
+        corrdata = cls(detector_name, modules, client,
+                       self._determine_creation_date(data))
+
+        # Begin with basic detector parameters.
+        corrdata._condition_params.update(
+            memory_cells=det_cls._get_cell_idx(detector_source),
+            pixels_x=det_cls.module_shape[0],
+            pixels_y=det_cls.module_shape[1])
+
+        # Update with specific data parameters.
+        corrdata._condition_params.update(
+            self._determine_condition_parameters(data, detector_source,
+                                                 *extra_args))
+
+        # Overwrite with any manually specified parameters.
+        corrdata._condition_params.update(condition_params)
+
+        return corrdata
+
+    def _determine_condition_parameters(self, data):
+        return {}
 
 
-class DualConditionCalibrationData(CalibrationData):
-    """Calibration data with dark and illuminated distinction.
+class IlluminationDependentCorrData(CorrectionData):
+    """Correction data with dark and illuminated distinction.
 
     Some detectors of this kind distinguish between two different
     operating conditions depending on whether photons illuminate the
@@ -718,8 +780,8 @@ class DualConditionCalibrationData(CalibrationData):
         return metadata
 
 
-class AGIPD_CalibrationData(DualConditionCalibrationData):
-    """Calibration data for the AGIPD detector.
+class AGIPD_CorrectionData(IlluminationDependentCorrData):
+    """Correction data for the AGIPD detector.
 
     Dark operating condition:
         Required parameters:
@@ -755,11 +817,15 @@ class AGIPD_CalibrationData(DualConditionCalibrationData):
     @classmethod
     def from_data(cls, data, detector=None, modules=None, client=None,
                   ctrl_device_id=None, **condition_params):
-        """Initialize a new AGIPD_CalibrationData object based on data.
+        """Initialize a new AGIPD_CorrectionData object based on data.
+
+        The correction constants validity time `event_at` is chosen
+        based on the run creation date, while the database time
+        `snapshot_at` is chosen to be now.
 
         Args:
             data (extra_data.DataCollection): Data to create
-                AGIPD_CalibrationData object for.
+                AGIPD_CorrectionData object for.
             detector (extra_data.components.AGIPD1M or str, optional):
                 Detector component object or name, may be omitted if
                 only a single detector instance is present.
@@ -774,57 +840,51 @@ class AGIPD_CalibrationData(DualConditionCalibrationData):
                 on an instance level.
 
         Returns:
-            (AGIPD_CalibrationData) CalibrationData
+            (AGIPD_CorrectionData) Initialized object.
         """
 
         from .components import AGIPD1M
+        return cls._from_data(AGIPD1M, data, detector, modules, client,
+                              ctrl_device_id, **condition_params)
 
-        if detector is None or isinstance(detector, str):
-            detector = AGIPD1M(data, detector, modules)
-        elif not isinstance(detector, AGIPD1M):
-            raise ValueError('detector may be an object of type AGIPD1M, '
-                             'a string or None')
-
-        caldata = cls(detector.detector_name,
-                      sorted(detector.modno_to_source.keys()),
-                      client=client, memory_cells=detector.frames_per_train,
-                      pixels_x=detector.module_shape[0],
-                      pixels_y=detector.module_shape[1])
-
+    def _determine_condition_parameters(self, data, det_src, ctrl_device_id):
         if ctrl_device_id is None:
-            ctrl_device_id = caldata.detector['karabo_id_control'] + \
-                'MDL/FPGA_COMP'
+            ctrl_device_id = self.detector['karabo_id_control'] + \
+                '/MDL/FPGA_COMP'
 
         try:
             ctrl_src = data[ctrl_device_id]
         except KeyError:  # Should be SourceNameError
             raise ValueError(f'control source {ctrl_device_id} not found in '
-                             f'DataCollection')
+                             f'data')
 
         auto_params = dict()
 
         try:
+            auto_params['acquisition_rate'] = ctrl_src[
+                'bunchStructure.repetitionRate'].as_single_value()
+        except PropertyNameError:
+            pass
+
+        try:
             auto_params['gain_setting'] = ctrl_src['gain'] \
                 .as_single_value()
-        except KeyError:  # Should be PropertyNameError
+        except PropertyNameError:
             pass
 
         try:
             auto_params['gain_mode'] = ctrl_src['gainModeIndex'] \
                 .as_single_value()
-        except KeyError:  # Should be PropertyNameError
+        except PropertyNameError:
             pass
 
         try:
             auto_params['integration_time'] = ctrl_src['integrationTime'] \
                 .as_single_value()
-        except KeyError:  # Should be PropertyNameError
+        except PropertyNameError:
             pass
 
-        caldata._condition_params.update(auto_params)
-        caldata._condition_params.update(condition_params)
-
-        return caldata
+        return auto_params
 
     def dark_condition(self, **condition_params):
         cond = OperatingCondition(condition_params, self._condition_params)
@@ -857,12 +917,43 @@ class AGIPD_CalibrationData(DualConditionCalibrationData):
         return cond
 
 
-class LPD_CalibrationData(DualConditionCalibrationData):
-    """Calibration data for the LPD detector."""
+class LPD_CorrectionData(IlluminationDependentCorrData):
+    """Correction data for the LPD detector."""
 
     dark_calibrations = {'Offset', 'Noise', 'BadPixelsDark'}
     illuminated_calibrations = {'RelativeGain', 'GainAmpMap', 'FFMap',
                                 'BadPixelsFF'}
+
+    @classmethod
+    def from_data(cls, data, detector=None, modules=None, client=None,
+                  **condition_params):
+        """Initialize a new LPD_CorrectionData object based on data.
+
+        The correction constants validity time `event_at` is chosen
+        based on the run creation date, while the database time
+        `snapshot_at` is chosen to be now.
+
+        Args:
+            data (extra_data.DataCollection): Data to create
+                LPD_CorrectionData object for.
+            detector (extra_data.components.LPD1M or str, optional):
+                Detector component object or name, may be omitted if
+                only a single detector instance is present.
+            modules (Iterable of ints, optional): Module numbers to
+                include, may be omitted for all modules found in data
+                and/or detector object.
+            client (CalibrationClient, optional): Client for CalCat
+                communication, may be omitted to use the global object.
+            **condition_params: Operating condition parameters defined
+                on an instance level.
+
+        Returns:
+            (LPD_CorrectionData) Initialized object.
+        """
+
+        from .components import LPD1M
+        return cls._from_data(LPD1M, data, detector, modules, client,
+                              **condition_params)
 
     def dark_condition(self, **condition_params):
         cond = OperatingCondition(condition_params, self._condition_params)
@@ -880,10 +971,115 @@ class LPD_CalibrationData(DualConditionCalibrationData):
         return cond
 
 
-class DSSC_CalibrationData(CalibrationData):
-    """Calibration data for the DSSC detetor."""
+class DSSC_CorrectionData(CorrectionData):
+    """Correction data for the DSSC detetor."""
 
     calibrations = {'Offset', 'Noise'}
+
+    @classmethod
+    def from_data(cls, data, detector=None, modules=None, client=None,
+                  ctrl_device_id=None, **condition_params):
+        """Initialize a new DSSC_CorrectionData object based on data.
+
+        The correction constants validity time `event_at` is chosen
+        based on the run creation date, while the database time
+        `snapshot_at` is chosen to be now.
+
+        Args:
+            data (extra_data.DataCollection): Data to create
+                DSSC_CorrectionData object for.
+            detector (extra_data.components.DSSC1M or str, optional):
+                Detector component object or name, may be omitted if
+                only a single detector instance is present.
+            modules (Iterable of ints, optional): Module numbers to
+                include, may be omitted for all modules found in data
+                and/or detector object.
+            client (CalibrationClient, optional): Client for CalCat
+                communication, may be omitted to use the global object.
+            ctrl_device_id (str, optional): Karabo device ID for the
+                control device, may be omitted to query from CalCat. May
+                contain a format field for the quadrant number.
+            **condition_params: Operating condition parameters defined
+                on an instance level.
+
+        Returns:
+            (DSSC_CorrectionData) Initialized object.
+        """
+
+        from .components import DSSC1M
+        return cls._from_data(DSSC1M, data, detector, modules, client,
+                              ctrl_device_id, **condition_params)
+
+    @staticmethod
+    def _get_pulse_id_checksum(det_src):
+        pulse_id_data = det_src['image.pulseId']
+        nonempty_trains = pulse_id_data.data_counts(labelled=False).nonzero()
+
+        if not nonempty_trains:
+            raise ValueError('all trains in data are empty')
+
+        pulse_ids = pulse_id_data[nonempty_trains[0]].ndarray().squeeze()
+
+        from binascii import unhexlify
+        from hashlib import blake2b
+        from struct import unpack
+
+        return unpack('d', blake2b(pulse_ids.data, digest_size=8).digest())[0]
+
+    @staticmethod
+    def _get_acquisition_rate(data, ctrl_src):
+        cycle_length = data.get_run_value(
+            ctrl_src.source, 'sequencer.cycleLength')
+        return 4.5 * (22.0 / cycle_length)
+
+    @staticmethod
+    def _get_encoded_gain(data, ctrl_src):
+        # The description of the paramters one can find in:
+        # https://docs.xfel.eu/share/page/site/dssc/documentlibrary
+        # Documents> DSSC - Documentation> DSSC - ASIC Documentation.
+        csaFbCap = int(ctrl_src['gain.csaFbCap'].as_single_value())
+        fcfEnCap = int(ctrl_src['gain.fcfEnCap'].as_single_value())
+        csaResistor = int(ctrl_src['gain.csaResistor'].as_single_value())
+        trimmed = int(data.get_run_value(
+            ctrl_src.source, 'gain.irampFineTrm') == 'Various')
+
+        return (csaFbCap << 0) + (fcfEnCap << 8) + (csaResistor << 16) \
+            + (trimmed << 32)
+
+    def _determine_condition_params(self, data, det_src, ctrl_device_id):
+        if ctrl_device_id is None:
+            ctrl_device_id = self.detector['karabo_id_control'] + \
+                '/FPGA_PPT_Q{}'
+
+        ctrl_device_ids = data.all_sources \
+            & {ctrl_device_id.format(i) for i in range(1, 5)}
+
+        if not ctrl_device_ids:
+            raise ValueError(f'no quadrant control device found in data for '
+                             f'pattern {ctrl_device_id}')
+
+        ctrl_src = data[next(iter(ctrl_device_ids))]
+        auto_params = dict()
+
+        try:
+            auto_params['pulse_id_checksum'] = self._get_pulse_id_checksum(
+                data, ctrl_src)
+        except PropertyNameError:
+            pass
+
+        try:
+            auto_params['acquisition_rate'] = self._get_acquisition_rate(
+                data, ctrl_src)
+        except (PropertyNameError, MultiRunError):
+            pass
+
+        try:
+            auto_params['encoded_gain'] = self._get_encoded_gain(
+                data, ctrl_src)
+        except (PropertyNameError, MultiRunError):
+            pass
+
+        return auto_params
 
     def condition(self, **condition_params):
         cond = OperatingCondition(condition_params, self._condition_params)
@@ -896,56 +1092,9 @@ class DSSC_CalibrationData(CalibrationData):
         cond.set_optional('Encoded gain')
         return cond
 
-    @classmethod
-    def from_data(cls, data, modules=None, client=None, ctrl_device_id=None,
-                  **condition_params):
-        from .components import DSSC1M
-        det = DSSC1M(data, modules)
 
-        caldata = cls(det.detector_name, sorted(det.modno_to_source.keys()),
-                      client=client, memory_cells=det.frames_per_train,
-                      pixels_x=det.module_shape[0],
-                      pixels_y=det.module_shape[1])
-
-        if ctrl_device_id is None:
-            ctrl_device_id = caldata.detector['karabo_id_control'] + \
-                '/MDL/FPGA_COMP'
-
-        # Assume for now that all quadrants are configured identically.
-
-        try:
-            ctrl_src = data[ctrl_device_id]
-        except SourceNameError:
-            raise ValueError(f'control source {ctrl_device_id} not found in '
-                             f'DataCollection')
-
-        auto_params = dict()
-
-        try:
-            auto_params['gain_setting'] = ctrl_src['gain'].single_value()
-        except PropertyNameError:
-            pass
-
-        try:
-            auto_params['gain_mode'] = ctrl_src['gainModeIndex'].single_value()
-        except PropertyNameError:
-            pass
-
-        try:
-            cycle_length = data.get_run_value(ctrl_device_id,
-                                              'sequencer.cycleLength')
-            auto_params['acquisition_rate'] = 4.5 * (22.0 / cycle_length)
-        except PropertyNameError:
-            pass
-
-        caldata._condition_params.update(auto_params)
-        caldata._condition_params.update(condition_params)
-
-        return caldata
-
-
-class JUNGFRAU_CalibrationData(CalibrationData):
-    """Calibration data for the JUNGFRAU detector."""
+class JUNGFRAU_CorrectionData(CorrectionData):
+    """Correction data for the JUNGFRAU detector."""
 
     calibrations = {'Offset10Hz', 'Noise10Hz', 'BadPixelsDark10Hz',
                     'RelativeGain10Hz', 'BadPixelsFF10Hz'}
@@ -954,22 +1103,26 @@ class JUNGFRAU_CalibrationData(CalibrationData):
     def from_data(cls, data, modules=None, client=None, ctrl_device_id=None,
                   **condition_params):
         from extra_data.components import JUNGFRAU
-        det = JUNGFRAU(data, modules=modules)
+        return cls._from_data(JUNGFRAU, data, detector, modules, client,
+                              ctrl_device_id, **condition_params)
 
-        caldata = cls(det.detector_name, sorted(det.modno_to_source.keys()),
-                      client=client, memory_cells=det.frames_per_train,
-                      pixels_x=det.module_shape[0],
-                      pixels_y=det.module_shape[1])
+    @staticmethod
+    def _get_pixel_sizes(det_src):
+        return det_src['data.adc'][0].shape[-2:]
 
+    def _determine_condition_parameters(self, data, det_src, ctrl_device_id):
         if ctrl_device_id is None:
-            ctrl_device_id = caldata.detector['karabo_id_control'] + \
-                '/DET/CONTROL'
+            ctrl_device_id = self.detector['karabo_id_control'] + \
+                '/FPGA_PPT_Q{}'
 
-        try:
-            ctrl_src = data[ctrl_device_id]
-        except SourceNameError:
-            raise ValueError(f'control source {ctrl_device_id} not found in '
-                             f'DataCollection')
+        ctrl_device_ids = data.all_sources \
+            & {ctrl_device_id.format(i) for i in range(1, 5)}
+
+        if not ctrl_device_ids:
+            raise ValueError(f'no quadrant control device found in data for '
+                             f'pattern {ctrl_device_id}')
+
+        ctrl_src = data[next(iter(ctrl_device_ids))]
 
         auto_params = dict()
 
@@ -991,10 +1144,7 @@ class JUNGFRAU_CalibrationData(CalibrationData):
         except (PropertyNameError, MultiRunError):
             pass
 
-        caldata._condition_params.update(auto_params)
-        caldata._condition_params.update(condition_params)
-
-        return caldata
+        return auto_params
 
     def condition(self, **condition_params):
         cond = OperatingCondition(condition_params, self._condition_params)
@@ -1008,9 +1158,9 @@ class JUNGFRAU_CalibrationData(CalibrationData):
         return cond
 
 
-class PNCCD_CalibrationData(CalibrationData):
+class PNCCD_CorrectionData(CorrectionData):
     pass
 
 
-class EPIX_CalibrationData(CalibrationData):
+class EPIX_CorrectionData(CorrectionData):
     pass
