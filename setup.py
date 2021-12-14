@@ -56,6 +56,9 @@ setup(name="EXtra-data",
               'karabo-bridge >=0.6',
               'psutil',
           ],
+          'calibration': [
+              'calibration-client>=9.0.7'
+          ]
           'docs': [
               'sphinx',
               'nbsphinx',
