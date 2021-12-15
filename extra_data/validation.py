@@ -225,7 +225,7 @@ def _check_file(args):
     filepath = osp.join(runpath, filename)
     problems = []
     try:
-        fa = FileAccess(filepath)
+        fa = FileAccess.get(filepath)
     except Exception as e:
         problems.append(
             dict(msg="Could not open file", file=filepath, error=e)

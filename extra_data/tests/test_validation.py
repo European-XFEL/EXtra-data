@@ -49,7 +49,7 @@ def test_zeros_in_train_ids(agipd_file):
         f['/INDEX/trainId'][12] = 0
 
     with raises(ValidationError) as excinfo:
-        FileValidator(FileAccess(agipd_file)).validate()
+        FileValidator(FileAccess.get(agipd_file)).validate()
     problem = excinfo.value.problems.pop()
     assert problem['msg'] == 'Zeroes in trainId index before last train ID'
     assert problem['dataset'] == 'INDEX/trainId'
@@ -63,7 +63,7 @@ def test_non_strictly_increasing_train_ids(agipd_file):
         f['/INDEX/trainId'][20] = 5
 
     with raises(ValidationError) as excinfo:
-        FileValidator(FileAccess(agipd_file)).validate()
+        FileValidator(FileAccess.get(agipd_file)).validate()
     problem = excinfo.value.problems.pop()
     assert problem['msg'] == 'Train IDs are not strictly increasing, e.g. at 10 (11010 >= 10011)'
     assert problem['dataset'] == 'INDEX/trainId'
@@ -76,7 +76,7 @@ def test_index_pointing_outside_dataset(data_aggregator_file):
         f['/INDEX/FXE_XAD_GEC/CAM/CAMERA:daqOutput/data/first'][30] = 999
 
     with raises(ValidationError) as excinfo:
-        FileValidator(FileAccess(data_aggregator_file)).validate()
+        FileValidator(FileAccess.get(data_aggregator_file)).validate()
     assert 'Index referring to data (1000) outside dataset (400)' in str(excinfo.value)
 
 
@@ -87,7 +87,7 @@ def test_invalid_first_dataset(data_aggregator_file):
         f['INDEX/SA1_XTD2_XGM/DOOCS/MAIN:output/data/first'].resize((length+1,))
 
     with raises(ValidationError) as excinfo:
-        FileValidator(FileAccess(data_aggregator_file)).validate()
+        FileValidator(FileAccess.get(data_aggregator_file)).validate()
     problem = excinfo.value.problems.pop()
     assert problem['msg'] == 'Index first & count have different number of entries'
     assert problem['dataset'] == 'INDEX/SA1_XTD2_XGM/DOOCS/MAIN:output/data'
@@ -105,7 +105,7 @@ def test_invalid_first_and_count_dataset(data_aggregator_file):
         f['INDEX/SA1_XTD2_XGM/DOOCS/MAIN:output/data/count'].resize((length-1,))
 
     with raises(ValidationError) as excinfo:
-        FileValidator(FileAccess(data_aggregator_file)).validate()
+        FileValidator(FileAccess.get(data_aggregator_file)).validate()
     problem = excinfo.value.problems.pop()
     assert problem['msg'] == 'Index has wrong number of entries'
     assert problem['dataset'] == 'INDEX/SA1_XTD2_XGM/DOOCS/MAIN:output/data'
@@ -120,7 +120,7 @@ def test_first_dataset_not_starting_from_zero(data_aggregator_file):
         f['INDEX/SA1_XTD2_XGM/DOOCS/MAIN:output/data/first'][0] = 1
 
     with raises(ValidationError) as excinfo:
-        FileValidator(FileAccess(data_aggregator_file)).validate()
+        FileValidator(FileAccess.get(data_aggregator_file)).validate()
     assert "Index doesn't start at 0" in str(excinfo.value)
     assert "INDEX/SA1_XTD2_XGM/DOOCS/MAIN:output/data" in str(excinfo.value)
 
@@ -132,7 +132,7 @@ def test_overlap(agipd_file):
         f['INDEX/SPB_DET_AGIPD1M-1/DET/0CH0:xtdf/image/count'][1] = 128  # no gaps
 
     with raises(ValidationError) as excinfo:
-        FileValidator(FileAccess(agipd_file)).validate()
+        FileValidator(FileAccess.get(agipd_file)).validate()
     problem = excinfo.value.problems.pop()
     assert problem['msg'] == 'Overlaps (1) in index, e.g. at 0 (0 + 64 > 0)'
     assert problem['dataset'] == 'INDEX/SPB_DET_AGIPD1M-1/DET/0CH0:xtdf/image'
@@ -146,7 +146,7 @@ def test_gaps(agipd_file):
         f['INDEX/SPB_DET_AGIPD1M-1/DET/0CH0:xtdf/image/count'][0] = 0
 
     with raises(ValidationError) as excinfo:
-        FileValidator(FileAccess(agipd_file)).validate()
+        FileValidator(FileAccess.get(agipd_file)).validate()
     problem = excinfo.value.problems.pop()
     assert problem['msg'] == 'Gaps (1) in index, e.g. at 1 (0 + 64 < 128)'
     assert problem['dataset'] == 'INDEX/SPB_DET_AGIPD1M-1/DET/0CH0:xtdf/image'
@@ -154,7 +154,7 @@ def test_gaps(agipd_file):
 
 
 def test_file_without_data(mock_empty_file):
-    FileValidator(FileAccess(mock_empty_file)).validate()
+    FileValidator(FileAccess.get(mock_empty_file)).validate()
 
 
 def test_control_data_timestamps(data_aggregator_file):
@@ -165,7 +165,7 @@ def test_control_data_timestamps(data_aggregator_file):
         ts[10] = 5
 
     with raises(ValidationError) as excinfo:
-        FileValidator(FileAccess(data_aggregator_file)).validate()
+        FileValidator(FileAccess.get(data_aggregator_file)).validate()
     problem = excinfo.value.problems.pop()
     assert problem['msg'] == 'Timestamp is decreasing, e.g. at 10 (5 < 10)'
     assert problem['dataset'] == 'CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/pulseEnergy/photonFlux/timestamp'

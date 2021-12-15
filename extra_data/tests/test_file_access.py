@@ -4,7 +4,7 @@ from ..file_access import FileAccess
 
 
 def test_registry(mock_sa3_control_data):
-    fa = FileAccess(mock_sa3_control_data)
+    fa = FileAccess.get(mock_sa3_control_data)
 
     # Load some data to populate caches
     fa.get_index('SA3_XTD10_IMGFEL/CAM/BEAMVIEW2:daqOutput', 'data')
@@ -14,7 +14,7 @@ def test_registry(mock_sa3_control_data):
     assert len(fa._keys_cache) == 1
 
     # This should get a reference to the existing object, not a duplicate.
-    fa2 = FileAccess(mock_sa3_control_data)
+    fa2 = FileAccess.get(mock_sa3_control_data)
 
     assert fa2 is fa
 
@@ -24,7 +24,7 @@ def test_registry(mock_sa3_control_data):
 
 
 def test_pickle(mock_sa3_control_data):
-    fa = FileAccess(mock_sa3_control_data)
+    fa = FileAccess.get(mock_sa3_control_data)
     b = pickle.dumps(fa)
 
     # Load some data to populate caches

@@ -123,7 +123,7 @@ class DataCollection:
     @staticmethod
     def _open_file(path, cache_info=None):
         try:
-            fa = FileAccess(path, _cache_info=cache_info)
+            fa = FileAccess.get(path, _cache_info=cache_info)
         except Exception as e:
             return osp.basename(path), str(e)
         else:
@@ -172,7 +172,7 @@ class DataCollection:
 
     @classmethod
     def from_path(cls, path, *, inc_suspect_trains=True):
-        files = [FileAccess(path)]
+        files = [FileAccess.get(path)]
         return cls(
             files, ctx_closes=True, inc_suspect_trains=inc_suspect_trains,
             is_single_run=True

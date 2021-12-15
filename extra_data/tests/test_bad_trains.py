@@ -52,20 +52,20 @@ def agipd_file_flag0():
         yield path
 
 def test_guess_validity(agipd_file_tid_very_high, agipd_file_tid_high, agipd_file_tid_low):
-    fa = FileAccess(agipd_file_tid_very_high)
+    fa = FileAccess.get(agipd_file_tid_very_high)
     assert fa.validity_flag.sum() == 249
     assert not fa.validity_flag[10]
 
-    fa = FileAccess(agipd_file_tid_high)
+    fa = FileAccess.get(agipd_file_tid_high)
     assert fa.validity_flag.sum() == 485
     assert not fa.validity_flag[10]
 
-    fa = FileAccess(agipd_file_tid_low)
+    fa = FileAccess.get(agipd_file_tid_low)
     assert fa.validity_flag.sum() == 249
     assert not fa.validity_flag[20]
 
 def test_validity_flag(agipd_file_flag0):
-    fa = FileAccess(agipd_file_flag0)
+    fa = FileAccess.get(agipd_file_flag0)
     assert fa.validity_flag.sum() == 485
     assert not fa.validity_flag[30]
 

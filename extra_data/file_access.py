@@ -109,16 +109,33 @@ class FileAccess:
     _format_version = None
     metadata_fstat = None
 
-    def __new__(cls, filename, _cache_info=None):
-        # Create only one FileAccess for each path, and store it in a registry
+    @classmethod
+    def get(cls, filename, _cache_info=None):
         filename = osp.abspath(filename)
         inst = file_access_registry.get(filename, None)
         if inst is None:
-            inst = file_access_registry[filename] = super().__new__(cls)
+            inst = file_access_registry[filename] = cls(
+                filename, _cache_info, _internal=True
+            )
 
         return inst
 
-    def __init__(self, filename, _cache_info=None):
+    @classmethod
+    def _from_pickle(cls, path, state):
+        """Used """
+        inst = file_access_registry.get(path, None)
+        if inst is None:
+            inst = cls.__new__(cls)
+            inst.__dict__.update(state)
+            file_access_registry[path] = inst
+
+        return inst
+
+    def __init__(self, filename, _cache_info=None, *, _internal=False):
+        if not _internal:
+            warn("Use FileAccess.get() instead of FileAccess(). This may be an "
+                 "error in the future.", stacklevel=2)
+
         self.filename = osp.abspath(filename)
 
         if _cache_info:
@@ -274,15 +291,10 @@ class FileAccess:
     def __repr__(self):
         return "{}({})".format(type(self).__name__, repr(self.filename))
 
-    def __getstate__(self):
-        """ Allows pickling `FileAccess` instance. """
+    def __reduce__(self):
         state = self.__dict__.copy()
         state['_file'] = None
-        return state
-
-    def __getnewargs__(self):
-        """Ensure that __new__ gets the filename when unpickling"""
-        return (self.filename,)
+        return self._from_pickle, (self.filename, state)
 
     @property
     def all_sources(self):
