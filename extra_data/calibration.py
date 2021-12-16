@@ -13,6 +13,8 @@ import socket
 import numpy as np
 import h5py
 
+from . import SourceData
+
 try:
     from calibration_client import CalibrationClient
     from calibration_client.modules import Detector, PhysicalDetectorUnit, \
@@ -32,7 +34,7 @@ __all__ = [
     'DSSC_CorrectionData',
     'JUNGFRAU_CorrectionData',
     'PNCCD_CorrectionData',
-    'EPIX_CorrectionData',
+    'EPIX100_CorrectionData',
 ]
 
 
@@ -239,7 +241,7 @@ class CalCatApi(metaclass=ClientWrapper):
             # module.
             for modno in da_to_modno.values():
                 metadata.setdefault(modno, dict())
-            return
+            return metadata
 
         # Map calibration ID to calibratio name.
         cal_id_map = {self.calibration_id(calibration): calibration
@@ -426,6 +428,11 @@ class CorrectionData:
         return self._api.detector(self.detector_name)
 
     @property
+    def physical_detector_units(self):
+        return self._api.physical_detector_units(
+            self.detector['id'], self.snapshot_at)
+
+    @property
     def condition(self):
         return self._build_condition(self.parameters)
 
@@ -566,6 +573,8 @@ class CorrectionData:
 
     @staticmethod
     def _simplify_parameter_name(name):
+        """Convert parameter names to valid Python symbols."""
+
         return name.lower().replace(' ', '_')
 
     @staticmethod
@@ -1007,7 +1016,74 @@ class JUNGFRAU_CorrectionData(CorrectionData):
 
 
 class PNCCD_CorrectionData(CorrectionData):
-    pass
+    calibrations = {'OffsetCCD', 'BadPixelsDarkCCD', 'NoiseCCD',
+                    'RelativeGainCCD', 'CTECCD'}
+    parameters = ['Sensor Bias Voltage', 'Memory cells', 'Pixels X',
+                  'Pixels Y', 'Integration Time', 'Sensor Temperature',
+                  'Gain Setting']
+
+    def __init__(self, detector_name, modules=None, client=None,
+                 event_at=None, snapshot_at=None, memory_cells=1,
+                 sensor_bias_voltage=270.0, pixels_x=1024, pixels_y=1024,
+                 integration_time=70, sensor_temperature=243.347,
+                 gain_setting=64):
+        # Ignore modules for this detector.
+        super().__init__(detector_name, None, client, event_at, snapshot_at)
+
+        self.sensor_bias_voltage = sensor_bias_voltage
+        self.memory_cells = 1  # Ignore memory_cells for this detector
+        self.pixels_x = pixels_x
+        self.pixels_y = pixels_y
+        self.integration_time = integration_time
+        self.sensor_temperature = sensor_temperature
+        self.gain_setting = gain_setting
+
+    @classmethod
+    def from_data(cls, data, detector=None, modules=None, client=None):
+        if not isinstance(detector, SourceData):
+            # Convert any non-SourceData detector argument
+            if detector is None:
+                sources = {source for source in data.instrument_sources
+                           if source.endswith('PNCCD_FMT-0:output')}
+            elif isinstance(detector, str):
+                sources = {source for source in data.instrument_sources
+                           if source.startswith(detector) and
+                                source.endswith('PNCCD_FMT-0:output')}
+            else:
+                raise ValueError('detector may be SourceData, str or None')
+
+            if len(sources) != 1:
+                raise ValueError('No or multiple candidate sources for '
+                                 'pnCCD detector found')
+
+            detector = data[next(iter(sources))]
+
+        # detector is always a SourceData object at this point.
+        detector_name = detector.source[:detector.source.find('/')]
+        det_data = detector
+
+        creation_date = cls._determine_data_creation_date(data)
+
+        sensor_bias_voltage = abs(
+            data[f'{detector_name}/MDL/DAQ_MPOD', 'u0voltage']
+            .as_single_value(atol=1))
+
+        gain_setting = \
+            data[f'{detector_name}/MDL/DAQ_GAIN', 'pNCCDGain'] \
+            .as_single_value()
+
+        # Notebook seem to use the top sensor temperature as reference,
+        # bottom sensor is found in inputB.
+        sensor_temperature = \
+            data[f'{detector_name}/CTRL/TCTRL', 'inputA.krdg'] \
+            .as_single_value(atol=1)
+
+        # Integration time is not found in control data.
+
+        return cls(detector_name, modules, client, creation_date,
+                   creation_date, sensor_bias_voltage=sensor_bias_voltage,
+                   gain_setting=gain_setting,
+                   sensor_temperature=sensor_temperature)
 
 
 class EPIX100_CorrectionData(CorrectionData):
