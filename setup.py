@@ -57,8 +57,8 @@ setup(name="EXtra-data",
               'psutil',
           ],
           'calibration': [
-              'calibration-client>=9.0.7'
-          ]
+              'calibration-client>=9.1.1'
+          ],
           'docs': [
               'sphinx',
               'nbsphinx',
