@@ -1450,7 +1450,7 @@ def RunDirectory(
         files which don't have this flag, out-of-sequence train IDs are suspect.
         If True (default), it tries to include these trains.
     parallelize: bool
-        Enable or disable loading files in parallel. Particularly useful if
+        Enable or disable opening files in parallel. Particularly useful if
         creating child processes is not allowed (e.g. in a daemonized
         :class:`multiprocessing.Process`).
     """
@@ -1512,7 +1512,7 @@ def open_run(
         files which don't have this flag, out-of-sequence train IDs are suspect.
         If True (default), it tries to include these trains.
     parallelize: bool
-        Enable or disable loading files in parallel. Particularly useful if
+        Enable or disable opening files in parallel. Particularly useful if
         creating child processes is not allowed (e.g. in a daemonized
         :class:`multiprocessing.Process`).
     """

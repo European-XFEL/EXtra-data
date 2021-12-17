@@ -794,6 +794,7 @@ def open_run_daemonized_helper(path):
     RunDirectory(path, parallelize=False)
 
 def test_open_run_daemonized(mock_fxe_raw_run):
+    # Daemon processes can't start their own children, check that opening a run is still possible.
     p = Process(target=open_run_daemonized_helper, args=(mock_fxe_raw_run,), daemon=True)
     p.start()
     p.join()
