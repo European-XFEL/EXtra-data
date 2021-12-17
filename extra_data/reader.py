@@ -132,19 +132,23 @@ class DataCollection:
     @classmethod
     def from_paths(
             cls, paths, _files_map=None, *, inc_suspect_trains=True,
-            is_single_run=False
+            is_single_run=False, parallelize=True
     ):
         files = []
         uncached = []
+
+        def handle_open_file_attempt(fname, fa):
+            if isinstance(fa, FileAccess):
+                files.append(fa)
+            else:
+                print(f"Skipping file {fname}", file=sys.stderr)
+                print(f"  (error was: {fa})", file=sys.stderr)
+
         for path in paths:
             cache_info = _files_map and _files_map.get(path)
-            if cache_info:
+            if cache_info and ('flag' in cache_info):
                 filename, fa = cls._open_file(path, cache_info=cache_info)
-                if isinstance(fa, FileAccess):
-                    files.append(fa)
-                else:
-                    print(f"Skipping file {filename}", file=sys.stderr)
-                    print(f"  (error was: {fa})", file=sys.stderr)
+                handle_open_file_attempt(filename, fa)
             else:
                 uncached.append(path)
 
@@ -153,14 +157,15 @@ class DataCollection:
                 # prevent child processes from receiving KeyboardInterrupt
                 signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-            nproc = min(available_cpu_cores(), len(uncached))
-            with Pool(processes=nproc, initializer=initializer) as pool:
-                for fname, fa in pool.imap_unordered(cls._open_file, uncached):
-                    if isinstance(fa, FileAccess):
-                        files.append(fa)
-                    else:
-                        print(f"Skipping file {fname}", file=sys.stderr)
-                        print(f"  (error was: {fa})", file=sys.stderr)
+            # Open the files either in parallel or serially
+            if parallelize:
+                nproc = min(available_cpu_cores(), len(uncached))
+                with Pool(processes=nproc, initializer=initializer) as pool:
+                    for fname, fa in pool.imap_unordered(cls._open_file, uncached):
+                        handle_open_file_attempt(fname, fa)
+            else:
+                for path in uncached:
+                    handle_open_file_attempt(*cls._open_file(path))
 
         if not files:
             raise Exception("All HDF5 files specified are unusable")
@@ -1416,7 +1421,8 @@ def H5File(path, *, inc_suspect_trains=True):
 
 
 def RunDirectory(
-        path, include='*', file_filter=locality.lc_any, *, inc_suspect_trains=True
+        path, include='*', file_filter=locality.lc_any, *, inc_suspect_trains=True,
+        parallelize=True
 ):
     """Open data files from a 'run' at European XFEL.
 
@@ -1443,18 +1449,23 @@ def RunDirectory(
         In newer files, trains where INDEX/flag are 0 are suspect. For older
         files which don't have this flag, out-of-sequence train IDs are suspect.
         If True (default), it tries to include these trains.
+    parallelize: bool
+        Enable or disable opening files in parallel. Particularly useful if
+        creating child processes is not allowed (e.g. in a daemonized
+        :class:`multiprocessing.Process`).
     """
     files = [f for f in os.listdir(path) if f.endswith('.h5')]
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
     files = file_filter(files)
     if not files:
-        raise Exception("No HDF5 files found in {} with glob pattern {}".format(path, include))
+        raise Exception(
+            f"No HDF5 files found in {path} with glob pattern {include}")
 
     files_map = RunFilesMap(path)
     t0 = time.monotonic()
     d = DataCollection.from_paths(
         files, files_map, inc_suspect_trains=inc_suspect_trains,
-        is_single_run=True,
+        is_single_run=True, parallelize=parallelize
     )
     log.debug("Opened run with %d files in %.2g s",
               len(d.files), time.monotonic() - t0)
@@ -1469,7 +1480,7 @@ RunHandler = RunDirectory
 
 def open_run(
         proposal, run, data='raw', include='*', file_filter=locality.lc_any, *,
-        inc_suspect_trains=True
+        inc_suspect_trains=True, parallelize=True
 ):
     """Access EuXFEL data on the Maxwell cluster by proposal and run number.
 
@@ -1500,6 +1511,10 @@ def open_run(
         In newer files, trains where INDEX/flag are 0 are suspect. For older
         files which don't have this flag, out-of-sequence train IDs are suspect.
         If True (default), it tries to include these trains.
+    parallelize: bool
+        Enable or disable opening files in parallel. Particularly useful if
+        creating child processes is not allowed (e.g. in a daemonized
+        :class:`multiprocessing.Process`).
     """
     if data == 'all':
         common_args = dict(
@@ -1543,5 +1558,5 @@ def open_run(
 
     return RunDirectory(
         osp.join(prop_dir, data, run), include=include, file_filter=file_filter,
-        inc_suspect_trains=inc_suspect_trains,
+        inc_suspect_trains=inc_suspect_trains, parallelize=parallelize
     )
