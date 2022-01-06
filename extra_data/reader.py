@@ -1474,7 +1474,7 @@ RunHandler = RunDirectory
 
 def open_run(
         proposal, run, data='raw', include='*', file_filter=locality.lc_any, *,
-        inc_suspect_trains=True
+        inc_suspect_trains=True, _use_voview=True,
 ):
     """Access EuXFEL data on the Maxwell cluster by proposal and run number.
 
@@ -1542,5 +1542,5 @@ def open_run(
 
     return RunDirectory(
         osp.join(prop_dir, data, run), include=include, file_filter=file_filter,
-        inc_suspect_trains=inc_suspect_trains,
+        inc_suspect_trains=inc_suspect_trains, _use_voview=_use_voview
     )

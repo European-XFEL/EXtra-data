@@ -19,17 +19,15 @@ SCRATCH_ROOT_DIR = "/gpfs/exfel/exp/"
 class VirtualOverviewFileWriter(VirtualFileWriter):
     def record_source_files(self):
         grp = self.file.create_group('.source_files')
-        names, mtimes, sizes = [], [], []
+        names, sizes = [], []
         for fa in self.data.files:
             st = fa.metadata_fstat or os.stat(fa.filename)
             names.append(osp.basename(fa.filename).encode('ascii'))
-            mtimes.append(st.st_mtime)
             sizes.append(st.st_size)
 
         grp.create_dataset(
             'names', data=names, dtype=h5py.special_dtype(vlen=bytes)
         )
-        grp.create_dataset('mtimes', data=mtimes, dtype='f8')
         grp.create_dataset('sizes', data=sizes, dtype='u8')
 
     def write(self):
@@ -39,7 +37,7 @@ class VirtualOverviewFileWriter(VirtualFileWriter):
 
 def check_sources(overview_file: h5py.File, run_dir):
     g = overview_file['.source_files']
-    if not (g['names'].shape == g['mtimes'].shape == g['sizes'].shape):
+    if not (g['names'].shape == g['sizes'].shape):
         return False  # Basic check that things make sense
 
     files_now = {f for f in os.listdir(run_dir)
@@ -48,9 +46,9 @@ def check_sources(overview_file: h5py.File, run_dir):
     if files_now != set(files_stored):
         return False
 
-    for name, mtime, size in zip(files_stored, g['mtimes'][:], g['sizes']):
+    for name, size in zip(files_stored, g['sizes']):
         st = os.stat(osp.join(run_dir, name))
-        if (st.st_size != size) or (st.st_mtime != mtime):
+        if st.st_size != size:
             return False
 
     return True
@@ -82,13 +80,13 @@ def voview_paths_for_run(directory):
         run_nr = None
 
     if run_nr is not None:
-        fname = '%s_%s.h5' % (raw_proc, run_nr)
-        prop_scratch = osp.join(
-            SCRATCH_ROOT_DIR, instr, cycle, prop, 'scratch'
+        fname = f'{raw_proc.upper()}-{run_nr.upper()}-OVERVIEW.h5'
+        prop_usr = osp.join(
+            SCRATCH_ROOT_DIR, instr, cycle, prop, 'usr'
         )
-        if osp.isdir(prop_scratch):
+        if osp.isdir(prop_usr):
             paths.append(
-                osp.join(prop_scratch, '.karabo_data_maps', fname)
+                osp.join(prop_usr, '.extra_data', fname)
             )
     return paths
 
@@ -99,7 +97,7 @@ def find_file_read(run_dir):
 
 def find_file_valid(run_dir):
     for candidate in voview_paths_for_run(run_dir):
-        if osp.isfile(candidate):
+        if h5py.is_hdf5(candidate):
             file_acc = FileAccess(candidate)
             if check_sources(file_acc.file, run_dir):
                 return file_acc
