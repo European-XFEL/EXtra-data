@@ -81,17 +81,16 @@ def voview_paths_for_run(directory):
     elif online_match:
         instr, cycle, prop, raw_proc, run_nr = online_match.groups()
     else:
-        run_nr = None
+        return paths
 
-    if run_nr is not None:
-        fname = f'{raw_proc.upper()}-{run_nr.upper()}-OVERVIEW.h5'
-        prop_usr = osp.join(
-            DATA_ROOT_DIR, instr, cycle, prop, 'usr'
+    fname = f'{raw_proc.upper()}-{run_nr.upper()}-OVERVIEW.h5'
+    prop_usr = osp.join(
+        DATA_ROOT_DIR, instr, cycle, prop, 'usr'
+    )
+    if osp.isdir(prop_usr):
+        paths.append(
+            osp.join(prop_usr, '.extra_data', fname)
         )
-        if osp.isdir(prop_usr):
-            paths.append(
-                osp.join(prop_usr, '.extra_data', fname)
-            )
     return paths
 
 def find_file_read(run_dir):
