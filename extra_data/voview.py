@@ -13,7 +13,7 @@ import h5py
 from .file_access import FileAccess
 from .writer import VirtualFileWriter
 
-SCRATCH_ROOT_DIR = "/gpfs/exfel/exp/"
+DATA_ROOT_DIR = "/gpfs/exfel/exp/"
 # Version number for virtual overview format - increment if we need to stop old
 # versions of EXtra-data from reading files made by newer versions.
 VOVIEW_VERSION = 1
@@ -86,7 +86,7 @@ def voview_paths_for_run(directory):
     if run_nr is not None:
         fname = f'{raw_proc.upper()}-{run_nr.upper()}-OVERVIEW.h5'
         prop_usr = osp.join(
-            SCRATCH_ROOT_DIR, instr, cycle, prop, 'usr'
+            DATA_ROOT_DIR, instr, cycle, prop, 'usr'
         )
         if osp.isdir(prop_usr):
             paths.append(

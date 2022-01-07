@@ -32,3 +32,26 @@ def test_use_voview(mock_spb_raw_run, tmp_path):
 
     assert 'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf' in run.instrument_sources
     assert 'SA1_XTD2_XGM/DOOCS/MAIN' in run.control_sources
+
+
+def test_voview_paths(tmp_path, monkeypatch):
+    monkeypatch.setattr(voview, 'DATA_ROOT_DIR', str(tmp_path))
+
+    maxwell_run_dir = tmp_path / 'raw' / 'XMPL' / '202102' / 'p700000' / 'r0123'
+    maxwell_run_dir.mkdir(parents=True)
+    voview_file_in_run_m = maxwell_run_dir / 'overview.h5'
+    usr_dir = tmp_path / 'XMPL' / '202102' / 'p700000' / 'usr'
+    usr_dir.mkdir(parents=True)
+    voview_file_in_usr = usr_dir / '.extra_data' / 'RAW-R0123-OVERVIEW.h5'
+
+    assert voview.voview_paths_for_run(maxwell_run_dir) == [
+        str(voview_file_in_run_m), str(voview_file_in_usr)
+    ]
+
+    online_run_dir = tmp_path / 'XMPL' / '202102' / 'p700000' / 'raw' / 'r0123'
+    online_run_dir.mkdir(parents=True)
+    voview_file_in_run_o = online_run_dir / 'overview.h5'
+
+    assert voview.voview_paths_for_run(online_run_dir) == [
+        str(voview_file_in_run_o), str(voview_file_in_usr)
+    ]
