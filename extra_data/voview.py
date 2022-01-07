@@ -14,6 +14,9 @@ from .file_access import FileAccess
 from .writer import VirtualFileWriter
 
 SCRATCH_ROOT_DIR = "/gpfs/exfel/exp/"
+# Version number for virtual overview format - increment if we need to stop old
+# versions of EXtra-data from reading files made by newer versions.
+VOVIEW_VERSION = 1
 
 
 class VirtualOverviewFileWriter(VirtualFileWriter):
@@ -32,6 +35,7 @@ class VirtualOverviewFileWriter(VirtualFileWriter):
 
     def write(self):
         self.record_source_files()
+        self.file.attrs['virtual_overview_version'] = VOVIEW_VERSION
         super().write()
 
 
@@ -99,7 +103,8 @@ def find_file_valid(run_dir):
     for candidate in voview_paths_for_run(run_dir):
         if h5py.is_hdf5(candidate):
             file_acc = FileAccess(candidate)
-            if check_sources(file_acc.file, run_dir):
+            version = file_acc.file.attrs.get('virtual_overview_version', 0)
+            if version <= VOVIEW_VERSION and check_sources(file_acc.file, run_dir):
                 return file_acc
 
 def find_file_write(run_dir):
