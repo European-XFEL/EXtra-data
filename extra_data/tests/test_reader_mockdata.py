@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from itertools import islice
+from multiprocessing import Process
+from warnings import catch_warnings
 
 import h5py
 import numpy as np
@@ -69,6 +71,11 @@ def test_train_info(mock_lpd_data, capsys):
         out, err = capsys.readouterr()
         assert "Devices" in out
         assert "FXE_DET_LPD1M-1/DET/0CH0:xtdf" in out
+
+
+def test_info(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    run.info(details_for_sources='*/DOOCS/*')  # Smoketest
 
 
 def test_iterate_trains_fxe(mock_fxe_control_data):
@@ -198,13 +205,15 @@ def test_iterate_select_trains(mock_fxe_raw_run):
     assert tids == [10478, 10479]
 
     # Not overlapping
-    with pytest.raises(ValueError) as excinfo:
-        list(run.trains(train_range=by_id[9000:9050]))
-    assert 'before' in str(excinfo.value)
+    with catch_warnings(record=True) as w:
+        tids = [tid for (tid, _) in run.trains(train_range=by_id[9000:9050])]
+        assert tids == []
+    assert 'before' in str(w[0].message)
 
-    with pytest.raises(ValueError) as excinfo:
-        list(run.trains(train_range=by_id[10500:10550]))
-    assert 'after' in str(excinfo.value)
+    with catch_warnings(record=True) as w:
+        tids = [tid for (tid, _) in run.trains(train_range=by_id[10500:10550])]
+        assert tids == []
+    assert 'after' in str(w[0].message)
 
     tids = [tid for (tid, _) in run.trains(train_range=by_index[4:6])]
     assert tids == [10004, 10005]
@@ -255,27 +264,28 @@ def test_file_get_series_control(mock_fxe_control_data):
         assert s.index[0] == 10000
 
 
-def test_file_get_series_instrument(mock_agipd_data):
-    with H5File(mock_agipd_data) as f:
+def test_file_get_series_instrument(mock_spb_proc_run):
+    agipd_file = os.path.join(mock_spb_proc_run, 'CORR-R0238-AGIPD07-S00000.h5')
+    with H5File(agipd_file) as f:
         s = f.get_series('SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'header.linkId')
         assert isinstance(s, pd.Series)
-        assert len(s) == 250
+        assert len(s) == 64
         assert s.index[0] == 10000
 
         # Multiple readings per train
-        s2 = f.get_series('SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.status')
+        s2 = f.get_series('SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId')
         assert isinstance(s2, pd.Series)
-        assert isinstance(s2.index, pd.MultiIndex)
-        assert len(s2) == 16000
+        assert not s2.index.is_unique
+        assert len(s2) == 64 * 64
         assert len(s2.loc[10000:10004]) == 5 * 64
 
         sel = f.select_trains(by_index[5:10])
-        s3 = sel.get_series('SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.status')
+        s3 = sel.get_series('SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.pulseId')
         assert isinstance(s3, pd.Series)
-        assert isinstance(s3.index, pd.MultiIndex)
+        assert not s3.index.is_unique
         assert len(s3) == 5 * 64
         np.testing.assert_array_equal(
-            s3.index.get_level_values(0), np.arange(10005, 10010).repeat(64)
+            s3.index.values, np.arange(10005, 10010).repeat(64)
         )
 
 
@@ -569,18 +579,27 @@ def test_select_trains(mock_fxe_raw_run):
     sel = run.select_trains(by_index[:10])
     assert sel.train_ids == list(range(10000, 10010))
 
-    with pytest.raises(ValueError):
-        run.select_trains(by_id[9000:9100])  # Before data
+    with catch_warnings(record=True) as w:
+        sel = run.select_trains(by_id[9000:9100])  # Before data
+        assert sel.train_ids == []
+        assert len(w) == 1
+        assert "before" in str(w[0].message)
 
-    with pytest.raises(ValueError):
-        run.select_trains(by_id[12000:12500])  # After data
+    with catch_warnings(record=True) as w:
+        sel = run.select_trains(by_id[12000:12500])  # After data
+        assert sel.train_ids == []
+        assert len(w) == 1
+        assert "after" in str(w[0].message)
 
     # Select a list of train IDs
     sel = run.select_trains(by_id[[9950, 10000, 10101, 10500]])
     assert sel.train_ids == [10000, 10101]
 
-    with pytest.raises(ValueError):
-        run.select_trains(by_id[[9900, 10600]])
+    with catch_warnings(record=True) as w:
+        sel = run.select_trains(by_id[[9900, 10600]])
+        assert sel.train_ids == []
+        assert len(w) == 1
+        assert "not found" in str(w[0].message)
 
     # Select a list of indexes
     sel = run.select_trains(by_index[[5, 25]])
@@ -588,6 +607,19 @@ def test_select_trains(mock_fxe_raw_run):
 
     with pytest.raises(IndexError):
         run.select_trains(by_index[[480]])
+
+
+def test_split_trains(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    assert len(run.train_ids) == 480
+
+    chunks = list(run.split_trains(3))
+    assert len(chunks) == 3
+    assert {len(c.train_ids) for c in chunks} == {160}
+
+    chunks = list(run.split_trains(4, trains_per_part=100))
+    assert len(chunks) == 5
+    assert {len(c.train_ids) for c in chunks} == {96}
 
 
 def test_train_timestamps(mock_scs_run):
@@ -647,6 +679,28 @@ def test_union_raw_proc(mock_spb_raw_run, mock_spb_proc_run):
     run = raw_run.deselect('*AGIPD1M*').union(proc_run)
 
     assert run.all_sources == (raw_run.all_sources | proc_run.all_sources)
+    if raw_run.run_metadata()['dataFormatVersion'] != '0.5':
+        assert run.is_single_run
+
+
+def test_union_multiple_runs(mock_spb_raw_run, mock_jungfrau_run, mock_scs_run):
+    run_spb = RunDirectory(mock_spb_raw_run)
+    run_jf = RunDirectory(mock_jungfrau_run)
+    run_scs = RunDirectory(mock_scs_run)
+
+    assert run_spb.is_single_run
+    assert run_jf.is_single_run
+    assert run_scs.is_single_run
+
+    # Union in one go
+    u1 = run_spb.union(run_jf, run_scs)
+    assert u1.all_sources == (run_spb.all_sources | run_jf.all_sources | run_scs.all_sources)
+    assert not u1.is_single_run
+
+    # Union in two steps
+    u2 = run_scs.union(run_jf).union(run_spb)
+    assert u2.all_sources == u1.all_sources
+    assert not u1.is_single_run
 
 
 def test_read_skip_invalid(mock_lpd_data, empty_h5_file, capsys):
@@ -736,6 +790,17 @@ def test_open_file(mock_sa3_control_data):
         assert 'METADATA/dataSources/dataSourceId' in file_access.file
 
 
+def open_run_daemonized_helper(path):
+    RunDirectory(path, parallelize=False)
+
+def test_open_run_daemonized(mock_fxe_raw_run):
+    # Daemon processes can't start their own children, check that opening a run is still possible.
+    p = Process(target=open_run_daemonized_helper, args=(mock_fxe_raw_run,), daemon=True)
+    p.start()
+    p.join()
+
+    assert p.exitcode == 0
+
 @pytest.mark.skipif(hasattr(os, 'geteuid') and os.geteuid() == 0,
                     reason="cannot run permission tests as root")
 def test_permission():
@@ -773,9 +838,9 @@ def test_get_run_value(mock_fxe_control_data):
         f.get_run_value(src, 'non.existant')
 
 
-def test_get_run_value_union(mock_fxe_control_data, mock_sa3_control_data):
+def test_get_run_value_union_multirun(mock_fxe_control_data, mock_lpd_data):
     f = H5File(mock_fxe_control_data)
-    f2 = H5File(mock_sa3_control_data)
+    f2 = H5File(mock_lpd_data)
     data = f.union(f2)
     with pytest.raises(MultiRunError):
         data.get_run_value('FXE_XAD_GEC/CAM/CAMERA', 'firmwareVersion')
@@ -783,12 +848,50 @@ def test_get_run_value_union(mock_fxe_control_data, mock_sa3_control_data):
     with pytest.raises(MultiRunError):
         data.get_run_values('FXE_XAD_GEC/CAM/CAMERA')
 
+
+def test_get_run_value_union(mock_fxe_control_data, mock_sa3_control_data):
+    f = H5File(mock_fxe_control_data)
+    f2 = H5File(mock_sa3_control_data)
+    data = f.union(f2)
+    if data.files[0].format_version != '0.5':
+        assert data.get_run_value(
+            'FXE_XAD_GEC/CAM/CAMERA', 'firmwareVersion') == 0
+
+        assert (
+            data.run_metadata()["runNumber"] ==
+            f.run_metadata()["runNumber"] ==
+            f2.run_metadata()["runNumber"]
+        )
+
+
 def test_get_run_values(mock_fxe_control_data):
     f = H5File(mock_fxe_control_data)
     src = 'FXE_XAD_GEC/CAM/CAMERA'
     d = f.get_run_values(src, )
     assert isinstance(d['firmwareVersion.value'], np.int32)
     assert isinstance(d['enableShutter.value'], np.uint8)
+
+
+def test_get_run_values_no_trains(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    sel = run.select_trains(np.s_[:0])
+    d = sel.get_run_values('SPB_IRDA_JF4M/MDL/POWER')
+    assert isinstance(d['voltage.value'], np.float64)
+
+
+def test_inspect_key_no_trains(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    sel = run.select_trains(np.s_[:0])
+
+    # CONTROL
+    jf_pwr_voltage = sel['SPB_IRDA_JF4M/MDL/POWER', 'voltage']
+    assert jf_pwr_voltage.shape == (0,)
+    assert jf_pwr_voltage.dtype == np.dtype(np.float64)
+
+    # INSTRUMENT
+    jf_m1_data = sel['SPB_IRDA_JF4M/DET/JNGFR01:daqOutput', 'data.adc']
+    assert jf_m1_data.shape == (0, 16, 512, 1024)
+    assert jf_m1_data.dtype == np.dtype(np.uint16)
 
 
 def test_run_metadata(mock_spb_raw_run):
@@ -804,3 +907,9 @@ def test_run_metadata(mock_spb_raw_run):
             'sample', 'sequenceNumber',
         }
         assert isinstance(md['creationDate'], str)
+
+def test_run_metadata_no_trains(mock_scs_run):
+    run = RunDirectory(mock_scs_run)
+    sel = run.select_trains(np.s_[:0])
+    md = sel.run_metadata()
+    assert md['dataFormatVersion'] == '1.0'

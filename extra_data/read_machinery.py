@@ -5,12 +5,13 @@ The public API is in extra_data.reader; this is internal code.
 from collections import defaultdict
 from glob import iglob
 import logging
+import math
 import numpy as np
 import os.path as osp
 import re
 import time
+from warnings import warn
 
-from .exceptions import SourceNameError
 
 log = logging.getLogger(__name__)
 
@@ -77,18 +78,28 @@ def _tid_to_slice_ix(tid, train_ids, stop=False):
     except ValueError:
         pass
 
+    if len(train_ids) == 0:
+        warn("Using train ID slice on data with no trains selected", stacklevel=4)
+        return 0
+
     if tid < train_ids[0]:
         if stop:
-            raise ValueError("Train ID {} is before this run (starts at {})"
-                             .format(tid, train_ids[0]))
+            warn(
+                f"Train ID {tid} is before this run (starts at {train_ids[0]})",
+                stacklevel=4,
+            )
+            return 0
         else:
             return None
     elif tid > train_ids[-1]:
         if stop:
             return None
         else:
-            raise ValueError("Train ID {} is after this run (ends at {})"
-                             .format(tid, train_ids[-1]))
+            warn(
+                f"Train ID {tid} is after this run (ends at {train_ids[-1]})",
+                stacklevel=4,
+            )
+            return len(train_ids)
     else:
         # This train ID is within the run, but doesn't have an entry.
         # Find the first ID in the run greater than the one given.
@@ -109,10 +120,10 @@ def select_train_ids(train_ids, sel):
     elif isinstance(sel, by_id) and isinstance(sel.value, (list, np.ndarray)):
         # Select a list of trains by train ID
         new_train_ids = sorted(set(train_ids).intersection(sel.value))
-        if not new_train_ids:
-            raise ValueError(
-                "Given train IDs not found among {} trains in "
-                "collection".format(len(train_ids))
+        if len(sel.value) and not new_train_ids:
+            warn(
+                f"Given train IDs not found among {len(train_ids)} trains in "
+                "collection", stacklevel=3,
             )
         return new_train_ids
     elif isinstance(sel, slice):
@@ -124,6 +135,23 @@ def select_train_ids(train_ids, sel):
     else:
         raise TypeError(type(sel))
 
+
+def split_trains(n_trains, parts=None, trains_per_part=None) -> [slice]:
+    if trains_per_part is not None:
+        assert trains_per_part >= 1
+        n_parts = math.ceil(n_trains / trains_per_part)
+        if parts is not None:
+            n_parts = max(n_parts, min(parts, n_trains))
+    elif parts is not None:
+        assert parts >= 1
+        n_parts = min(parts, n_trains)
+    else:
+        raise ValueError("Either parts or trains_per_part must be specified")
+
+    return [
+        slice(i * n_trains // n_parts, (i + 1) * n_trains // n_parts)
+        for i in range(n_parts)
+    ]
 
 class DataChunk:
     """Reference to a contiguous chunk of data for one or more trains."""
@@ -155,7 +183,7 @@ def contiguous_regions(condition):
     a 2D array where the first column is the start index of the region and the
     second column is the end index."""
 
-    # Find the indicies of changes in "condition"
+    # Find the indices of changes in "condition"
     d = np.diff(condition)
     idx, = d.nonzero()
 
@@ -193,6 +221,12 @@ def union_selections(selections):
         source: None if (None in keygroups) else set().union(*keygroups)
         for (source, keygroups) in selection_multi.items()
     }
+
+
+def roi_shape(orig_shape: tuple, roi: tuple) -> tuple:
+    """Find array shape after slicing ROI"""
+    dummy = np.zeros((0,) + orig_shape)  # Extra 0 dim -> minimal memory use
+    return dummy[np.index_exp[:] + roi].shape[1:]
 
 
 class FilenameInfo:
@@ -236,3 +270,6 @@ def find_proposal(propno):
         return d
 
     raise Exception("Couldn't find proposal dir for {!r}".format(propno))
+
+
+glob_wildcards_re = re.compile(r'([*?[])')

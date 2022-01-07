@@ -1,10 +1,12 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 
-from .exceptions import TrainIDError
+from .exceptions import TrainIDError, NoDataError
 from .file_access import FileAccess
-from .read_machinery import contiguous_regions, DataChunk, select_train_ids
+from .read_machinery import (
+    contiguous_regions, DataChunk, select_train_ids, split_trains, roi_shape
+)
 
 class KeyData:
     """Data for one key in one source
@@ -28,6 +30,9 @@ class KeyData:
     def _find_chunks(self):
         """Find contiguous chunks of data for this key, in any order."""
         for file in self.files:
+            if len(file.train_ids) == 0:
+                continue
+
             firsts, counts = file.get_index(self.source, self._key_group)
 
             # Of trains in this file, which are in selection
@@ -51,14 +56,17 @@ class KeyData:
         """An ordered list of chunks containing data"""
         if self._cached_chunks is None:
             self._cached_chunks = sorted(
-                [c for c in self._find_chunks() if c.total_count],
-                key=lambda c: c.train_ids[0]
+                self._find_chunks(), key=lambda c: c.train_ids[0]
             )
         return self._cached_chunks
 
+    @property
+    def _data_chunks_nonempty(self) -> List[DataChunk]:
+        return [c for c in self._data_chunks if c.total_count]
+
     def __repr__(self):
         return f"<extra_data.KeyData source={self.source!r} key={self.key!r} " \
-               f"for {len(self.train_ids)} trains"
+               f"for {len(self.train_ids)} trains>"
 
     @property
     def _key_group(self):
@@ -89,6 +97,12 @@ class KeyData:
             run[source, key][:10]  # Select data for first 10 trains
         """
         tids = select_train_ids(self.train_ids, trains)
+        return self._only_tids(tids)
+
+    def __getitem__(self, item):
+        return self.select_trains(item)
+
+    def _only_tids(self, tids):
         files = [f for f in self.files
                  if f.has_train_ids(tids, self.inc_suspect_trains)]
 
@@ -103,34 +117,102 @@ class KeyData:
             inc_suspect_trains=self.inc_suspect_trains,
         )
 
-    def __getitem__(self, item):
-        return self.select_trains(item)
+    def drop_empty_trains(self):
+        """Select only trains with data as a new :class:`KeyData` object."""
+        counts = self.data_counts(labelled=False)
+        tids = np.array(self.train_ids)[counts > 0]
+        return self._only_tids(list(tids))
 
-    def data_counts(self):
+    def split_trains(self, parts=None, trains_per_part=None):
+        """Split this data into chunks with a fraction of the trains each.
+
+        Either *parts* or *trains_per_part* must be specified.
+
+        This returns an iterator yielding new :class:`KeyData` objects.
+        The parts will have similar sizes, e.g. splitting 11 trains
+        with ``trains_per_part=8`` will produce 5 & 6 trains, not 8 & 3.
+        Selected trains count even if they are missing data, so different
+        keys from the same run can be split into matching chunks.
+
+        Parameters
+        ----------
+
+        parts: int
+            How many parts to split the data into. If trains_per_part is also
+            specified, this is a minimum, and it may make more parts.
+            It may also make fewer if there are fewer trains in the data.
+        trains_per_part: int
+            A maximum number of trains in each part. Parts will often have
+            fewer trains than this.
+        """
+        for s in split_trains(len(self.train_ids), parts, trains_per_part):
+            yield self.select_trains(s)
+
+    def data_counts(self, labelled=True):
         """Get a count of data entries in each train.
 
-        Returns a pandas series with an index of train IDs.
+        If *labelled* is True, returns a pandas series with an index of train
+        IDs. Otherwise, returns a NumPy array of counts to match ``.train_ids``.
         """
-        import pandas as pd
+        if self._data_chunks:
+            train_ids = np.concatenate([c.train_ids for c in self._data_chunks])
+            counts = np.concatenate([c.counts for c in self._data_chunks])
+        else:
+            train_ids = counts = np.zeros(0, dtype=np.uint64)
 
-        seq_series = []
+        if labelled:
+            import pandas as pd
+            return pd.Series(counts, index=train_ids)
+        else:
+            # We may be missing some train IDs, if they're not in any file
+            # for this source, and they're sometimes out of order within chunks
+            # (they shouldn't be, but we try not to fail too badly if they are).
+            assert np.isin(train_ids, self.train_ids).all()
+            tid_to_ix = {t: i for (i, t) in enumerate(self.train_ids)}
+            res = np.zeros(len(self.train_ids), dtype=np.uint64)
+            for tid, ct in zip(train_ids, counts):
+                res[tid_to_ix[tid]] = ct
 
-        for f in self.files:
-            if self.section == 'CONTROL':
-                counts = np.ones(len(f.train_ids), dtype=np.uint64)
-            else:
-                _, counts = f.get_index(self.source, self._key_group)
+            return res
 
-            if self.inc_suspect_trains:
-                s = pd.Series(counts, index=f.train_ids)
-            else:
-                s = pd.Series(counts[f.validity_flag], index=f.valid_train_ids)
-            seq_series.append(s)
+    def as_single_value(self, rtol=1e-5, atol=0.0, reduce_by='median'):
+        """Retrieve a single reduced value if within tolerances.
 
-        ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
-        # Select out only the train IDs of interest
-        train_ids = ser.index.intersection(np.asarray(self.train_ids))
-        return ser.loc[train_ids]
+        The relative and absolute tolerances *rtol* and *atol* work the
+        same way as in ``numpy.allclose``. The default relative tolerance
+        is 1e-5 with no absolute tolerance. The data for this key is compared
+        against a reduced value obtained by the method described in *reduce_by*.
+
+        This may be a callable taking the key data, the string value of a
+        global symbol in the numpy packge such as 'median' or 'first' to use
+        the first value encountered. By default, 'median' is used.
+
+        If within tolerances, the reduced value is returned.
+        """
+
+        data = self.ndarray()
+
+        if len(data) == 0:
+            raise NoDataError(self.source, self.key)
+
+        if callable(reduce_by):
+            value = reduce_by(data)
+        elif isinstance(reduce_by, str) and hasattr(np, reduce_by):
+            value = getattr(np, reduce_by)(data, axis=0)
+        elif reduce_by == 'first':
+            value = data[0]
+        else:
+            raise ValueError('invalid reduction method (may be callable, '
+                             'global numpy symbol or "first")')
+
+        if not np.allclose(data, value, rtol=rtol, atol=atol):
+            adev = np.max(np.abs(data - value))
+            rdev = np.max(np.abs(adev / value))
+
+            raise ValueError(f'data values are not within tolerance '
+                             f'(absolute: {adev:.3g}, relative: {rdev:.3g})')
+
+        return value
 
     # Getting data as different kinds of array: -------------------------------
 
@@ -143,15 +225,13 @@ class KeyData:
         if not isinstance(roi, tuple):
             roi = (roi,)
 
-        # Find the shape of the array with the ROI applied
-        roi_dummy = np.zeros((0,) + self.entry_shape) # extra 0 dim: use less memory
-        roi_shape = roi_dummy[np.index_exp[:] + roi].shape[1:]
-
-        out = np.empty(self.shape[:1] + roi_shape, dtype=self.dtype)
+        out = np.empty(
+            self.shape[:1] + roi_shape(self.entry_shape, roi), dtype=self.dtype
+        )
 
         # Read the data from each chunk into the result array
         dest_cursor = 0
-        for chunk in self._data_chunks:
+        for chunk in self._data_chunks_nonempty:
             dest_chunk_end = dest_cursor + chunk.total_count
 
             slices = (chunk.slice,) + roi
@@ -162,8 +242,22 @@ class KeyData:
 
         return out
 
-    def _trainid_index(self):
-        """A 1D array of train IDs, corresponding to self.shape[0]"""
+    def train_id_coordinates(self):
+        """Make an array of train IDs to use alongside data from ``.ndarray()``.
+
+        :attr:`train_ids` includes each selected train ID once, including trains
+        where data is missing. :meth:`train_id_coordinates` excludes missing
+        trains, and repeats train IDs if the source has multiple entries
+        per train. The result will be the same length as the first dimension
+        of an array from :meth:`ndarray`, and tells you which train each entry
+        belongs to.
+
+        .. seealso::
+
+           :meth:`xarray` returns a labelled array including these train IDs.
+        """
+        if not self._data_chunks:
+            return np.zeros(0, dtype=np.uint64)
         chunks_trainids = [
             np.repeat(chunk.train_ids, chunk.counts.astype(np.intp))
             for chunk in self._data_chunks
@@ -203,9 +297,7 @@ class KeyData:
         dims = ['trainId'] + extra_dims
 
         # Train ID index
-        coords = {}
-        if self.shape[0]:
-            coords = {'trainId': self._trainid_index()}
+        coords = {'trainId': self.train_id_coordinates()}
 
         if name is None:
             name = f'{self.source}.{self.key}'
@@ -227,7 +319,7 @@ class KeyData:
         if name.endswith('.value') and self.section == 'CONTROL':
             name = name[:-6]
 
-        index = pd.Index(self._trainid_index(), name='trainId')
+        index = pd.Index(self.train_id_coordinates(), name='trainId')
         data = self.ndarray()
         return pd.Series(data, name=name, index=index)
 
@@ -256,7 +348,7 @@ class KeyData:
 
         chunks_darrs = []
 
-        for chunk in self._data_chunks:
+        for chunk in self._data_chunks_nonempty:
             chunk_dim0 = chunk.total_count
             chunk_shape = (chunk_dim0,) + chunk.dataset.shape[1:]
             itemsize = chunk.dataset.dtype.itemsize
@@ -279,14 +371,18 @@ class KeyData:
                 )[chunk.slice]
             )
 
-        dask_arr = da.concatenate(chunks_darrs, axis=0)
+        if chunks_darrs:
+            dask_arr = da.concatenate(chunks_darrs, axis=0)
+        else:
+            shape = (0,) + self.entry_shape
+            dask_arr = da.zeros(shape=shape, dtype=self.dtype, chunks=shape)
 
         if labelled:
             # Dimension labels
             dims = ['trainId'] + ['dim_%d' % i for i in range(dask_arr.ndim - 1)]
 
             # Train ID index
-            coords = {'trainId': self._trainid_index()}
+            coords = {'trainId': self.train_id_coordinates()}
 
             import xarray
             return xarray.DataArray(dask_arr, dims=dims, coords=coords)
@@ -295,7 +391,7 @@ class KeyData:
 
     # Getting data by train: --------------------------------------------------
 
-    def _find_tid(self, tid) -> (Optional[FileAccess], int):
+    def _find_tid(self, tid) -> Tuple[Optional[FileAccess], int]:
         for fa in self.files:
             matches = (fa.train_ids == tid).nonzero()[0]
             if self.inc_suspect_trains and matches.size > 0:
@@ -338,7 +434,7 @@ class KeyData:
 
         Yields pairs of (train ID, array). Skips trains where data is missing.
         """
-        for chunk in self._data_chunks:
+        for chunk in self._data_chunks_nonempty:
             start = chunk.first
             ds = chunk.dataset
             for tid, count in zip(chunk.train_ids, chunk.counts):

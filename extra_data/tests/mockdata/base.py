@@ -58,7 +58,7 @@ class DeviceBase:
                              (1,)+dims, datatype, maxshape=((None,)+dims))
 
     def write_instrument(self, f):
-        """Write the INSTRUMENT data, and the relevants parts of INDEX"""
+        """Write the INSTRUMENT data, and the relevant parts of INDEX"""
         train0 = self.firsttrain
 
         if self.nsamples is None:
@@ -156,7 +156,10 @@ def write_metadata(h5file, data_sources, chunksize=16, format_version='0.5'):
         h5file['METADATA/karaboFramework'] = [b'2.7.0']
         h5file.create_dataset('METADATA/proposalNumber', dtype=np.uint32,
                               data=[700000])
-        h5file.create_dataset('METADATA/runNumber', dtype=np.uint32, data=[1])
+        h5file.create_dataset(
+            'METADATA/runNumber', dtype=np.uint32,
+            data=[int(re.findall(r".*-R([0-9]+)-.*", h5file.filename)[0])],
+        )
         h5file['METADATA/runType'] = [b'Test DAQ']
         h5file['METADATA/sample'] = [b'No Sample']
         # get sequence number

@@ -1,6 +1,107 @@
 Release Notes
 =============
 
+1.9.1
+-----
+
+- Fix errors from :meth:`~.KeyData.data_counts` and
+  :meth:`~.KeyData.drop_empty_trains` when different train IDs exist for
+  different sources (:ghpull:`257`).
+
+1.9
+---
+
+- New :meth:`.KeyData.as_single_value` method to check that a key remains
+  constant (within a specified tolerance) through the data, and return it as
+  a single value (:ghpull:`228`).
+- New :meth:`.KeyData.train_id_coordinates` method to get train IDs associated
+  with specific data as a NumPy array (:ghpull:`226`).
+- :ref:`cmd-validate` now checks that timestamps in control data are in
+  increasing order (:ghpull:`94`).
+- Ensure basic :class:`DataCollection` functionality, including getting values
+  from ``RUN`` and inspecting the shape & dtype of other data, works when no
+  trains are selected (:ghpull:`244`).
+- Fix reading data where some files in a run contain zero trains, as seen in
+  some of the oldest EuXFEL data (:ghpull:`225`).
+- Minor performance improvements for :meth:`~.DataCollection.select` when
+  selecting single keys (no wildcards) and when selecting all keys along with
+  ``require_all=True`` (:ghpull:`248`).
+
+Deprecations & potentially breaking changes:
+
+- The ``QuickView`` class is deprecated. We believe no-one is using this.
+  If you are, please get in touch with da-support@xfel.eu .
+- Removed the ``h5index`` module and the ``hdf5_paths`` function, which were
+  deprecated in 1.7.
+
+1.8.1
+-----
+
+- Fixed two different bugs introduced in 1.8 affecting loading data for
+  multi-module detectors with :meth:`~.LPD1M.get_array` when only some of the
+  modules captured data for a given train (:ghpull:`234`).
+- Fix ``open_run(..., data='all')`` when all sources in the raw data are copied
+  to the corrected run folder (:ghpull:`236`).
+
+1.8
+---
+
+- New API for inspecting the data associated with a single source (:ghpull:`206`).
+  Use a source name to get a :class:`.SourceData` object::
+
+    xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
+    xgm.keys()  # List the available keys
+    beam_x = xgm['beamPosition.ixPos'].ndarray()
+
+  See :ref:`data-by-source-and-key` for more details.
+- Combining data from the same run with :meth:`~.union` now preserves
+  'single run' status, so :meth:`~.run_metadata` still works (:ghpull:`208`).
+  This only works with more recent data (file format version 1.0 and above).
+- Reading data for multi-module detectors with :meth:`~.LPD1M.get_array` is
+  now faster, especially when selecting a subset of pulses (:ghpull:`218`,
+  :ghpull:`220`).
+- Fix :meth:`~.data_counts` when data is missing for some selected trains
+  (:ghpull:`222`).
+
+Deprecations & potentially breaking changes:
+
+- The ``numpy_to_cbf`` and ``hdf5_to_cbf`` functions have been removed
+  (:ghpull:`213`), after they were deprecated in 1.7. If you need to create CBF
+  files, consult the `Fabio package <http://www.silx.org/doc/fabio/latest/>`_.
+- Some packages required for :ref:`cmd-serve-files` are no longer installed
+  along with EXtra-data by default (:ghpull:`211`). Install with
+  ``pip install extra-data[bridge]`` if you need this functionality.
+
+1.7
+---
+
+- New methods to split data into chunks with a similar number of trains in
+  each: :meth:`.DataCollection.split_trains` and :meth:`.KeyData.split_trains`
+  (:ghpull:`184`).
+- New method :meth:`.KeyData.drop_empty_trains` to select only trains with
+  data for a given key (:ghpull:`193`).
+- Virtual CXI files can now be made for multi-module JUNGFRAU detectors
+  (:ghpull:`62`).
+- ``extra-data-validate`` now checks INDEX for control sources as well as
+  instrument sources (:ghpull:`188`).
+- Fix opening some files written by a test version of the DAQ, marked with
+  format version 1.1 (:ghpull:`198`).
+- Fix making virtual CXI files with h5py 3.3 (:ghpull:`195`).
+
+Deprecations & potentially breaking changes:
+
+- Remove special behaviour for :meth:`~.get_series` with big detector data,
+  deprecated in 1.4 (:ghpull:`196`).
+- Deprecated some functions for converting data to CBF format, and the
+  ``h5index`` module (:ghpull:`197`). We believe these were unused.
+
+
+1.6.1
+-----
+
+- Fix a check which made it very slow to open runs with thousands of files
+  (:ghpull:`183`).
+
 1.6
 ---
 
@@ -25,6 +126,8 @@ Release Notes
 1.5
 ---
 
+- Exclude :ref:`suspect-trains`, fixing occasional issues in particular with
+  AGIPD data containing bad train IDs (:ghpull:`121`).
 - Avoid converting train IDs to floats when using
   ``run.select(..., require_all=True)`` (:ghpull:`159`).
 - New method :meth:`.train_timestamps` to get approximate timestamps for each

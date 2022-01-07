@@ -1,22 +1,7 @@
 import numpy as np
-import os
 import pytest
-import re
-import tempfile
-from testpath import assert_isfile
 
-from extra_data import utils
 from extra_data.utils import QuickView
-
-
-def test_cbf_conversion(mock_agipd_data, capsys):
-    with tempfile.TemporaryDirectory() as td:
-        out_file = os.path.join(td, 'out.cbf')
-        utils.hdf5_to_cbf(mock_agipd_data, out_file, index=0)
-        assert_isfile(out_file)
-
-    captured = capsys.readouterr()
-    assert re.match("Convert .* to .*/out.cbf", captured.out)
 
 
 def test_init_quick_view():

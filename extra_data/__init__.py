@@ -33,7 +33,7 @@ You should have received a copy of the 3-Clause BSD License along with this
 program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 """
 
-__version__ = "1.6.0"
+__version__ = "1.9.1"
 
 
 from .exceptions import (
@@ -41,8 +41,11 @@ from .exceptions import (
 )
 from .keydata import KeyData
 from .reader import *
+from .sourcedata import SourceData
 from .stacking import *
 from .utils import *
 
 
-__all__ = reader.__all__ + utils.__all__ + stacking.__all__
+__all__ = reader.__all__ + utils.__all__ + stacking.__all__ + [
+    'SourceData', 'KeyData'
+]

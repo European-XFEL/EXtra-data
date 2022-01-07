@@ -7,25 +7,9 @@ import sys
 from textwrap import dedent
 
 from extra_data import RunDirectory
-from extra_data.components import XtdfDetectorBase
-from extra_data.exceptions import SourceNameError
+from extra_data.components import identify_multimod_detectors
 
 log = logging.getLogger(__name__)
-
-
-def _get_detector(data, min_modules):
-    for cls in XtdfDetectorBase.__subclasses__():
-        try:
-            return cls(data, min_modules=min_modules)
-        except SourceNameError:
-            continue
-
-
-def _detectors():
-    """returns a list of names for all detector components available
-    """
-    return [d.__name__ for d in XtdfDetectorBase.__subclasses__()]
-
 
 def parse_number(number:str):
     try:
@@ -56,8 +40,14 @@ def main(argv=None):
              "By default, it is written in the proposal's scratch directory."
     )
     ap.add_argument(
-        '--min-modules', type=int, default=9, metavar='N',
-        help="Include trains where at least N modules have data (default 9)"
+        '--min-modules', type=int, default=None, metavar='N',
+        help='Include trains where at least N modules have data (default:'
+             ' half+1 of all detector modules).'
+    )
+    ap.add_argument(
+        '--n-modules', type=int, default=None, metavar='N',
+        help='Number of detector modules in the experiment setup.'
+             ' Should be used only for JUNGFRAU data.'
     )
     ap.add_argument(
         '--fill-value', action='append', nargs=2, metavar=('DS', 'V'),
@@ -67,8 +57,9 @@ def main(argv=None):
     )
     ap.add_argument(
         '--exc-suspect-trains', action='store_true',
-        help="Exclude suspect trains. This tries to avoid some issues with incorrect train IDs in the data, "
-             "but may mean less data is available."
+        help='Exclude suspect trains. This tries to avoid some issues with'
+             ' incorrect train IDs in the data, but may mean less data is'
+             ' available.'
     )
     args = ap.parse_args(argv)
     out_file = args.output
@@ -106,11 +97,22 @@ def main(argv=None):
         sys.exit("ERROR: Don't have write access to {}".format(out_dir))
 
     log.info("Reading run directory %s", run_dir)
-    run = RunDirectory(run_dir, inc_suspect_trains=(not args.exc_suspect_trains))
-    det = _get_detector(run, args.min_modules)
-    if det is None:
-        sys.exit(f"No {_detectors()} sources found in {run_dir}")
+    inc_suspect = not args.exc_suspect_trains
+    run = RunDirectory(run_dir, inc_suspect_trains=inc_suspect)
 
+    _, det_class = identify_multimod_detectors(run, single=True)
+
+    n_modules = det_class.n_modules
+    kwargs = {}
+    if n_modules == 0:
+        n_modules = args.n_modules
+        kwargs['n_modules'] = n_modules
+
+    min_modules = args.min_modules
+    if min_modules is None:
+        min_modules = 1 if (n_modules is None) else (n_modules // 2) + 1
+
+    det = det_class(run, min_modules=min_modules, **kwargs)
     det.write_virtual_cxi(out_file, fill_values)
 
 if __name__ == '__main__':

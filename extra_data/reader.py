@@ -22,12 +22,12 @@ import numpy as np
 from operator import index
 import os
 import os.path as osp
-import psutil
 import re
 import signal
 import sys
 import tempfile
 import time
+from typing import Tuple
 from warnings import warn
 
 from .exceptions import (
@@ -40,12 +40,16 @@ from .read_machinery import (
     by_id,
     by_index,
     select_train_ids,
+    split_trains,
     union_selections,
     find_proposal,
+    glob_wildcards_re,
 )
 from .run_files_map import RunFilesMap
+from .sourcedata import SourceData
 from . import locality, voview
 from .file_access import FileAccess
+from .utils import available_cpu_cores
 
 __all__ = [
     'H5File',
@@ -128,19 +132,23 @@ class DataCollection:
     @classmethod
     def from_paths(
             cls, paths, _files_map=None, *, inc_suspect_trains=True,
-            is_single_run=False
+            is_single_run=False, parallelize=True
     ):
         files = []
         uncached = []
+
+        def handle_open_file_attempt(fname, fa):
+            if isinstance(fa, FileAccess):
+                files.append(fa)
+            else:
+                print(f"Skipping file {fname}", file=sys.stderr)
+                print(f"  (error was: {fa})", file=sys.stderr)
+
         for path in paths:
             cache_info = _files_map and _files_map.get(path)
-            if cache_info:
+            if cache_info and ('flag' in cache_info):
                 filename, fa = cls._open_file(path, cache_info=cache_info)
-                if isinstance(fa, FileAccess):
-                    files.append(fa)
-                else:
-                    print(f"Skipping file {filename}", file=sys.stderr)
-                    print(f"  (error was: {fa})", file=sys.stderr)
+                handle_open_file_attempt(filename, fa)
             else:
                 uncached.append(path)
 
@@ -149,16 +157,15 @@ class DataCollection:
                 # prevent child processes from receiving KeyboardInterrupt
                 signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-            # cpu_affinity give a list of cpu cores we can use, can be all or a
-            # subset of the cores the machine has.
-            nproc = min(len(psutil.Process().cpu_affinity()), len(uncached))
-            with Pool(processes=nproc, initializer=initializer) as pool:
-                for fname, fa in pool.imap_unordered(cls._open_file, uncached):
-                    if isinstance(fa, FileAccess):
-                        files.append(fa)
-                    else:
-                        print(f"Skipping file {fname}", file=sys.stderr)
-                        print(f"  (error was: {fa})", file=sys.stderr)
+            # Open the files either in parallel or serially
+            if parallelize:
+                nproc = min(available_cpu_cores(), len(uncached))
+                with Pool(processes=nproc, initializer=initializer) as pool:
+                    for fname, fa in pool.imap_unordered(cls._open_file, uncached):
+                        handle_open_file_attempt(fname, fa)
+            else:
+                for path in uncached:
+                    handle_open_file_attempt(*cls._open_file(path))
 
         if not files:
             raise Exception("All HDF5 files specified are unusable")
@@ -204,16 +211,8 @@ class DataCollection:
         if source not in self.all_sources:
             raise SourceNameError(source)
 
-        if not self._has_source_key(source, key):
+        if key not in self[source]:
             raise PropertyNameError(key, source)
-
-    def _has_source_key(self, source, key):
-        selected_keys = self.selection[source]
-        if selected_keys is not None:
-            return key in selected_keys
-
-        for f in self._source_index[source]:
-            return f.has_source_key(source, key)
 
     def keys_for_source(self, source):
         """Get a set of key names for the given source
@@ -226,37 +225,37 @@ class DataCollection:
         combine two runs where the source was configured differently, the
         result can be unpredictable.
         """
-        selected_keys = self.selection[source]
-        if selected_keys is not None:
-            return selected_keys
-
-        # The same source may be in multiple files, but this assumes it has
-        # the same keys in all files that it appears in.
-        for f in self._source_index[source]:
-            return f.get_keys(source)
+        return self._get_source_data(source).keys()
 
     # Leave old name in case anything external was using it:
     _keys_for_source = keys_for_source
 
     def _get_key_data(self, source, key):
-        self._check_field(source, key)
-        section = 'INSTRUMENT' if source in self.instrument_sources else 'CONTROL'
+        return self._get_source_data(source)[key]
+
+    def _get_source_data(self, source):
+        if source in self.control_sources:
+            section = 'CONTROL'
+        elif source in self.instrument_sources:
+            section = 'INSTRUMENT'
+        else:
+            raise SourceNameError(source)
+
         files = self._source_index[source]
-        ds0 = files[0].file[f"{section}/{source}/{key.replace('.', '/')}"]
-        return KeyData(
+        return SourceData(
             source,
-            key,
+            sel_keys=self.selection[source],
             train_ids=self.train_ids,
-            files=self._source_index[source],
+            files=files,
             section=section,
-            dtype=ds0.dtype,
-            eshape=ds0.shape[1:],
             inc_suspect_trains=self.inc_suspect_trains,
         )
 
     def __getitem__(self, item):
         if isinstance(item, tuple) and len(item) == 2:
             return self._get_key_data(*item)
+        elif isinstance(item, str):
+            return self._get_source_data(item)
 
         raise TypeError("Expected data[source, key]")
 
@@ -451,76 +450,11 @@ class DataCollection:
         return self._get_key_data(source, key).data_counts()
 
     def get_series(self, source, key):
-        """Return a pandas Series for a particular data field.
+        """Return a pandas Series for a 1D data field defined by source & key.
 
-        ::
-
-            s = run.get_series("SA1_XTD2_XGM/XGM/DOOCS", "beamPosition.ixPos")
-
-        This only works for 1-dimensional data.
-
-        Parameters
-        ----------
-
-        source: str
-            Device name with optional output channel, e.g.
-            "SA1_XTD2_XGM/DOOCS/MAIN" or "SPB_DET_AGIPD1M-1/DET/7CH0:xtdf"
-        key: str
-            Key of parameter within that device, e.g. "beamPosition.iyPos.value"
-            or "header.linkId". The data must be 1D in the file.
+        See :meth:`.KeyData.series` for details.
         """
-        import pandas as pd
-
-        self._check_field(source, key)
-        name = source + '/' + key
-        if name.endswith('.value'):
-            name = name[:-6]
-
-        seq_series = []
-
-        if source in self.instrument_sources:
-            data_path = "/INSTRUMENT/{}/{}".format(source, key.replace('.', '/'))
-            for f in self._source_index[source]:
-                group = key.partition('.')[0]
-                firsts, counts = f.get_index(source, group)
-                trainids = self._expand_trainids(counts, f.train_ids)
-
-                index = pd.Index(trainids, name='trainId')
-                data = f.file[data_path][:]
-                if not index.is_unique:
-                    pulse_id = f.file['/INSTRUMENT/{}/{}/pulseId'.format(source, group)]
-                    pulse_id = pulse_id[: len(index), 0]
-                    index = pd.MultiIndex.from_arrays(
-                        [trainids, pulse_id], names=['trainId', 'pulseId']
-                    )
-                    # Does pulse-oriented data always have an extra dimension?
-                    assert data.shape[1] == 1
-                    data = data[:, 0]
-
-                    warn(
-                        "Getting a series with pulseId labels is deprecated, "
-                        "as it only works in very specific cases. "
-                        "If you still need this, please contact "
-                        "da-support@xfel.eu to discuss it.",
-                        stacklevel=2
-                    )
-                data = data[: len(index)]
-
-                seq_series.append(pd.Series(data, name=name, index=index))
-        else:
-            return self._get_key_data(source, key).series()
-
-        ser = pd.concat(sorted(seq_series, key=lambda s: s.index[0]))
-
-        # Select out only the train IDs of interest
-        if isinstance(ser.index, pd.MultiIndex):
-            train_ids = ser.index.levels[0].intersection(self.train_ids)
-            # A numpy array works for selecting, but a pandas index doesn't
-            train_ids = np.asarray(train_ids)
-        else:
-            train_ids = ser.index.intersection(self.train_ids)
-
-        return ser.loc[train_ids]
+        return self._get_key_data(source, key).series()
 
     def get_dataframe(self, fields=None, *, timestamps=False):
         """Return a pandas dataframe for given data fields.
@@ -656,17 +590,32 @@ class DataCollection:
         files = set(self.files)
         train_ids = set(self.train_ids)
 
+        # DataCollection union of format version = 0.5 (no run/proposal # in
+        # files) is not considered a single run.
+        proposal_nos = set()
+        run_nos = set()
+        for dc in (self,) + others:
+            md = dc.run_metadata() if dc.is_single_run else {}
+            proposal_nos.add(md.get("proposalNumber", -1))
+            run_nos.add(md.get("runNumber", -1))
+
+        same_run = (
+            len(proposal_nos) == 1 and (-1 not in proposal_nos)
+            and len(run_nos) == 1 and (-1 not in run_nos)
+        )
+
         for other in others:
             files.update(other.files)
             train_ids.update(other.train_ids)
 
         train_ids = sorted(train_ids)
-        selection = union_selections([self.selection] +
-                                     [o.selection for o in others])
+        selection = union_selections(
+            [self.selection] + [o.selection for o in others])
 
         return DataCollection(
             files, selection=selection, train_ids=train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=same_run,
         )
 
     def _expand_selection(self, selection):
@@ -686,7 +635,7 @@ class DataCollection:
                     # If a specific set of keys is selected, make sure
                     # they are all valid.
                     for key in in_keys:
-                        if not self._has_source_key(source, key):
+                        if key not in self[source]:
                             raise PropertyNameError(key, source)
                 else:
                     # Catches both an empty set and None.
@@ -740,12 +689,12 @@ class DataCollection:
         source_re = re.compile(fnmatch.translate(source_glob))
         key_re = re.compile(fnmatch.translate(key_glob))
         if key_glob.endswith(('.value', '*')):
+            ctrl_key_glob = key_glob
             ctrl_key_re = key_re
         else:
-            # The translated pattern ends with "\Z" - insert before this
-            p = key_re.pattern
-            end_ix = p.rindex(r'\Z')
-            ctrl_key_re = re.compile(p[:end_ix] + r'(\.value)?' + p[end_ix:])
+            # Add .value suffix for keys of CONTROL sources
+            ctrl_key_glob = key_glob + '.value'
+            ctrl_key_re = re.compile(fnmatch.translate(ctrl_key_glob))
 
         matched = {}
         for source in self.all_sources:
@@ -761,6 +710,12 @@ class DataCollection:
                     matched[source] = None
                 else:
                     matched[source] = self.selection[source]
+            elif glob_wildcards_re.search(key_glob) is None:
+                # Selecting a single key (no wildcards in pattern)
+                # This check should be faster than scanning all keys:
+                k = ctrl_key_glob if source in self.control_sources else key_glob
+                if k in self._get_source_data(source):
+                    matched[source] = {k}
             else:
                 r = ctrl_key_re if source in self.control_sources else key_re
                 keys = set(filter(r.match, self.keys_for_source(source)))
@@ -846,9 +801,10 @@ class DataCollection:
                     # many cases this is 'data', but not always.
                     if keys is None:
                         # All keys are selected.
-                        keys = self.keys_for_source(source)
-
-                    groups = {key.partition('.')[0] for key in keys}
+                        f = self._source_index[source][0]
+                        groups = f.index_group_names(source)
+                    else:
+                        groups = {key.partition('.')[0] for key in keys}
                 else:
                     # CONTROL data has no key group.
                     groups = ['']
@@ -870,8 +826,7 @@ class DataCollection:
                     train_ids = np.intersect1d(train_ids, source_tids)
 
             # Filtering may have eliminated previously selected files.
-            files = [f for f in files
-                     if f.has_train_ids(train_ids, self.inc_suspect_trains)]
+            files = self._filter_files_for_trains(files, train_ids, selection.keys())
 
             train_ids = list(train_ids)  # Convert back to a list.
 
@@ -951,8 +906,9 @@ class DataCollection:
         """
         new_train_ids = select_train_ids(self.train_ids, train_range)
 
-        files = [f for f in self.files
-                 if f.has_train_ids(new_train_ids, self.inc_suspect_trains)]
+        files = self._filter_files_for_trains(
+            self.files, new_train_ids, self.all_sources
+        )
 
         return DataCollection(
             files, selection=self.selection, train_ids=new_train_ids,
@@ -960,19 +916,63 @@ class DataCollection:
             is_single_run=self.is_single_run,
         )
 
+    def _filter_files_for_trains(self, files, train_ids, sel_sources) -> list:
+        """Filter the files by trains, retaining >= 1 file for each source
+
+        This allows inspection, and access to RUN data, even if no data for that
+        source is selected.
+        """
+        files = {f for f in files
+                 if f.has_train_ids(train_ids, self.inc_suspect_trains)}
+
+        sources_in_files = set().union(f.all_sources for f in files)
+        for src in (sel_sources - sources_in_files):
+            files.add(self._source_index[src][0])
+
+        return sorted(files, key=lambda f: f.filename)
+
+    def split_trains(self, parts=None, trains_per_part=None):
+        """Split this data into chunks with a fraction of the trains each.
+
+        Either *parts* or *trains_per_part* must be specified.
+
+        This returns an iterator yielding new :class:`DataCollection` objects.
+        The parts will have similar sizes, e.g. splitting 11 trains
+        with ``trains_per_part=8`` will produce 5 & 6 trains, not 8 & 3.
+
+        Parameters
+        ----------
+
+        parts: int
+            How many parts to split the data into. If trains_per_part is also
+            specified, this is a minimum, and it may make more parts.
+            It may also make fewer if there are fewer trains in the data.
+        trains_per_part: int
+            A maximum number of trains in each part. Parts will often have
+            fewer trains than this.
+        """
+        for s in split_trains(len(self.train_ids), parts, trains_per_part):
+            yield self.select_trains(s)
+
     def _check_source_conflicts(self):
         """Check for data with the same source and train ID in different files.
         """
         sources_with_conflicts = set()
+        files_conflict_cache = {}
+
+        def files_have_conflict(files):
+            fset = frozenset({f.filename for f in files})
+            if fset not in files_conflict_cache:
+                if self.inc_suspect_trains:
+                    tids = np.concatenate([f.train_ids for f in files])
+                else:
+                    tids = np.concatenate([f.valid_train_ids for f in files])
+                files_conflict_cache[fset] = len(np.unique(tids)) != len(tids)
+            return files_conflict_cache[fset]
+
         for source, files in self._source_index.items():
-            got_tids = np.array([], dtype=np.uint64)
-            for file in files:
-                if file.has_train_ids(got_tids, self.inc_suspect_trains):
-                    sources_with_conflicts.add(source)
-                    break
-                f_tids = file.train_ids if self.inc_suspect_trains \
-                            else file.valid_train_ids
-                got_tids = np.union1d(got_tids, f_tids)
+            if files_have_conflict(files):
+                sources_with_conflicts.add(source)
 
         if sources_with_conflicts:
             raise ValueError("{} sources have conflicting data "
@@ -991,7 +991,7 @@ class DataCollection:
         """
         return self._get_key_data(source, key)._data_chunks
 
-    def _find_data(self, source, train_id) -> (FileAccess, int):
+    def _find_data(self, source, train_id) -> Tuple[FileAccess, int]:
         for f in self._source_index[source]:
             ixs = (f.train_ids == train_id).nonzero()[0]
             if self.inc_suspect_trains and ixs.size > 0:
@@ -1002,6 +1002,10 @@ class DataCollection:
                     return f, ix
 
         return None, None
+
+    def __repr__(self):
+        return f"<extra_data.DataCollection for {len(self.all_sources)} " \
+               f"sources and {len(self.train_ids)} trains>"
 
     def info(self, details_for_sources=()):
         """Show information about the selected data.
@@ -1098,16 +1102,19 @@ class DataCollection:
             print('  -', s)
             if any(p.match(s) for p in details_sources_re):
                 # Detail for control sources: list keys
-                ctrl_keys = self.keys_for_source(s)
+                ctrl_keys = self[s].keys(inc_timestamps=False)
                 print('    - Control keys (1 entry per train):')
                 keys_detail(s, sorted(ctrl_keys), prefix='      - ')
 
                 run_keys = self._source_index[s][0].get_run_keys(s)
+                run_keys = {k[:-6] for k in run_keys if k.endswith('.value')}
                 run_only_keys = run_keys - ctrl_keys
                 if run_only_keys:
                     print('    - Additional run keys (1 entry per run):')
                     for k in sorted(run_only_keys):
-                        ds = self._source_index[s][0].file[f"/RUN/{s}/{k.replace('.', '/')}"]
+                        ds = self._source_index[s][0].file[
+                            f"/RUN/{s}/{k.replace('.', '/')}/value"
+                        ]
                         entry_shape = ds.shape[1:]
                         if entry_shape:
                             entry_info = f", entry shape {entry_shape}"
@@ -1415,7 +1422,7 @@ def H5File(path, *, inc_suspect_trains=True):
 
 def RunDirectory(
         path, include='*', file_filter=locality.lc_any, *, inc_suspect_trains=True,
-        _use_voview=True,
+        parallelize=True, _use_voview=True,
 ):
     """Open data files from a 'run' at European XFEL.
 
@@ -1442,13 +1449,18 @@ def RunDirectory(
         In newer files, trains where INDEX/flag are 0 are suspect. For older
         files which don't have this flag, out-of-sequence train IDs are suspect.
         If True (default), it tries to include these trains.
+    parallelize: bool
+        Enable or disable opening files in parallel. Particularly useful if
+        creating child processes is not allowed (e.g. in a daemonized
+        :class:`multiprocessing.Process`).
     """
     files = [f for f in os.listdir(path)
              if f.endswith('.h5') and ('overview' not in f.lower())]
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
     sel_files = file_filter(files)
     if not sel_files:
-        raise Exception("No HDF5 files found in {} with glob pattern {}".format(path, include))
+        raise Exception(
+            f"No HDF5 files found in {path} with glob pattern {include}")
 
     if _use_voview and (sel_files == files):
         voview_file_acc = voview.find_file_valid(path)
@@ -1459,7 +1471,7 @@ def RunDirectory(
     t0 = time.monotonic()
     d = DataCollection.from_paths(
         files, files_map, inc_suspect_trains=inc_suspect_trains,
-        is_single_run=True,
+        is_single_run=True, parallelize=parallelize
     )
     log.debug("Opened run with %d files in %.2g s",
               len(d.files), time.monotonic() - t0)
@@ -1474,7 +1486,7 @@ RunHandler = RunDirectory
 
 def open_run(
         proposal, run, data='raw', include='*', file_filter=locality.lc_any, *,
-        inc_suspect_trains=True, _use_voview=True,
+        inc_suspect_trains=True, parallelize=True, _use_voview=True,
 ):
     """Access EuXFEL data on the Maxwell cluster by proposal and run number.
 
@@ -1505,6 +1517,10 @@ def open_run(
         In newer files, trains where INDEX/flag are 0 are suspect. For older
         files which don't have this flag, out-of-sequence train IDs are suspect.
         If True (default), it tries to include these trains.
+    parallelize: bool
+        Enable or disable opening files in parallel. Particularly useful if
+        creating child processes is not allowed (e.g. in a daemonized
+        :class:`multiprocessing.Process`).
     """
     if data == 'all':
         common_args = dict(
@@ -1519,9 +1535,15 @@ def open_run(
         raw_extra = raw_dc.deselect(
             [(src, '*') for src in raw_dc.all_sources & proc_dc.all_sources])
 
-        # Merge extra raw sources into proc sources and re-enable is_single_run.
-        dc = proc_dc.union(raw_extra)
-        dc.is_single_run = True
+        if raw_extra.files:
+            # If raw is not a subset of proc, merge the "extra" raw
+            # sources into proc sources and re-enable is_single_run.
+            dc = proc_dc.union(raw_extra)
+            dc.is_single_run = True
+        else:
+            # If raw is a subset of proc, just use proc.
+            dc = proc_dc
+
         return dc
 
     if isinstance(proposal, str):
@@ -1542,5 +1564,6 @@ def open_run(
 
     return RunDirectory(
         osp.join(prop_dir, data, run), include=include, file_filter=file_filter,
-        inc_suspect_trains=inc_suspect_trains, _use_voview=_use_voview
+        inc_suspect_trains=inc_suspect_trains, parallelize=parallelize,
+        _use_voview=_use_voview,
     )

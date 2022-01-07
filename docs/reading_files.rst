@@ -17,8 +17,6 @@ run number to look up the standard data paths on the Maxwell cluster.
 
 .. autofunction:: open_run
 
-   .. versionadded:: 0.5
-
 You can also open a single file. The methods described below all work for either
 a run or a single file.
 
@@ -80,6 +78,13 @@ to refer to all data associated with that 0.1 second window.
 Getting data by source & key
 ----------------------------
 
+Selecting a source in a run gives a :class:`.SourceData` object.
+You can use this to find keys belonging to that source::
+
+    xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
+    xgm.keys()  # List the available keys
+    beam_x = xgm['beamPosition.ixPos']  # Get a KeyData object
+
 Selecting a single source & key in a run gives a :class:`.KeyData` object.
 You can get the data from this in various forms with the methods described
 below, e.g.::
@@ -131,7 +136,22 @@ below, e.g.::
        :doc:`dask_averaging`
          An example using Dask with EuXFEL data
 
+   .. automethod:: train_id_coordinates
+
    .. automethod:: select_trains
+   
+   .. automethod:: split_trains
+
+      .. versionadded:: 1.7
+      
+   .. automethod:: drop_empty_trains
+   
+      .. versionadded:: 1.7
+
+   .. automethod:: as_single_value
+   
+      .. versionadded:: 1.9
+
 
 The run or file object (a :class:`DataCollection`) also has methods to load
 data by sources and keys. :meth:`get_array`, :meth:`get_dask_array` and
@@ -158,8 +178,6 @@ methods offer extra capabilities.
           Examples using xarray & pandas with EuXFEL data
 
    .. automethod:: get_virtual_dataset
-
-      .. versionadded:: 0.5
 
       .. seealso::
         :doc:`parallel_example`
@@ -230,6 +248,10 @@ data, so you use them like this::
    .. automethod:: deselect
 
    .. automethod:: select_trains
+
+   .. automethod:: split_trains
+
+      .. versionadded:: 1.7
 
    .. automethod:: union
 

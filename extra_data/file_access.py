@@ -10,6 +10,7 @@ import numpy as np
 import os
 import os.path as osp
 import resource
+from warnings import warn
 from weakref import WeakValueDictionary
 
 from .exceptions import SourceNameError
@@ -70,7 +71,7 @@ class OpenFilesLimiter(object):
         will be closed.
         
         For use of the file cache, FileAccess should use `touch(filename)` every time 
-        it provides the underying instance of `h5py.File` for reading.
+        it provides the underlying instance of `h5py.File` for reading.
         """
         if filename in self._cache:
             self._cache.move_to_end(filename)
@@ -138,6 +139,24 @@ class FileAccess:
                 self.validity_flag = self._guess_valid_trains()
             else:
                 self.validity_flag = self.file['INDEX/flag'][:len(self.train_ids)].astype(bool)
+
+                if self.format_version == '1.1':
+                    # File format version 1.1 changed the semantics of
+                    # INDEX/flag from a boolean flag to an index, with
+                    # the time server device being hardcoded to occur
+                    # at index 0. Inverting the flag after the boolean
+                    # cast above restores compatibility with format
+                    # version 1.0, with any "invalid" train having an
+                    # index >= 1, thus being casted to True and inverted
+                    # to False. Format 1.2 restored the 1.0 semantics.
+                    np.logical_not(self.validity_flag, out=self.validity_flag)
+
+                    warn(
+                        'Train validation is not fully supported for data '
+                        'format version 1.1. If you have issues accessing '
+                        'these files, please contact da-support@xfel.eu.',
+                        stacklevel=2
+                    )
 
         if self._file is not None:
             # Store the stat of the file as it was when we read the metadata.
@@ -214,6 +233,10 @@ class FileAccess:
                 # TODO: Do something with groups?
             elif category == 'CONTROL':
                 control_sources.add(h5_source)
+            elif category == 'Karabo_TimerServer':
+                # Ignore virtual data source used only in file format
+                # version 1.1 / pclayer-1.10.3-2.10.5.
+                pass
             else:
                 raise ValueError("Unknown data category %r" % category)
 
@@ -292,6 +315,15 @@ class FileAccess:
             counts = np.uint64((ix_group['last'][:ntrains] - firsts + 1) * status)
         return firsts, counts
 
+    def index_group_names(self, source):
+        """Get group names for index data, to use with .get_index()"""
+        if source in self.control_sources:
+            return {''}
+        elif source in self.instrument_sources:
+            return set(self.file[f'/INDEX/{source}'].keys())
+        else:
+            raise SourceNameError(source)
+
     def metadata(self) -> dict:
         """Get the contents of the METADATA group as a dict
 
@@ -358,7 +390,7 @@ class FileAccess:
                 res.add(key.replace('/', '.'))
 
         self.file['/RUN/' + source].visititems(add_key)
-        self._keys_cache[source] = res
+        self._run_keys_cache[source] = res
         return res
 
     def has_source_key(self, source, key):

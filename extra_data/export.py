@@ -10,21 +10,34 @@ You should have received a copy of the 3-Clause BSD License along with this
 program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 """
 
-from argparse import ArgumentParser
 import os.path as osp
+from socket import AF_INET
 from warnings import warn
 
 from karabo_bridge import ServerInThread
 from karabo_bridge.server import Sender
+from psutil import net_if_addrs
 
 from .components import XtdfDetectorBase
 from .exceptions import SourceNameError
 from .reader import RunDirectory, H5File
 from .stacking import stack_detector_data
-from .utils import find_infiniband_ip
 
 
 __all__ = ['ZMQStreamer', 'serve_files']
+
+
+def find_infiniband_ip():
+    """Find the first infiniband IP address
+
+    :returns: str
+        IP of the first infiniband interface if it exists else '*'
+    """
+    addrs = net_if_addrs()
+    for addr in addrs.get('ib0', ()):
+        if addr.family == AF_INET:
+            return addr.address
+    return '*'
 
 
 class ZMQStreamer(ServerInThread):
@@ -44,7 +57,7 @@ def _iter_trains(data, merge_detector=False):
 
     :data: DataCollection
     :merge_detector: bool
-        if True and data contains detector data (e.g. AGIPD) idividual sources
+        if True and data contains detector data (e.g. AGIPD) individual sources
         for each detector tiles are merged in a single source. The new source
         name keep the original prefix, but replace the last 2 part with
         '/DET/APPEND'. Individual sources are removed from the train data
@@ -148,47 +161,3 @@ def serve_files(path, port, source_glob='*', key_glob='*',
     # wait until ZMQ has finished transferring them before the socket is closed.
     sender.server_socket.close(linger=-1)
 
-
-def main(argv=None):
-    ap = ArgumentParser(prog="karabo-bridge-serve-files")
-    ap.add_argument("path", help="Path of a file or run directory to serve")
-    ap.add_argument("port", help="TCP port or ZMQ endpoint to send data on")
-    ap.add_argument(
-        "--source", help="Stream only matching sources ('*' is a wildcard)",
-        default='*',
-    )
-    ap.add_argument(
-        "--key", help="Stream only matching keys ('*' is a wildcard)",
-        default='*',
-    )
-    ap.add_argument(
-        "--append-detector-modules", help="combine multiple module sources"
-        " into one (will only work for AGIPD data currently).",
-        action='store_true'
-    )
-    ap.add_argument(
-        "--dummy-timestamps", help="create dummy timestamps if the meta-data"
-        " lacks proper timestamps",
-        action='store_true'
-    )
-    ap.add_argument(
-        "--use-infiniband", help="Use infiniband interface if available "
-                                 "(if a TCP port is specified)",
-        action='store_true'
-    )
-    ap.add_argument(
-        "-z", "--socket-type", help="ZeroMQ socket type",
-        choices=['PUB', 'PUSH', 'REP'], default='REP'
-    )
-    args = ap.parse_args(argv)
-
-    try:
-        serve_files(
-            args.path, args.port, source_glob=args.source, key_glob=args.key,
-            append_detector_modules=args.append_detector_modules,
-            dummy_timestamps=args.dummy_timestamps,
-            use_infiniband=args.use_infiniband, sock=args.socket_type
-        )
-    except KeyboardInterrupt:
-        pass
-    print('\nStopped.')

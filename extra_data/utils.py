@@ -8,14 +8,13 @@ You should have received a copy of the 3-Clause BSD License along with this
 program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 """
 
-from psutil import net_if_addrs
-from socket import AF_INET
+import os
+from warnings import warn
 
-import h5py
 import numpy as np
 
 
-__all__ = ['hdf5_paths', 'hdf5_to_cbf', 'numpy_to_cbf', 'QuickView']
+__all__ = ['QuickView']
 
 
 class QuickView:
@@ -54,6 +53,11 @@ class QuickView:
     _current_index = 0
 
     def __init__(self, data=None):
+        warn(
+            'extra_data.QuickView is deprecated, and likely to be removed in a '
+            'future version. Please contact da-support@xfel.eu if you use it.',
+            stacklevel=2,
+        )
         if data:
             self.data = data
 
@@ -117,43 +121,12 @@ class QuickView:
         return self._data.shape[0]
 
 
-def hdf5_paths(ds, indent=0, maxlen=100):
-    """Visit and print name of all element in HDF5 file (from S Hauf)"""
-
-    for k in list(ds.keys())[:maxlen]:
-        print(" " * indent + k)
-        if isinstance(ds[k], h5py.Group):
-            hdf5_paths(ds[k], indent + 4, maxlen)
-        else:
-            print(" " * indent + k)
-
-
-def numpy_to_cbf(np_array, index=0, header=None):
-    """Given a 3D numpy array, convert it to a CBF data object"""
-    import fabio.cbfimage
-    img_reduced = np_array[index, ...]
-    return fabio.cbfimage.cbfimage(header=header or {}, data=img_reduced)
-
-
-def hdf5_to_cbf(in_h5file, cbf_filename, index, header=None):
-    """Conversion from HDF5 file to cbf binary image file"""
-    tmpf = h5py.File(in_h5file, 'r')
-    paths = list(tmpf["METADATA/dataSourceId"])
-    image_path = [p for p in paths if p.endswith(b"image")][0]
-    images = tmpf[image_path + b"/data"]
-    cbf_out = numpy_to_cbf(images, index=index)
-    cbf_out.write(cbf_filename)
-    print("Convert {} index {} to {}".format(in_h5file, index, cbf_filename))
-
-
-def find_infiniband_ip():
-    """Find the first infiniband IP address
-
-    :returns: str
-        IP of the first infiniband interface if it exists else '*'
-    """
-    addrs = net_if_addrs()
-    for addr in addrs.get('ib0', ()):
-        if addr.family is AF_INET:
-            return addr.address
-    return '*'
+def available_cpu_cores():
+    # This process may be restricted to a subset of the cores on the machine;
+    # sched_getaffinity() tells us which on some Unix flavours (inc Linux)
+    if hasattr(os, 'sched_getaffinity'):
+        return len(os.sched_getaffinity(0))
+    else:
+        # Fallback, inc on Windows
+        ncpu = os.cpu_count() or 2
+        return min(ncpu, 8)
