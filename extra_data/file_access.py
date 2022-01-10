@@ -94,7 +94,22 @@ def init_open_files_limiter():
 open_files_limiter = init_open_files_limiter()
 
 
-class FileAccess:
+class MetaFileAccess(type):
+    # Override regular instance creation to check in the registry first.
+    # Defining __new__ on the class is not enough, because an object retrieved
+    # from the registry that way will have its __init__ run again.
+    def __call__(cls, filename, _cache_info=None):
+        filename = osp.abspath(filename)
+        inst = file_access_registry.get(filename, None)
+        if inst is None:
+            inst = file_access_registry[filename] = type.__call__(
+                cls, filename, _cache_info
+            )
+
+        return inst
+
+
+class FileAccess(metaclass=MetaFileAccess):
     """Access an EuXFEL HDF5 file.
 
     This does not necessarily keep the real file open, but opens it on demand.
@@ -108,15 +123,6 @@ class FileAccess:
     _file = None
     _format_version = None
     metadata_fstat = None
-
-    def __new__(cls, filename, _cache_info=None):
-        # Create only one FileAccess for each path, and store it in a registry
-        filename = osp.abspath(filename)
-        inst = file_access_registry.get(filename, None)
-        if inst is None:
-            inst = file_access_registry[filename] = super().__new__(cls)
-
-        return inst
 
     def __init__(self, filename, _cache_info=None):
         self.filename = osp.abspath(filename)
@@ -274,15 +280,21 @@ class FileAccess:
     def __repr__(self):
         return "{}({})".format(type(self).__name__, repr(self.filename))
 
-    def __getstate__(self):
-        """ Allows pickling `FileAccess` instance. """
+    @classmethod
+    def _from_pickle(cls, filename, state):
+        """Called when an instance is loaded from a pickle"""
+        inst = file_access_registry.get(filename, None)
+        if inst is None:
+            inst = file_access_registry[filename] = cls.__new__(cls)
+            inst.__dict__.update(state)
+
+        return inst
+
+    def __reduce__(self):
+        """Called when a `FileAccess` instance is pickled"""
         state = self.__dict__.copy()
         state['_file'] = None
-        return state
-
-    def __getnewargs__(self):
-        """Ensure that __new__ gets the filename when unpickling"""
-        return (self.filename,)
+        return self._from_pickle, (self.filename, state)
 
     @property
     def all_sources(self):
