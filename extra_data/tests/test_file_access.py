@@ -1,3 +1,4 @@
+import gc
 import pickle
 
 from ..file_access import FileAccess
@@ -42,3 +43,13 @@ def test_pickle(mock_sa3_control_data):
     # Unpickling should not update state of existing object
     assert len(fa._index_cache) == 1
     assert len(fa._keys_cache) == 1
+
+    # Delete the existing instances, then reload from pickle
+    del fa, fa2
+    gc.collect()
+
+    fa3 = pickle.loads(b)
+    assert len(fa3._index_cache) == 0
+    assert len(fa3._keys_cache) == 0
+    assert 'SA3_XTD10_IMGFEL/CAM/BEAMVIEW2:daqOutput' in fa3.instrument_sources
+    assert len(fa3.train_ids) == 500
