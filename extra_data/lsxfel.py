@@ -14,8 +14,7 @@ from .reader import H5File, RunDirectory
 def describe_file(path, details_for_sources=()):
     """Describe a single HDF5 data file"""
     basename = os.path.basename(path)
-    info = FilenameInfo(basename)
-    print(basename, ":", info.description)
+    print(basename, ": Data file")
 
     h5file = H5File(path)
     h5file.info(details_for_sources)
@@ -23,20 +22,10 @@ def describe_file(path, details_for_sources=()):
 
 def summarise_file(path):
     basename = os.path.basename(path)
-    info = FilenameInfo(basename)
-    print(basename, ":", info.description)
+    print(basename, ": Data file")
 
-    h5file = H5File(path)
-    ntrains = len(h5file.train_ids)
-
-    if info.is_detector:
-        detector_source = next(iter(h5file.detector_sources))
-        dinfo = h5file.detector_info(detector_source)
-        print("  {} trains, {} frames/train, {} total frames".format(
-            len(h5file.train_ids), dinfo['frames_per_train'], dinfo['total_frames']
-        ))
-    else:
-        print("  {} trains, {} sources".format(ntrains, len(h5file.sources)))
+    f = H5File(path)
+    print(f"  {len(f.train_ids)} trains, {len(f.all_sources)} sources")
 
 
 def describe_run(path, details_for_sources=()):

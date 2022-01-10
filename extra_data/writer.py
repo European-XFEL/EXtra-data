@@ -1,6 +1,8 @@
 import h5py
 import numpy as np
 
+from .exceptions import MultiRunError
+
 
 class FileWriter:
     """Write data in European XFEL HDF5 format
@@ -95,6 +97,11 @@ class FileWriter:
         self.file.create_dataset(
             'INDEX/trainId', data=self.data.train_ids, dtype='u8'
         )
+        train_timestamps = self.data.train_timestamps()
+        if not np.all(np.isnat(train_timestamps)):
+            self.file.create_dataset(
+                'INDEX/timestamp', data=train_timestamps.astype(np.uint64)
+            )
 
     def write_indexes(self):
         """Write the INDEX information for all data we've copied"""
@@ -104,25 +111,57 @@ class FileWriter:
             group.create_dataset('count', data=count, dtype=np.uint64)
 
     def write_metadata(self):
+        try:
+            metadata = self.data.run_metadata()
+        except MultiRunError:
+            metadata = {}
+
+        metadata_grp = self.file.create_group('METADATA')
+        if metadata.get('dataFormatVersion') == '1.0':
+            self.write_sources(metadata_grp.create_group('dataSources'))
+
+            # File format 1.0 should also have INDEX/flag
+            self.file.create_dataset('INDEX/flag', data=self.gather_flag())
+
+            for key, val in metadata.items():
+                metadata_grp[key] = [val]
+        else:
+            # File format '0.5': source lists directly in METADATA
+            self.write_sources(metadata_grp)
+
+    def write_sources(self, data_sources_grp: h5py.Group):
         """Write the METADATA section, including lists of sources"""
         vlen_bytes = h5py.special_dtype(vlen=bytes)
         data_sources = sorted(self.data_sources)
         N = len(data_sources)
 
-        sources_ds = self.file.create_dataset(
-            'METADATA/dataSourceId', (N,), dtype=vlen_bytes, maxshape=(None,)
+        sources_ds = data_sources_grp.create_dataset(
+            'dataSourceId', (N,), dtype=vlen_bytes, maxshape=(None,)
         )
         sources_ds[:] = data_sources
 
-        root_ds = self.file.create_dataset(
-            'METADATA/root', (N,), dtype=vlen_bytes, maxshape=(None,)
+        root_ds = data_sources_grp.create_dataset(
+            'root', (N,), dtype=vlen_bytes, maxshape=(None,)
         )
         root_ds[:] = [ds.split('/', 1)[0] for ds in data_sources]
 
-        devices_ds = self.file.create_dataset(
-            'METADATA/deviceId', (N,), dtype=vlen_bytes, maxshape=(None,)
+        devices_ds = data_sources_grp.create_dataset(
+            'deviceId', (N,), dtype=vlen_bytes, maxshape=(None,)
         )
         devices_ds[:] = [ds.split('/', 1)[1] for ds in data_sources]
+
+    def gather_flag(self):
+        """Make the array for INDEX/flag.
+
+        Trains are valid (1) if they are valid in *any* of the source files.
+        """
+        tid_arr = np.asarray(self.data.train_ids, dtype=np.uint64)
+        flag = np.zeros_like(tid_arr, dtype=np.int32)
+        for fa in self.data.files:
+            mask_valid = np.isin(tid_arr, fa.valid_train_ids)
+            flag[mask_valid] = 1
+
+        return flag
 
     def set_writer(self):
         """Record the package & version writing the file in an attribute"""
@@ -176,9 +215,9 @@ class VirtualFileWriter(FileWriter):
                                     dtype=ds0.dtype)
 
         # Map each chunk into the relevant part of the layout
-        output_cursor = np.uint64(0)
+        output_cursor = 0
         for chunk in chunks:
-            n = chunk.counts.sum()
+            n = int(chunk.counts.sum())
             src = h5py.VirtualSource(chunk.dataset)
             src = src[chunk.slice]
             layout[output_cursor : output_cursor + n] = src
@@ -192,9 +231,30 @@ class VirtualFileWriter(FileWriter):
         ])
         return layout, train_ids
 
+    # In big detector data, these fields are like extra indexes.
+    # So we'll copy them to the output file for fast access, rather than
+    # making virtual datasets.
+    copy_keys = {'image.pulseId', 'image.cellId'}
+
     def prepare_source(self, source):
         for key in self.data.keys_for_source(source):
-            self.add_dataset(source, key)
+            if key in self.copy_keys:
+                self.copy_dataset(source, key)
+            else:
+                self.add_dataset(source, key)
+
+        # Add a link in RUN for control sources
+        if source in self.data.control_sources:
+            src_file = self.data._source_index[source][0]
+            run_path = f'RUN/{source}'
+            self.file[run_path] = h5py.ExternalLink(src_file.filename, run_path)
+
+    def copy_dataset(self, source, key):
+        """Copy data as a new dataset"""
+        a = self.data.get_array(source, key)
+        path = f"{self._section(source)}/{source}/{key.replace('.', '/')}"
+        self.file.create_dataset(path, data=a.values, compression='gzip')
+        self._make_index(source, key, a.coords['trainId'].values)
 
     def add_dataset(self, source, key):
         layout, train_ids = self._assemble_data(source, key)

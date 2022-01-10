@@ -47,7 +47,7 @@ from .read_machinery import (
 )
 from .run_files_map import RunFilesMap
 from .sourcedata import SourceData
-from . import locality
+from . import locality, voview
 from .file_access import FileAccess
 from .utils import available_cpu_cores
 
@@ -1422,7 +1422,7 @@ def H5File(path, *, inc_suspect_trains=True):
 
 def RunDirectory(
         path, include='*', file_filter=locality.lc_any, *, inc_suspect_trains=True,
-        parallelize=True
+        parallelize=True, _use_voview=True,
 ):
     """Open data files from a 'run' at European XFEL.
 
@@ -1454,12 +1454,18 @@ def RunDirectory(
         creating child processes is not allowed (e.g. in a daemonized
         :class:`multiprocessing.Process`).
     """
-    files = [f for f in os.listdir(path) if f.endswith('.h5')]
+    files = [f for f in os.listdir(path)
+             if f.endswith('.h5') and (f.lower() != 'overview.h5')]
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
-    files = file_filter(files)
-    if not files:
+    sel_files = file_filter(files)
+    if not sel_files:
         raise Exception(
             f"No HDF5 files found in {path} with glob pattern {include}")
+
+    if _use_voview and (sel_files == files):
+        voview_file_acc = voview.find_file_valid(path)
+        if voview_file_acc is not None:
+            return DataCollection([voview_file_acc])
 
     files_map = RunFilesMap(path)
     t0 = time.monotonic()
@@ -1480,7 +1486,7 @@ RunHandler = RunDirectory
 
 def open_run(
         proposal, run, data='raw', include='*', file_filter=locality.lc_any, *,
-        inc_suspect_trains=True, parallelize=True
+        inc_suspect_trains=True, parallelize=True, _use_voview=True,
 ):
     """Access EuXFEL data on the Maxwell cluster by proposal and run number.
 
@@ -1558,5 +1564,6 @@ def open_run(
 
     return RunDirectory(
         osp.join(prop_dir, data, run), include=include, file_filter=file_filter,
-        inc_suspect_trains=inc_suspect_trains, parallelize=parallelize
+        inc_suspect_trains=inc_suspect_trains, parallelize=parallelize,
+        _use_voview=_use_voview,
     )
