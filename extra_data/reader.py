@@ -1455,7 +1455,7 @@ def RunDirectory(
         :class:`multiprocessing.Process`).
     """
     files = [f for f in os.listdir(path)
-             if f.endswith('.h5') and ('overview' not in f.lower())]
+             if f.endswith('.h5') and (f.lower() != 'overview.h5')]
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
     sel_files = file_filter(files)
     if not sel_files:

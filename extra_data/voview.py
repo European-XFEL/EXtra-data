@@ -45,7 +45,7 @@ def check_sources(overview_file: h5py.File, run_dir):
         return False  # Basic check that things make sense
 
     files_now = {f for f in os.listdir(run_dir)
-                 if f.endswith('.h5') and ('overview' not in f.lower())}
+                 if f.endswith('.h5') and (f.lower() != 'overview.h5')}
     files_stored = [p.decode('ascii') for p in g['names'][:]]
     if files_now != set(files_stored):
         return False
