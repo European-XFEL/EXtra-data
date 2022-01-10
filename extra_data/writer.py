@@ -215,9 +215,9 @@ class VirtualFileWriter(FileWriter):
                                     dtype=ds0.dtype)
 
         # Map each chunk into the relevant part of the layout
-        output_cursor = np.uint64(0)
+        output_cursor = 0
         for chunk in chunks:
-            n = chunk.counts.sum()
+            n = int(chunk.counts.sum())
             src = h5py.VirtualSource(chunk.dataset)
             src = src[chunk.slice]
             layout[output_cursor : output_cursor + n] = src
