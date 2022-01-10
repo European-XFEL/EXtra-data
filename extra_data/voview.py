@@ -7,6 +7,7 @@ import os
 import os.path as osp
 import re
 import sys
+from tempfile import TemporaryDirectory
 
 import h5py
 
@@ -121,6 +122,24 @@ def find_file_write(run_dir):
     raise PermissionError
 
 
+def write_atomic(path, data):
+    """Write a virtual overview file, then rename it to the final path
+
+    This aims to avoid exposing a partially written file where EXtra-data might
+    try to read it.
+    """
+    dirname, basename = osp.split(path)
+    with TemporaryDirectory(prefix=".create-voview-", dir=dirname) as td:
+        tmp_filename = osp.join(td, basename)
+        try:
+            vofw = VirtualOverviewFileWriter(tmp_filename, data)
+            vofw.write()
+            os.replace(tmp_filename, path)
+        except:
+            os.unlink(tmp_filename)
+            raise
+
+
 def main(argv=None):
     import argparse
 
@@ -146,8 +165,7 @@ def main(argv=None):
         print("Opening", args.run_dir)
         run = RunDirectory(args.run_dir, _use_voview=False)
         print(f"Creating {file_path} from {len(run.files)} files...")
-        vofw = VirtualOverviewFileWriter(file_path, run)
-        vofw.write()
+        write_atomic(file_path, run)
 
 if __name__ == '__main__':
     sys.exit(main())
