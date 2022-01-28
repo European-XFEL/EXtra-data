@@ -1,4 +1,4 @@
-coverage==6.3
+coverage<=6.3
 cycler==0.11.0
 h5py<3.7.0
 karabo-bridge==0.6.1
