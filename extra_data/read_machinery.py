@@ -204,25 +204,6 @@ def contiguous_regions(condition):
     return idx
 
 
-def union_selections(selections):
-    """Merge together different selections
-
-    A selection is a dict of {source: set(keys)}, or {source: None}
-    to include all keys for a given source.
-    """
-    selection_multi = defaultdict(list)
-
-    for seln in selections:
-        for source, keys in seln.items():
-            selection_multi[source].append(keys)
-
-    # Merge selected keys; None -> all keys selected
-    return {
-        source: None if (None in keygroups) else set().union(*keygroups)
-        for (source, keygroups) in selection_multi.items()
-    }
-
-
 def roi_shape(orig_shape: tuple, roi: tuple) -> tuple:
     """Find array shape after slicing ROI"""
     dummy = np.zeros((0,) + orig_shape)  # Extra 0 dim -> minimal memory use

@@ -41,7 +41,6 @@ from .read_machinery import (
     by_index,
     select_train_ids,
     split_trains,
-    union_selections,
     find_proposal,
     glob_wildcards_re,
 )
@@ -80,37 +79,13 @@ class DataCollection:
     for a single file or :func:`RunDirectory` for a directory.
     """
     def __init__(
-            self, files, selection=None, train_ids=None, ctx_closes=False, *,
+            self, files, sources_data=None, train_ids=None, ctx_closes=False, *,
             inc_suspect_trains=True, is_single_run=False,
     ):
         self.files = list(files)
         self.ctx_closes = ctx_closes
         self.inc_suspect_trains = inc_suspect_trains
         self.is_single_run = is_single_run
-
-        # selection: {source: set(keys)}
-        # None as value -> all keys for this source
-        if selection is None:
-            selection = {}
-            for f in self.files:
-                selection.update(dict.fromkeys(f.control_sources))
-                selection.update(dict.fromkeys(f.instrument_sources))
-        self.selection = selection
-
-        self.control_sources = set()
-        self.instrument_sources = set()
-        self._source_index = defaultdict(list)
-        for f in self.files:
-            self.control_sources.update(f.control_sources.intersection(selection))
-            self.instrument_sources.update(f.instrument_sources.intersection(selection))
-            for source in (f.control_sources | f.instrument_sources):
-                self._source_index[source].append(f)
-
-        # Throw an error if we have conflicting data for the same source
-        self._check_source_conflicts()
-
-        self.control_sources = frozenset(self.control_sources)
-        self.instrument_sources = frozenset(self.instrument_sources)
 
         if train_ids is None:
             if inc_suspect_trains:
@@ -119,6 +94,37 @@ class DataCollection:
                 tid_sets = [f.valid_train_ids for f in files]
             train_ids = sorted(set().union(*tid_sets))
         self.train_ids = train_ids
+
+        if sources_data is None:
+            files_by_sources = defaultdict(list)
+            for f in self.files:
+                for source in f.control_sources:
+                    files_by_sources[source, 'CONTROL'].append(f)
+                for source in f.instrument_sources:
+                    files_by_sources[source, 'INSTRUMENT'].append(f)
+            sources_data = {
+                src: SourceData(src,
+                    sel_keys=None,
+                    train_ids=train_ids,
+                    files=files,
+                    section=section,
+                    inc_suspect_trains=self.inc_suspect_trains,
+                )
+                for ((src, section), files) in files_by_sources.items()
+            }
+        self._sources_data = sources_data
+
+        # Throw an error if we have conflicting data for the same source
+        self._check_source_conflicts()
+
+        self.control_sources = frozenset({
+            name for (name, sd) in self._sources_data.items()
+            if sd.section == 'CONTROL'
+        })
+        self.instrument_sources = frozenset({
+            name for (name, sd) in self._sources_data.items()
+            if sd.section == 'INSTRUMENT'
+        })
 
     @staticmethod
     def _open_file(path, cache_info=None):
@@ -200,6 +206,11 @@ class DataCollection:
                 file.close()
 
     @property
+    def selection(self):
+        # This was previously a regular attribute, which code may have relied on.
+        return {src: srcdata.sel_keys for src, srcdata in self._sources_data.items()}
+
+    @property
     def all_sources(self):
         return self.control_sources | self.instrument_sources
 
@@ -234,22 +245,10 @@ class DataCollection:
         return self._get_source_data(source)[key]
 
     def _get_source_data(self, source):
-        if source in self.control_sources:
-            section = 'CONTROL'
-        elif source in self.instrument_sources:
-            section = 'INSTRUMENT'
-        else:
+        if source not in self._sources_data:
             raise SourceNameError(source)
 
-        files = self._source_index[source]
-        return SourceData(
-            source,
-            sel_keys=self.selection[source],
-            train_ids=self.train_ids,
-            files=files,
-            section=section,
-            inc_suspect_trains=self.inc_suspect_trains,
-        )
+        return self._sources_data[source]
 
     def __getitem__(self, item):
         if isinstance(item, tuple) and len(item) == 2:
@@ -535,7 +534,7 @@ class DataCollection:
             raise SourceNameError(source)
 
         # Arbitrary file - should be the same across a run
-        fa = self._source_index[source][0]
+        fa = self._sources_data[source].files[0]
         ds = fa.file['RUN'][source].get(key.replace('.', '/'))
         if isinstance(ds, h5py.Group):
             # Allow for the .value suffix being omitted
@@ -566,7 +565,7 @@ class DataCollection:
             raise SourceNameError(source)
 
         # Arbitrary file - should be the same across a run
-        fa = self._source_index[source][0]
+        fa = self._sources_data[source].files[0]
         res = {}
         def visitor(path, obj):
             if isinstance(obj, h5py.Dataset):
@@ -587,9 +586,7 @@ class DataCollection:
 
         Returns a new :class:`DataCollection` object.
         """
-        files = set(self.files)
-        train_ids = set(self.train_ids)
-
+        sources_data_multi = defaultdict(list)
         # DataCollection union of format version = 0.5 (no run/proposal # in
         # files) is not considered a single run.
         proposal_nos = set()
@@ -598,92 +595,64 @@ class DataCollection:
             md = dc.run_metadata() if dc.is_single_run else {}
             proposal_nos.add(md.get("proposalNumber", -1))
             run_nos.add(md.get("runNumber", -1))
+            for source, srcdata in dc._sources_data.items():
+                sources_data_multi[source].append(srcdata)
+
+        sources_data = {src: src_datas[0].union(*src_datas[1:])
+                        for src, src_datas in sources_data_multi.items()}
 
         same_run = (
             len(proposal_nos) == 1 and (-1 not in proposal_nos)
             and len(run_nos) == 1 and (-1 not in run_nos)
         )
 
-        for other in others:
-            files.update(other.files)
-            train_ids.update(other.train_ids)
-
-        train_ids = sorted(train_ids)
-        selection = union_selections(
-            [self.selection] + [o.selection for o in others])
+        train_ids = sorted(set().union(*[sd.train_ids for sd in sources_data.values()]))
+        files = set().union(*[sd.files for sd in sources_data.values()])
 
         return DataCollection(
-            files, selection=selection, train_ids=train_ids,
+            files, sources_data=sources_data, train_ids=train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
             is_single_run=same_run,
         )
 
     def _expand_selection(self, selection):
-        res = defaultdict(set)
+
         if isinstance(selection, dict):
             # {source: {key1, key2}}
-            # {source: {}} or {source: None} -> all keys for this source
+            # {source: set()} or {source: None} -> all keys for this source
+
+            res = {}
             for source, in_keys in selection.items():
                 if source not in self.all_sources:
                     raise SourceNameError(source)
 
-                # Keys of the current DataCollection.
-                cur_keys = self.selection[source]
+                if in_keys is not None and not isinstance(in_keys, set):
+                    raise TypeError(
+                        f"keys in selection dict should be a set or None (got "
+                        f"{in_keys!r})"
+                    )
 
-                # Keys input as the new selection.
-                if in_keys:
-                    # If a specific set of keys is selected, make sure
-                    # they are all valid.
-                    for key in in_keys:
-                        if key not in self[source]:
-                            raise PropertyNameError(key, source)
-                else:
-                    # Catches both an empty set and None.
-                    # While the public API describes an empty set to
-                    # refer to all keys, the internal API actually uses
-                    # None for this case. This method is supposed to
-                    # accept both cases in order to natively support
-                    # passing a DataCollection as the selector. To keep
-                    # the conditions below clearer, any non-True value
-                    # is converted to None.
-                    in_keys = None
+                res[source] = self._sources_data[source].select_keys(in_keys)
 
-                if cur_keys is None and in_keys is None:
-                    # Both the new and current keys select all.
-                    res[source] = None
-
-                elif cur_keys is not None and in_keys is not None:
-                    # Both the new and current keys are specific, take
-                    # the intersection of both. This should never be
-                    # able to result in an empty set, but to prevent the
-                    # code further below from breaking, assert it.
-                    res[source] = cur_keys & in_keys
-                    assert res[source]
-
-                elif cur_keys is None and in_keys is not None:
-                    # Current keys are unspecific but new ones are, just
-                    # use the new keys.
-                    res[source] = in_keys
-
-                elif cur_keys is not None and in_keys is None:
-                    # The current keys are specific but new ones are
-                    # not, use the current keys.
-                    res[source] = cur_keys
+            return res
 
         elif isinstance(selection, Iterable):
             # selection = [('src_glob', 'key_glob'), ...]
-            res = union_selections(
-                self._select_glob(src_glob, key_glob)
-                for (src_glob, key_glob) in selection
-            )
+            sources_data_multi = defaultdict(list)
+            for (src_glob, key_glob) in selection:
+                for source, keys in self._select_glob(src_glob, key_glob).items():
+                    sources_data_multi[source].append(
+                        self._sources_data[source].select_keys(keys)
+                    )
+            return {src: src_datas[0].union(*src_datas[1:])
+                    for src, src_datas in sources_data_multi.items()}
         elif isinstance(selection, DataCollection):
             return self._expand_selection(selection.selection)
         elif isinstance(selection, KeyData):
-            res[selection.source] = {selection.key}
+            src = selection.source
+            return {src: self._sources_data[src].select_keys({selection.key})}
         else:
             raise TypeError("Unknown selection type: {}".format(type(selection)))
-
-        return dict(res)
 
     def _select_glob(self, source_glob, key_glob):
         source_re = re.compile(fnmatch.translate(source_glob))
@@ -714,7 +683,7 @@ class DataCollection:
                 # Selecting a single key (no wildcards in pattern)
                 # This check should be faster than scanning all keys:
                 k = ctrl_key_glob if source in self.control_sources else key_glob
-                if k in self._get_source_data(source):
+                if k in self._sources_data[source]:
                     matched[source] = {k}
             else:
                 r = ctrl_key_re if source in self.control_sources else key_re
@@ -782,10 +751,7 @@ class DataCollection:
         """
         if isinstance(seln_or_source_glob, str):
             seln_or_source_glob = [(seln_or_source_glob, key_glob)]
-        selection = self._expand_selection(seln_or_source_glob)
-
-        files = [f for f in self.files
-                 if f.all_sources.intersection(selection.keys())]
+        sources_data = self._expand_selection(seln_or_source_glob)
 
         if require_all:
             # Select only those trains for which all selected sources
@@ -794,26 +760,13 @@ class DataCollection:
 
             train_ids = self.train_ids
 
-            for source, keys in selection.items():
-                if source in self.instrument_sources:
-                    # For INSTRUMENT sources, the INDEX is saved by
-                    # key group, which is the first hash component. In
-                    # many cases this is 'data', but not always.
-                    if keys is None:
-                        # All keys are selected.
-                        f = self._source_index[source][0]
-                        groups = f.index_group_names(source)
-                    else:
-                        groups = {key.partition('.')[0] for key in keys}
-                else:
-                    # CONTROL data has no key group.
-                    groups = ['']
+            for source, srcdata in sources_data.items():
 
-                for group in groups:
+                for group in srcdata._index_group_names():
                     # Empty list would be converted to np.float64 array.
                     source_tids = np.empty(0, dtype=np.uint64)
 
-                    for f in self._source_index[source]:
+                    for f in self._sources_data[source].files:
                         valid = True if self.inc_suspect_trains else f.validity_flag
                         # Add the trains with data in each file.
                         _, counts = f.get_index(source, group)
@@ -825,16 +778,20 @@ class DataCollection:
                     # selected source and key group has no data.
                     train_ids = np.intersect1d(train_ids, source_tids)
 
-            # Filtering may have eliminated previously selected files.
-            files = self._filter_files_for_trains(files, train_ids, selection.keys())
+            sources_data = {
+                src: srcdata._only_tids(train_ids)
+                for src, srcdata in sources_data.items()
+            }
 
             train_ids = list(train_ids)  # Convert back to a list.
 
         else:
             train_ids = self.train_ids
 
+        files = set().union(*[sd.files for sd in sources_data.values()])
+
         return DataCollection(
-            files, selection=selection, train_ids=train_ids,
+            files, sources_data, train_ids=train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
             is_single_run=self.is_single_run
         )
@@ -852,31 +809,26 @@ class DataCollection:
             seln_or_source_glob = [(seln_or_source_glob, key_glob)]
         deselection = self._expand_selection(seln_or_source_glob)
 
-        # Subtract deselection from self.selection
-        selection = {}
-        for source, keys in self.selection.items():
+        # Subtract deselection from selection on self
+        sources_data = {}
+        for source, srcdata in self._sources_data.items():
             if source not in deselection:
-                selection[source] = keys
+                sources_data[source] = srcdata
                 continue
 
-            desel_keys = deselection[source]
+            desel_keys = deselection[source].sel_keys
             if desel_keys is None:
                 continue  # Drop the entire source
 
-            if keys is None:
-                keys = self.keys_for_source(source)
+            remaining_keys = srcdata.keys() - desel_keys
 
-            selection[source] = keys - desel_keys
+            if remaining_keys:
+                sources_data[source] = srcdata.select_keys(remaining_keys)
 
-            if not selection[source]:
-                # Drop the source if all keys were deselected
-                del selection[source]
-
-        files = [f for f in self.files
-                 if f.all_sources.intersection(selection.keys())]
+        files = set().union(*[sd.files for sd in sources_data.values()])
 
         return DataCollection(
-            files, selection=selection, train_ids=self.train_ids,
+            files, sources_data=sources_data, train_ids=self.train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
             is_single_run=self.is_single_run,
         )
@@ -906,30 +858,18 @@ class DataCollection:
         """
         new_train_ids = select_train_ids(self.train_ids, train_range)
 
-        files = self._filter_files_for_trains(
-            self.files, new_train_ids, self.all_sources
-        )
+        sources_data = {
+            src: srcdata._only_tids(new_train_ids)
+            for src, srcdata in self._sources_data.items()
+        }
+
+        files = set().union(*[sd.files for sd in sources_data.values()])
 
         return DataCollection(
-            files, selection=self.selection, train_ids=new_train_ids,
+            files, sources_data=sources_data, train_ids=new_train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
             is_single_run=self.is_single_run,
         )
-
-    def _filter_files_for_trains(self, files, train_ids, sel_sources) -> list:
-        """Filter the files by trains, retaining >= 1 file for each source
-
-        This allows inspection, and access to RUN data, even if no data for that
-        source is selected.
-        """
-        files = {f for f in files
-                 if f.has_train_ids(train_ids, self.inc_suspect_trains)}
-
-        sources_in_files = set().union(f.all_sources for f in files)
-        for src in (sel_sources - sources_in_files):
-            files.add(self._source_index[src][0])
-
-        return sorted(files, key=lambda f: f.filename)
 
     def split_trains(self, parts=None, trains_per_part=None):
         """Split this data into chunks with a fraction of the trains each.
@@ -970,8 +910,8 @@ class DataCollection:
                 files_conflict_cache[fset] = len(np.unique(tids)) != len(tids)
             return files_conflict_cache[fset]
 
-        for source, files in self._source_index.items():
-            if files_have_conflict(files):
+        for source, srcdata in self._sources_data.items():
+            if files_have_conflict(srcdata.files):
                 sources_with_conflicts.add(source)
 
         if sources_with_conflicts:
@@ -992,7 +932,7 @@ class DataCollection:
         return self._get_key_data(source, key)._data_chunks
 
     def _find_data(self, source, train_id) -> Tuple[FileAccess, int]:
-        for f in self._source_index[source]:
+        for f in self._sources_data[source].files:
             ixs = (f.train_ids == train_id).nonzero()[0]
             if self.inc_suspect_trains and ixs.size > 0:
                 return f, ixs[0]
@@ -1106,13 +1046,13 @@ class DataCollection:
                 print('    - Control keys (1 entry per train):')
                 keys_detail(s, sorted(ctrl_keys), prefix='      - ')
 
-                run_keys = self._source_index[s][0].get_run_keys(s)
+                run_keys = self._sources_data[s].files[0].get_run_keys(s)
                 run_keys = {k[:-6] for k in run_keys if k.endswith('.value')}
                 run_only_keys = run_keys - ctrl_keys
                 if run_only_keys:
                     print('    - Additional run keys (1 entry per run):')
                     for k in sorted(run_only_keys):
-                        ds = self._source_index[s][0].file[
+                        ds = self._sources_data[s].files[0].file[
                             f"/RUN/{s}/{k.replace('.', '/')}/value"
                         ]
                         entry_shape = ds.shape[1:]
@@ -1135,7 +1075,7 @@ class DataCollection:
         - 'frames_per_train' (estimated from one file)
         - 'total_frames' (estimated assuming all trains have data)
         """
-        source_files = self._source_index[source]
+        source_files = self._sources_data[source].files
         file0 = sorted(source_files, key=lambda fa: fa.filename)[0]
 
         _, counts = file0.get_index(source, 'image')

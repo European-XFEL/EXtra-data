@@ -511,7 +511,7 @@ def test_select(mock_fxe_raw_run):
         sel.select('FXE_DET_LPD1M-1/DET/0CH0:xtdf', '*') \
            .keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf')
     assert sel.keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf') == \
-        sel.select({'FXE_DET_LPD1M-1/DET/0CH0:xtdf': {}}) \
+        sel.select({'FXE_DET_LPD1M-1/DET/0CH0:xtdf': set()}) \
            .keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf')
 
     # Re-select a different but originally valid key, should fail.
@@ -764,8 +764,8 @@ def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
         # Proc is a true subset.
         assert proc_run.all_sources < all_run.all_sources
 
-        for source, files in all_run._source_index.items():
-            for file in files:
+        for source, srcdata in all_run._sources_data.items():
+            for file in srcdata.files:
                 if '/DET/' in source:
                     # AGIPD data is in proc.
                     assert '/raw/' not in file.filename

@@ -1,10 +1,14 @@
-from typing import List
+from copy import copy
+import fnmatch
+import re
+from typing import Optional, List
 
 import h5py
 
 from .exceptions import PropertyNameError
 from .file_access import FileAccess
 from .keydata import KeyData
+from .read_machinery import glob_wildcards_re, select_train_ids
 
 class SourceData:
     """Data for one key in one source
@@ -87,3 +91,103 @@ class SourceData:
         # the same keys in all files that it appears in.
         for f in self.files:
             return f.get_keys(self.source)
+
+    def _index_group_names(self) -> set:
+        if self.section == 'INSTRUMENT':
+            # For INSTRUMENT sources, the INDEX is saved by
+            # key group, which is the first hash component. In
+            # many cases this is 'data', but not always.
+            if self.sel_keys is None:
+                # All keys are selected.
+                return self.files[0].index_group_names(self.source)
+            else:
+                return {key.partition('.')[0] for key in self.sel_keys}
+        else:
+            # CONTROL data has no key group.
+            return {''}
+
+    def _glob_keys(self, pattern: str) -> Optional[set]:
+        if self.section == 'CONTROL' and not pattern.endswith(('.value', '*')):
+            pattern += '.value'
+
+        if pattern == '*':
+            # When the selection refers to all keys, make sure this
+            # is restricted to the current selection of keys for
+            # this source.
+            matched = self.sel_keys
+        elif glob_wildcards_re.search(pattern) is None:
+            # Selecting a single key (no wildcards in pattern)
+            # This check should be faster than scanning all keys:
+            matched = {pattern} if pattern in self else set()
+        else:
+            key_re = re.compile(fnmatch.translate(pattern))
+            matched = set(filter(key_re.match, self.keys()))
+
+        if matched == set():
+            raise PropertyNameError(pattern, self.source)
+
+        return matched
+
+    def select_keys(self, keys) -> 'SourceData':
+        if isinstance(keys, str):
+            keys = self._glob_keys(keys)
+        elif keys:
+            # If a specific set of keys is selected, make sure
+            # they are all valid.
+            for key in keys:
+                if key not in self:
+                    raise PropertyNameError(key, self.source)
+        else:
+            # Catches both an empty set and None.
+            # While the public API describes an empty set to
+            # refer to all keys, the internal API actually uses
+            # None for this case. This method is supposed to
+            # accept both cases in order to natively support
+            # passing a DataCollection as the selector. To keep
+            # the conditions below clearer, any non-True value
+            # is converted to None.
+            keys = None
+
+        if self.sel_keys is None:
+            # Current keys are unspecific - use the specified keys
+            new_keys = keys
+        elif keys is None:
+            # Current keys are specific but new selection is not - use current
+            new_keys = self.sel_keys
+        else:
+            # Both the new and current keys are specific: take the intersection.
+            # The check above should ensure this never results in an empty set,
+            # but
+            new_keys = self.sel_keys & keys
+            assert new_keys
+
+        res = copy(self)
+        res.sel_keys = new_keys
+        return res
+
+    def select_trains(self, trains) -> 'SourceData':
+        return self._only_tids(select_train_ids(self.train_ids, trains))
+
+    def _only_tids(self, tids) -> 'SourceData':
+        res = copy(self)
+        res.train_ids = tids
+        res.files = [
+            f for f in self.files
+            if f.has_train_ids(tids, self.inc_suspect_trains)
+        ] or [self.files[0]]
+        # ^ Keep 1 file, even if 0 trains selected, to get keys, datatypes, etc.
+
+        return res
+
+    def union(self, *others) -> 'SourceData':
+        keygroups = [sd.sel_keys for sd in (self,) + others]
+        files = set(self.files)
+        train_ids = set(self.train_ids)
+        for other in others:
+            files.update(other.files)
+            train_ids.update(other.train_ids)
+        res = copy(self)
+        res.sel_keys = None if (None in keygroups) else set().union(*keygroups)
+        res.files = sorted(files, key=lambda f: f.filename)
+        res.train_ids = sorted(train_ids)
+        return res
