@@ -211,6 +211,15 @@ class DataCollection:
         return {src: srcdata.sel_keys for src, srcdata in self._sources_data.items()}
 
     @property
+    def _source_index(self):
+        warn(
+            "DataCollection._source_index will be removed. "
+            "Contact da-support@xfel.eu if you need to discuss alternatives.",
+            stacklevel=2
+        )
+        return {src: srcdata.files for src, srcdata in self._sources_data.items()}
+
+    @property
     def all_sources(self):
         return self.control_sources | self.instrument_sources
 
