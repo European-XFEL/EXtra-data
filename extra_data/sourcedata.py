@@ -133,6 +133,14 @@ class SourceData:
         return matched
 
     def select_keys(self, keys) -> 'SourceData':
+        """Select a subset of the keys in this source
+
+        *keys* is either a single key name, a set of names, or a glob pattern
+        (e.g. ``beamPosition.*``) matching a subset of keys. PropertyNameError
+        is matched if a specified key does not exist.
+
+        Returns a new :class:`SourceData` object.
+        """
         if isinstance(keys, str):
             keys = self._glob_keys(keys)
         elif keys:
@@ -176,6 +184,8 @@ class SourceData:
         return res
 
     def select_trains(self, trains) -> 'SourceData':
+        """Select a subset of trains in this data as a new :class:`SourceData` object.
+        """
         return self._only_tids(select_train_ids(self.train_ids, trains))
 
     def _only_tids(self, tids) -> 'SourceData':
@@ -190,6 +200,12 @@ class SourceData:
         return res
 
     def union(self, *others) -> 'SourceData':
+        """Combine two or more ``SourceData`` objects
+
+        These must be for the same source, e.g. from separate runs.
+        """
+        if len({sd.source for sd in (self,) + others}) > 1:
+            raise ValueError("Cannot use SourceData.union() with different sources")
         keygroups = [sd.sel_keys for sd in (self,) + others]
         files = set(self.files)
         train_ids = set(self.train_ids)
