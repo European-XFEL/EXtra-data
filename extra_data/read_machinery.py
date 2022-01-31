@@ -2,7 +2,6 @@
 
 The public API is in extra_data.reader; this is internal code.
 """
-from collections import defaultdict
 from glob import iglob
 import logging
 import math
