@@ -1,4 +1,3 @@
-from copy import copy
 import fnmatch
 import re
 from typing import Optional, List
@@ -179,9 +178,14 @@ class SourceData:
             new_keys = self.sel_keys & keys
             assert new_keys
 
-        res = copy(self)
-        res.sel_keys = new_keys
-        return res
+        return SourceData(
+            self.source,
+            sel_keys=new_keys,
+            train_ids=self.train_ids,
+            files=self.files,
+            section=self.section,
+            inc_suspect_trains=self.inc_suspect_trains
+        )
 
     def select_trains(self, trains) -> 'SourceData':
         """Select a subset of trains in this data as a new :class:`SourceData` object.
@@ -189,15 +193,18 @@ class SourceData:
         return self._only_tids(select_train_ids(self.train_ids, trains))
 
     def _only_tids(self, tids) -> 'SourceData':
-        res = copy(self)
-        res.train_ids = tids
-        res.files = [
-            f for f in self.files
-            if f.has_train_ids(tids, self.inc_suspect_trains)
-        ] or [self.files[0]]
-        # ^ Keep 1 file, even if 0 trains selected, to get keys, datatypes, etc.
-
-        return res
+        return SourceData(
+            self.source,
+            sel_keys=self.sel_keys,
+            train_ids=tids,
+            # Keep 1 file, even if 0 trains selected, to get keys, dtypes, etc.
+            files=[
+                f for f in self.files
+                if f.has_train_ids(tids, self.inc_suspect_trains)
+            ] or [self.files[0]],
+            section=self.section,
+            inc_suspect_trains=self.inc_suspect_trains
+        )
 
     def union(self, *others) -> 'SourceData':
         """Combine two or more ``SourceData`` objects
@@ -212,8 +219,11 @@ class SourceData:
         for other in others:
             files.update(other.files)
             train_ids.update(other.train_ids)
-        res = copy(self)
-        res.sel_keys = None if (None in keygroups) else set().union(*keygroups)
-        res.files = sorted(files, key=lambda f: f.filename)
-        res.train_ids = sorted(train_ids)
-        return res
+        return SourceData(
+            self.source,
+            sel_keys=None if (None in keygroups) else set().union(*keygroups),
+            train_ids=sorted(train_ids),
+            files=sorted(files, key=lambda f: f.filename),
+            section=self.section,
+            inc_suspect_trains=self.inc_suspect_trains
+        )
