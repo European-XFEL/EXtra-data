@@ -34,6 +34,36 @@ def test_use_voview(mock_spb_raw_run, tmp_path):
     assert 'SA1_XTD2_XGM/DOOCS/MAIN' in run.control_sources
 
 
+def open_run_with_voview(run_src, new_run_dir):
+    copytree(run_src, new_run_dir)
+    voview_file = new_run_dir / 'overview.h5'
+    run_orig = RunDirectory(str(new_run_dir), _use_voview=False)
+    vofw = voview.VirtualOverviewFileWriter(voview_file, run_orig)
+    vofw.write()
+    opened = RunDirectory(str(new_run_dir))
+    assert len(opened.files) == 1
+    return opened
+
+
+def test_combine_voview(mock_spb_raw_run, mock_spb_proc_run, tmp_path):
+    raw_dc = open_run_with_voview(mock_spb_raw_run, tmp_path / 'r0238_raw')
+    proc_dc = open_run_with_voview(mock_spb_proc_run, tmp_path / 'r0238_proc')
+
+    # Deselect & union data like we do for open_run(..., data='all')
+    raw_extra = raw_dc.deselect([
+        (src, '*') for src in raw_dc.all_sources & proc_dc.all_sources]
+    )
+    assert raw_extra.instrument_sources == {
+        'SA1_XTD2_XGM/DOOCS/MAIN:output',
+        'SPB_XTD9_XGM/DOOCS/MAIN:output',
+        'SPB_IRU_CAM/CAM/SIDEMIC:daqOutput',
+    }
+    run = proc_dc.union(raw_extra)
+
+    assert 'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf' in run.instrument_sources
+    assert 'SA1_XTD2_XGM/DOOCS/MAIN' in run.control_sources
+
+
 def test_voview_paths(tmp_path, monkeypatch):
     monkeypatch.setattr(voview, 'DATA_ROOT_DIR', str(tmp_path))
 
