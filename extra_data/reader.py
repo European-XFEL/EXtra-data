@@ -635,7 +635,9 @@ class DataCollection:
                 if source not in self.all_sources:
                     raise SourceNameError(source)
 
-                if in_keys is not None and not isinstance(in_keys, set):
+                # Empty dict was accidentally allowed and tested; keep it
+                # working just in case.
+                if in_keys is not None and not isinstance(in_keys, (set, dict)):
                     raise TypeError(
                         f"keys in selection dict should be a set or None (got "
                         f"{in_keys!r})"

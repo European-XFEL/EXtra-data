@@ -511,7 +511,7 @@ def test_select(mock_fxe_raw_run):
         sel.select('FXE_DET_LPD1M-1/DET/0CH0:xtdf', '*') \
            .keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf')
     assert sel.keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf') == \
-        sel.select({'FXE_DET_LPD1M-1/DET/0CH0:xtdf': set()}) \
+        sel.select({'FXE_DET_LPD1M-1/DET/0CH0:xtdf': {}}) \
            .keys_for_source('FXE_DET_LPD1M-1/DET/0CH0:xtdf')
 
     # Re-select a different but originally valid key, should fail.
