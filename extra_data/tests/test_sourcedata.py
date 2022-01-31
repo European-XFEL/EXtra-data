@@ -29,3 +29,28 @@ def test_keys(mock_spb_raw_run):
     assert 'beamPosition.ixPos.value' not in xgm.keys(inc_timestamps=False)
     assert 'beamPosition.ixPos.timestamp' not in xgm.keys(inc_timestamps=False)
     assert 'beamPosition.ixPos' in xgm.keys(inc_timestamps=False)
+
+def test_select_keys(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
+
+    # Select exact key
+    xpos_key = 'beamPosition.ixPos.value'
+    assert xgm.select_keys('beamPosition.ixPos.value').keys() == {xpos_key}
+    assert xgm.select_keys('beamPosition.ixPos').keys() == {xpos_key}
+    assert xgm.select_keys({'beamPosition.ixPos.value'}).keys() == {xpos_key}
+    assert xgm.select_keys({'beamPosition.ixPos'}).keys() == {xpos_key}
+
+    # Select all keys
+    all_keys = xgm.keys()
+    assert xgm.select_keys(set()).keys() == all_keys
+    assert xgm.select_keys(None).keys() == all_keys
+    assert xgm.select_keys('*').keys() == all_keys
+
+    # Select keys with glob pattern
+    beampos_keys = {
+        'beamPosition.ixPos.value', 'beamPosition.ixPos.timestamp',
+        'beamPosition.iyPos.value', 'beamPosition.iyPos.timestamp'
+    }
+    assert xgm.select_keys('beamPosition.*').keys() == beampos_keys
+    assert xgm.select_keys('beamPosition.*').select_keys('*').keys() == beampos_keys

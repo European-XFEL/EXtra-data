@@ -30,6 +30,10 @@ class SourceData:
         return f"<extra_data.SourceData source={self.source!r} " \
                f"for {len(self.train_ids)} trains>"
 
+    @property
+    def _is_control(self):
+        return self.section == 'CONTROL'
+
     def _has_exact_key(self, key):
         if self.sel_keys is not None:
             return key in self.sel_keys
@@ -39,7 +43,7 @@ class SourceData:
 
     def __contains__(self, key):
         res = self._has_exact_key(key)
-        if (not res) and (self.section == 'CONTROL'):
+        if (not res) and self._is_control:
             res = self._has_exact_key(key + '.value')
         return res
 
@@ -81,7 +85,7 @@ class SourceData:
         combine two runs where the source was configured differently, the
         result can be unpredictable.
         """
-        if (not inc_timestamps) and (self.section == 'CONTROL'):
+        if (not inc_timestamps) and self._is_control:
             return {k[:-6] for k in self.keys() if k.endswith('.value')}
 
         if self.sel_keys is not None:
@@ -107,7 +111,7 @@ class SourceData:
             return {''}
 
     def _glob_keys(self, pattern: str) -> Optional[set]:
-        if self.section == 'CONTROL' and not pattern.endswith(('.value', '*')):
+        if self._is_control and not pattern.endswith(('.value', '*')):
             pattern += '.value'
 
         if pattern == '*':
@@ -133,10 +137,16 @@ class SourceData:
             keys = self._glob_keys(keys)
         elif keys:
             # If a specific set of keys is selected, make sure
-            # they are all valid.
+            # they are all valid, adding .value as needed for CONTROl keys.
+            normed_keys = set()
             for key in keys:
-                if key not in self:
+                if self._has_exact_key(key):
+                    normed_keys.add(key)
+                elif self._is_control and self._has_exact_key(key + '.value'):
+                    normed_keys.add(key + '.value')
+                else:
                     raise PropertyNameError(key, self.source)
+                keys = normed_keys
         else:
             # Catches both an empty set and None.
             # While the public API describes an empty set to
