@@ -1,6 +1,25 @@
 Release Notes
 =============
 
+1.10
+----
+
+- EXtra-data can now generate and use "virtual overview" files (:ghpull:`69`).
+  A virtual overview file is a single file containing the metadata and indices
+  of an entire run, and links to the source files for the data (using HDF5
+  virtual datasets). When virtual overview files are available, :func:`open_run`
+  and :func:`RunDirectory` will use them automatically; this should make it
+  faster to open and explore runs (but not to read data).
+- You can now specify ``parallelize=False`` for :func:`open_run` and
+  :func:`RunDirectory` to open files in serial (:ghpull:`158`). This can be
+  necessary if you're opening runs inside a parallel worker.
+- Fix various features to work when 0 trains of data are selected (:ghpull:`260`).
+- Fix :meth:`~.DataCollection.union` when starting with already-unioned data
+  from different runs (:ghpull:`261`).
+- Fix for opening runs with ``data='all'`` and combining data in certain ways
+  (:ghpull:`274`).
+- Fixes to ensure that files are not unnecessarily reopened (:ghpull:`264`).
+
 1.9.1
 -----
 
