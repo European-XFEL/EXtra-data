@@ -335,7 +335,7 @@ class XtdfCXIWriter(VirtualCXIWriterBase):
           to h5py virtual layouts.
         """
         src = next(iter(self.detdata.source_to_modno))
-        h5file = self.data._source_index[src][0].file
+        h5file = self.data[src].files[0].file
         image_grp = h5file['INSTRUMENT'][src][self.group_label]
 
         VLayout = h5py.VirtualLayout
@@ -418,7 +418,7 @@ class JUNGFRAUCXIWriter(VirtualCXIWriterBase):
           to h5py virtual layouts.
         """
         src = next(iter(self.detdata.source_to_modno))
-        h5file = self.data._source_index[src][0].file
+        h5file = self.data[src].files[0].file
         image_grp = h5file['INSTRUMENT'][src][self.group_label]
 
         VLayout = h5py.VirtualLayout

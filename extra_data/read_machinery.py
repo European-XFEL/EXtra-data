@@ -2,7 +2,6 @@
 
 The public API is in extra_data.reader; this is internal code.
 """
-from collections import defaultdict
 from glob import iglob
 import logging
 import math
@@ -202,25 +201,6 @@ def contiguous_regions(condition):
     # Reshape the result into two columns
     idx.shape = (-1,2)
     return idx
-
-
-def union_selections(selections):
-    """Merge together different selections
-
-    A selection is a dict of {source: set(keys)}, or {source: None}
-    to include all keys for a given source.
-    """
-    selection_multi = defaultdict(list)
-
-    for seln in selections:
-        for source, keys in seln.items():
-            selection_multi[source].append(keys)
-
-    # Merge selected keys; None -> all keys selected
-    return {
-        source: None if (None in keygroups) else set().union(*keygroups)
-        for (source, keygroups) in selection_multi.items()
-    }
 
 
 def roi_shape(orig_shape: tuple, roi: tuple) -> tuple:

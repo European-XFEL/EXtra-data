@@ -530,8 +530,10 @@ def test_select(mock_fxe_raw_run):
     assert sel_by_dc.train_ids == sel.train_ids
 
 
-@pytest.mark.parametrize('select_str',
-                         ['*/BEAMVIEW2:daqOutput', '*/BEAMVIEW2*', '*'])
+@pytest.mark.parametrize(
+    'select_str',
+    ['*/BEAMVIEW2:daqOutput', '*/BEAMVIEW2*', '*', [('*/BEAMVIEW2:*', 'data.image.*')]]
+)
 def test_select_require_all(mock_sa3_control_data, select_str):
     # De-select two sources in this example set, which have no trains
     # at all, to allow matching trains across all sources with the same
@@ -764,8 +766,8 @@ def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
         # Proc is a true subset.
         assert proc_run.all_sources < all_run.all_sources
 
-        for source, files in all_run._source_index.items():
-            for file in files:
+        for source, srcdata in all_run._sources_data.items():
+            for file in srcdata.files:
                 if '/DET/' in source:
                     # AGIPD data is in proc.
                     assert '/raw/' not in file.filename

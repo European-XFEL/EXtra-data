@@ -26,7 +26,7 @@ class FileWriter:
         for key in sorted(self.data.keys_for_source(source)):
             path = f"{self._section(source)}/{source}/{key.replace('.', '/')}"
             nentries = self._guess_number_of_storing_entries(source, key)
-            src_ds1 = self.data._source_index[source][0].file[path]
+            src_ds1 = self.data[source].files[0].file[path]
             self.file.create_dataset_like(
                 path, src_ds1, shape=(nentries,) + src_ds1.shape[1:],
                 # Corrected detector data has maxshape==shape, but if any max
@@ -245,7 +245,7 @@ class VirtualFileWriter(FileWriter):
 
         # Add a link in RUN for control sources
         if source in self.data.control_sources:
-            src_file = self.data._source_index[source][0]
+            src_file = self.data[source].files[0]
             run_path = f'RUN/{source}'
             self.file[run_path] = h5py.ExternalLink(src_file.filename, run_path)
 

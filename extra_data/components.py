@@ -840,7 +840,7 @@ class FramesFileWriter(FileWriter):
         frame_tids_piecewise = []
 
         src_files = sorted(
-            self.data._source_index[source],
+            self.data[source].files,
             key=lambda fa: fa.train_ids[0]
         )
 
