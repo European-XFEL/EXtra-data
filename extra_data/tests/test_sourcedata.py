@@ -1,6 +1,8 @@
 import numpy as np
+import pytest
 
-from extra_data import RunDirectory
+from extra_data import RunDirectory, by_id, by_index
+from extra_data.exceptions import PropertyNameError
 
 def test_get_sourcedata(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
@@ -54,3 +56,38 @@ def test_select_keys(mock_spb_raw_run):
     }
     assert xgm.select_keys('beamPosition.*').keys() == beampos_keys
     assert xgm.select_keys('beamPosition.*').select_keys('*').keys() == beampos_keys
+
+    # select keys on INSTRUMENT data
+    am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf']
+    key = 'image.data'
+    assert am0.select_keys(key).keys() == {key}
+    assert am0.select_keys('*').keys() == am0.keys()
+
+    with pytest.raises(PropertyNameError):
+        am0.select_keys('data.image')
+
+def test_select_trains(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
+
+    assert len(xgm.train_ids) == 64
+    sel = xgm.select_trains(by_id[10020:10040])
+    assert sel.train_ids == list(range(10020, 10040))
+
+    sel = xgm.select_trains(by_index[:10])
+    assert sel.train_ids == list(range(10000, 10010))
+
+    sel = xgm.select_trains(by_index[999995:999999])
+    assert sel.train_ids == []
+    assert sel.keys() == xgm.keys()
+
+def test_union(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
+    am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf']
+
+    sel = xgm.select_trains(np.s_[:10]).union(xgm.select_trains(np.s_[-10:]))
+    assert sel.train_ids == list(range(10000, 10010)) + list(range(10054, 10064))
+
+    with pytest.raises(ValueError):
+        xgm.union(am0)
