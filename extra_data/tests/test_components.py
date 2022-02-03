@@ -265,6 +265,17 @@ def test_get_dask_array_jungfrau(mock_jungfrau_run):
     np.testing.assert_array_equal(arr.coords['train'], np.arange(10000, 10100))
 
 
+def test_select_trains(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    det = LPD1M(run.select_trains(np.s_[:20]))
+    assert len(det.train_ids) == 20
+    det = det.select_trains(np.s_[:2])
+    assert len(det.train_ids) == 2
+
+    arr = det.get_array('image.data')
+    assert arr.shape == (16, 2, 128, 256, 256)
+
+
 def test_iterate(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run.select_trains(by_index[:2]))

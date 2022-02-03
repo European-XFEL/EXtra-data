@@ -2,6 +2,7 @@
 """
 import logging
 import re
+from copy import copy
 from warnings import warn
 
 import numpy as np
@@ -142,6 +143,8 @@ class MultimodDetectorBase:
         self.train_ids_perframe = np.repeat(
             self.frame_counts.index.values, self.frame_counts.values.astype(np.intp)
         )
+        # If we add extra instance attributes, check whether they should be
+        # updated in .select_trains() below.
 
     @classmethod
     def _find_detector_name(cls, data):
@@ -282,6 +285,17 @@ class MultimodDetectorBase:
         return "<{}: Data interface for detector {!r} with {} modules>".format(
             type(self).__name__, self.detector_name, len(self.source_to_modno),
         )
+
+    def select_trains(self, trains):
+        """Select a subset of trains from this data as a new object."""
+        # Using a copy to bypass the source & train checks in __init__
+        res = copy(self)
+        res.data = self.data.select_trains(trains)
+        res.frame_counts = self.frame_counts[res.data.train_ids]
+        res.train_ids_perframe = np.repeat(
+            res.frame_counts.index.values, res.frame_counts.values.astype(np.intp)
+        )
+        return res
 
     @staticmethod
     def _concat(arrays, index, fill_value, astype):
