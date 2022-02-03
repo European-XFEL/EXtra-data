@@ -1,9 +1,11 @@
 """Interfaces to data from specific instruments
 """
 import logging
+import re
+from warnings import warn
+
 import numpy as np
 import pandas as pd
-import re
 import xarray
 
 from .exceptions import SourceNameError
@@ -135,17 +137,11 @@ class MultimodDetectorBase:
         self.modno_to_source = {m: s for (s, m) in source_to_modno.items()}
         assert len(self.modno_to_source) == len(self.source_to_modno)
 
-        train_id_arr = np.asarray(self.data.train_ids)
-        split_indices = np.where(np.diff(train_id_arr) != 1)[0] + 1
-        self.train_id_chunks = np.split(train_id_arr, split_indices)
-        self.frame_counts = frame_counts[train_id_arr]
+        self.frame_counts = frame_counts[self.data.train_ids]
 
         self.train_ids_perframe = np.repeat(
             self.frame_counts.index.values, self.frame_counts.values.astype(np.intp)
         )
-
-        # Cumulative sum gives the end of each train, subtract to get start
-        self.train_id_to_ix = self.frame_counts.cumsum() - self.frame_counts
 
     @classmethod
     def _find_detector_name(cls, data):
@@ -251,6 +247,29 @@ class MultimodDetectorBase:
     @property
     def train_ids(self):
         return self.data.train_ids
+
+    @property
+    def train_id_chunks(self):
+        # Used to be used internally. Kept temporarily in case anyone else used it.
+        warn(
+            "detector.train_id_chunks is likely to be removed in the future. "
+            "Please contact da-support@xfel.eu if you're using it",
+            stacklevel=2
+        )
+        train_id_arr = np.asarray(self.data.train_ids)
+        split_indices = np.where(np.diff(train_id_arr) != 1)[0] + 1
+        return np.split(train_id_arr, split_indices)
+
+    @property
+    def train_id_to_ix(self):
+        # Used to be used internally. Kept temporarily in case anyone else used it.
+        warn(
+            "detector.train_id_to_ix is likely to be removed in the future. "
+            "Please contact da-support@xfel.eu if you're using it",
+            stacklevel=2
+        )
+        # Cumulative sum gives the end of each train, subtract to get start
+        return self.frame_counts.cumsum() - self.frame_counts
 
     @property
     def frames_per_train(self):
