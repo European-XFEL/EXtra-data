@@ -276,6 +276,20 @@ def test_select_trains(mock_fxe_raw_run):
     assert arr.shape == (16, 2, 128, 256, 256)
 
 
+def test_split_trains(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    det = LPD1M(run.select_trains(np.s_[:20]))
+    assert len(det.train_ids) == 20
+
+    parts = list(det.split_trains(parts=4))
+    assert len(parts) == 4
+    assert [len(p.train_ids) for p in parts] == [5, 5, 5, 5]
+    assert sum([p.train_ids for p in parts], []) == det.train_ids
+
+    arr = parts[-1].get_array('image.data', pulses=np.s_[:1])
+    assert arr.shape == (16, 5, 1, 256, 256)
+
+
 def test_iterate(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run.select_trains(by_index[:2]))

@@ -11,7 +11,7 @@ import xarray
 
 from .exceptions import SourceNameError
 from .reader import DataCollection, by_id, by_index
-from .read_machinery import roi_shape, DataChunk
+from .read_machinery import DataChunk, roi_shape, split_trains
 from .writer import FileWriter
 from .write_cxi import XtdfCXIWriter, JUNGFRAUCXIWriter
 
@@ -296,6 +296,25 @@ class MultimodDetectorBase:
             res.frame_counts.index.values, res.frame_counts.values.astype(np.intp)
         )
         return res
+
+    def split_trains(self, parts=None, trains_per_part=None):
+        """Split this data into chunks with a fraction of the trains each.
+
+        Either *parts* or *trains_per_part* must be specified.
+
+        Parameters
+        ----------
+
+        parts: int
+            How many parts to split the data into. If trains_per_part is also
+            specified, this is a minimum, and it may make more parts.
+            It may also make fewer if there are fewer trains in the data.
+        trains_per_part: int
+            A maximum number of trains in each part. Parts will often have
+            fewer trains than this.
+        """
+        for s in split_trains(len(self.train_ids), parts, trains_per_part):
+            yield self.select_trains(s)
 
     @staticmethod
     def _concat(arrays, index, fill_value, astype):
