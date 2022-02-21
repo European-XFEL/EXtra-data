@@ -50,7 +50,7 @@ exit with status 1. See :doc:`validation` for details of what it checks.
 -----------------------------
 
 Stream data from files in the `Karabo bridge
-<https://in.xfel.eu/readthedocs/docs/data-analysis-user-documentation/en/latest/online.html#data-stream-to-user-tools>`_
+<https://rtd.xfel.eu/docs/data-analysis-user-documentation/en/latest/online.html#streaming-from-karabo-bridge>`_
 format. See :doc:`streaming` for more information.
 
 .. code-block:: shell

@@ -89,7 +89,7 @@ Documentation contents
 .. seealso::
 
    `Data Analysis at European XFEL
-   <https://in.xfel.eu/readthedocs/docs/data-analysis-user-documentation/en/latest/>`_
+   <https://rtd.xfel.eu/docs/data-analysis-user-documentation/en/latest/>`_
 
 Indices and tables
 ==================
