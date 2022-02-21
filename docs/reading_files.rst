@@ -121,7 +121,7 @@ below, e.g.::
    .. automethod:: xarray
 
      .. seealso::
-       `xarray documentation <http://xarray.pydata.org/en/stable/indexing.html>`__
+       `xarray documentation <https://xarray.pydata.org/en/stable/indexing.html>`__
          How to use the arrays returned by :meth:`DataCollection.get_array`
 
        :doc:`xpd_examples`
@@ -292,7 +292,7 @@ missing from the data returned by ``extra_data``:
 - :meth:`~.DataCollection.get_dataframe` includes rows for which any column has
   data. Where some but not all columns have data, the missing values are filled
   with ``NaN`` by pandas' `missing data handling
-  <http://pandas.pydata.org/pandas-docs/stable/user_guide/missing_data.html>`__.
+  <https://pandas.pydata.org/pandas-docs/stable/user_guide/missing_data.html>`__.
 
 Missing data does not necessarily mean that something has gone wrong:
 some devices send data at less than 10 Hz (the train rate), so they always
