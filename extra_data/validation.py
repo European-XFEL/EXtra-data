@@ -212,10 +212,10 @@ def check_index_contiguous(firsts, counts, record):
         ))
 
 
-def progress_bar(done, total, suffix=' '):
-    line = f'Progress: {done}/{total}{suffix}[{{}}]'
+def progress_bar(done):
+    line = f'Progress: {done * 100:.2f}% [{{}}]'
     length = min(get_terminal_size().columns - len(line), 50)
-    filled = int(length * done // total)
+    filled = int(length * done)
     bar = '#' * filled + ' ' * (length - filled)
     return line.format(bar)
 
@@ -245,6 +245,7 @@ class RunValidator:
         self.filenames = [f for f in os.listdir(run_dir) if f.endswith('.h5')]
         self.file_accesses = []
         self.problems = []
+        self.progress_stages = 1
 
     def validate(self):
         problems = self.run_checks()
@@ -253,17 +254,17 @@ class RunValidator:
 
     def run_checks(self):
         self.problems = []
-        self.check_files()
+        self.check_files(progress_stage=1)
         self.check_files_map()
         return self.problems
 
-    def progress(self, done, total, nproblems, badfiles):
+    def progress(self, stage_done, stage_total, stage, badfiles=None):
         """Show progress information"""
         if not self.term_progress:
             return
 
-        lines = progress_bar(done, total)
-        lines += f'\n{nproblems} problems'
+        lines = progress_bar((stage_done / stage_total + stage - 1) / self.progress_stages)
+        lines += f'\n{len(self.problems)} problems'
         if badfiles:
             lines += f' in {len(badfiles)} files (last: {badfiles[-1]})'
         if sys.stderr.isatty():
@@ -273,7 +274,7 @@ class RunValidator:
         else:
             print(lines, file=sys.stderr)
 
-    def check_files(self):
+    def check_files(self, progress_stage):
         self.file_accesses = []
 
         def initializer():
@@ -283,7 +284,7 @@ class RunValidator:
         filepaths = [(self.run_dir, fn) for fn in sorted(self.filenames)]
         nfiles = len(self.filenames)
         badfiles = []
-        self.progress(0, nfiles, 0, badfiles)
+        self.progress(0, nfiles, progress_stage, badfiles)
 
         with Pool(initializer=initializer) as pool:
             iterator = pool.imap_unordered(_check_file, filepaths)
@@ -293,7 +294,7 @@ class RunValidator:
                     badfiles.append(fname)
                 if fa is not None:
                     self.file_accesses.append(fa)
-                self.progress(done, nfiles, len(self.problems), badfiles)
+                self.progress(done, nfiles, progress_stage, badfiles)
 
         if not self.file_accesses:
             self.problems.append(
