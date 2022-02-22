@@ -63,6 +63,13 @@ def mock_fxe_raw_run(format_version):
 
 
 @pytest.fixture(scope='session')
+def mock_fxe_raw_half_missing_run(format_version):
+    with TemporaryDirectory() as td:
+        make_examples.make_fxe_run(td, missing_data_ratio=0.5, format_version=format_version)
+        yield td
+
+
+@pytest.fixture(scope='session')
 def mock_lpd_parallelgain_run():
     with TemporaryDirectory() as td:
         make_examples.make_lpd_parallelgain_run(td, format_version='1.0')
