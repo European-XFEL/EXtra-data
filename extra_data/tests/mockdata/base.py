@@ -21,7 +21,6 @@ class DeviceBase:
         """Create a dummy device
 
         :param str device_id: e.g. "SA1_XTD2_XGM/DOOCS/MAIN"
-        :param int ntrains: e.g. 256
         :param int nsamples: For INSTRUMENT data only. Default is ntrains.
             If more, should be a multiple of ntrains. If fewer, samples will be
             spread evenly across the trains.
