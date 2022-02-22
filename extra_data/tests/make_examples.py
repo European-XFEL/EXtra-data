@@ -209,7 +209,7 @@ def make_lpd_file(path, format_version='0.5'):
         LPDModule('FXE_DET_LPD1M-1/DET/0CH0', frames_per_train=128)
     ], ntrains=480, chunksize=32, format_version=format_version)
 
-def make_fxe_run(dir_path, raw=True, format_version='0.5'):
+def make_fxe_run(dir_path, raw=True, missing_data_ratio=1, format_version='0.5'):
     prefix = 'RAW' if raw else 'CORR'
     for modno in range(16):
         path = osp.join(dir_path,
@@ -220,17 +220,21 @@ def make_fxe_run(dir_path, raw=True, format_version='0.5'):
         ], ntrains=480, chunksize=32, format_version=format_version)
     if not raw:
         return
+
+    # Calculate nsamples for the given missing_data_ratio
+    compute_nsamples = lambda ntrains: int((1 - missing_data_ratio) * ntrains)
+
     write_file(osp.join(dir_path, 'RAW-R0450-DA01-S00000.h5'), [
         XGM('SA1_XTD2_XGM/DOOCS/MAIN'),
         XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
         GECCamera('FXE_XAD_GEC/CAM/CAMERA'),
-        GECCamera('FXE_XAD_GEC/CAM/CAMERA_NODATA', nsamples=0),
+        GECCamera('FXE_XAD_GEC/CAM/CAMERA_NODATA', nsamples=compute_nsamples(400)),
     ], ntrains=400, chunksize=200, format_version=format_version)
     write_file(osp.join(dir_path, '{}-R0450-DA01-S00001.h5'.format(prefix)), [
         XGM('SA1_XTD2_XGM/DOOCS/MAIN'),
         XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
         GECCamera('FXE_XAD_GEC/CAM/CAMERA'),
-        GECCamera('FXE_XAD_GEC/CAM/CAMERA_NODATA', nsamples=0),
+        GECCamera('FXE_XAD_GEC/CAM/CAMERA_NODATA', nsamples=compute_nsamples(80)),
     ], ntrains=80, firsttrain=10400, chunksize=200, format_version=format_version)
 
 def make_lpd_parallelgain_run(dir_path, raw=True, format_version='0.5'):
