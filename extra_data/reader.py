@@ -1481,22 +1481,27 @@ def open_run(
             proposal=proposal, run=run, include=include,
             file_filter=file_filter, inc_suspect_trains=inc_suspect_trains)
 
-        # Create separate data collections for raw and proc.
-        raw_dc = open_run(**common_args, data='raw')
-        proc_dc = open_run(**common_args, data='proc')
+        # Open the raw data
+        dc = open_run(**common_args, data='raw')
 
-        # Deselect to those raw sources not present in proc.
-        raw_extra = raw_dc.deselect(
-            [(src, '*') for src in raw_dc.all_sources & proc_dc.all_sources])
-
-        if raw_extra.files:
-            # If raw is not a subset of proc, merge the "extra" raw
-            # sources into proc sources and re-enable is_single_run.
-            dc = proc_dc.union(raw_extra)
-            dc.is_single_run = True
+        try:
+            # Attempt to open proc data, but this may not exist
+            proc_dc = open_run(**common_args, data='proc')
+        except FileNotFoundError:
+            warn("Proc data is not available for this run")
         else:
-            # If raw is a subset of proc, just use proc.
-            dc = proc_dc
+            # Deselect to those raw sources not present in proc.
+            raw_extra = dc.deselect(
+                [(src, '*') for src in dc.all_sources & proc_dc.all_sources])
+
+            if raw_extra.files:
+                # If raw is not a subset of proc, merge the "extra" raw
+                # sources into proc sources and re-enable is_single_run.
+                dc = proc_dc.union(raw_extra)
+                dc.is_single_run = True
+            else:
+                # If raw is a subset of proc, just use proc.
+                dc = proc_dc
 
         return dc
 

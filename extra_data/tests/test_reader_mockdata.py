@@ -729,8 +729,9 @@ def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
     os.symlink(mock_spb_raw_run, os.path.join(prop_dir, 'raw', 'r0238'))
 
     # Set up proc
+    proc_run_dir = os.path.join(prop_dir, 'proc', 'r0238')
     os.makedirs(os.path.join(prop_dir, 'proc'))
-    os.symlink(mock_spb_proc_run, os.path.join(prop_dir, 'proc', 'r0238'))
+    os.symlink(mock_spb_proc_run, proc_run_dir)
 
     with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', str(tmpdir)):
         # With integers
@@ -775,6 +776,20 @@ def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
                     # Non-AGIPD data is in raw.
                     # (CAM, XGM)
                     assert '/proc/' not in file.filename
+
+        # Delete the proc data
+        os.unlink(proc_run_dir)
+        assert not os.path.isdir(proc_run_dir)
+
+        with catch_warnings(record=True) as w:
+            # Opening a run with 'all', with no proc data
+            all_run = open_run(proposal=2012, run=238, data='all')
+
+            # Attempting to open the proc data should raise a warning
+            assert len(w) == 1
+
+        # It should have opened at least the raw data
+        assert run.all_sources == all_run.all_sources
 
         # Run that doesn't exist
         with pytest.raises(Exception):
