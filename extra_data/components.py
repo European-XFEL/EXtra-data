@@ -97,6 +97,7 @@ class MultimodDetectorBase:
     _source_re = re.compile(r'(?P<detname>.+)/DET/(\d+)CH')
     # Override in subclass
     _main_data_key = ''  # Key to use for checking data counts match
+    _frames_per_entry = 1  # Override if separate pulse dimension in files
     module_shape = (0, 0)
     n_modules = 0
 
@@ -279,7 +280,7 @@ class MultimodDetectorBase:
         counts = set(self.frame_counts.unique()) - {0}
         if len(counts) > 1:
             raise ValueError(f"Varying number of frames per train: {counts}")
-        return counts.pop()
+        return counts.pop() * self._frames_per_entry
 
     def __repr__(self):
         return "<{}: Data interface for detector {!r} with {} modules>".format(
@@ -341,18 +342,18 @@ class MultimodDetectorBase:
 
             chunk_start = 0
             ntrains = 1
-            nframes = self.frame_counts.iloc[0]
+            nentries = self.frame_counts.iloc[0]
 
             for frame_ct in self.frame_counts.iloc[1:]:
                 ntrains += 1
-                nframes += frame_ct
-                if (ntrains > trains_per_part) or (nframes > frames_per_part):
+                nentries += frame_ct
+                if (ntrains > trains_per_part) or (nentries * self._frames_per_entry > frames_per_part):
                     # We've got a full chunk
                     chunk_end = chunk_start + ntrains - 1
                     yield self.select_trains(np.s_[chunk_start:chunk_end])
                     chunk_start = chunk_end
                     ntrains = 1
-                    nframes = frame_ct
+                    nentries = frame_ct
 
             # There will always be at least the last train left to yield
             yield self.select_trains(np.s_[chunk_start:])
@@ -1428,6 +1429,10 @@ class JUNGFRAU(MultimodDetectorBase):
             self.n_modules = max(modno for (_, modno) in self._source_matches(
                 data, self.detector_name
             ))
+
+        # In burst mode, JUNGFRAU can have 16 frames per train
+        src = next(iter(self.source_to_modno))
+        self._frames_per_entry = self.data[src, self._main_data_key].entry_shape[0]
 
     @staticmethod
     def _label_dims(arr):

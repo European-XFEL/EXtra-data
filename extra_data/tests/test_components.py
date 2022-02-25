@@ -313,6 +313,16 @@ def test_split_trains(mock_fxe_raw_run):
     parts = list(det.split_trains(frames_per_part=3000))
     assert [len(p.train_ids) for p in parts] == [20]
 
+
+def test_split_trains_jungfrau(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    jf = JUNGFRAU(run.select_trains(np.s_[:20]))
+    assert jf.frames_per_train == 16
+
+    parts = list(jf.split_trains(frames_per_part=64))
+    assert [len(p.train_ids) for p in parts] == [4] * 5
+
+
 def test_iterate(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run.select_trains(by_index[:2]))
