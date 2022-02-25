@@ -297,10 +297,11 @@ class MultimodDetectorBase:
         )
         return res
 
-    def split_trains(self, parts=None, trains_per_part=None):
+    def split_trains(self, parts=None, trains_per_part=None, frames_per_part=None):
         """Split this data into chunks with a fraction of the trains each.
 
-        Either *parts* or *trains_per_part* must be specified.
+        At least one of *parts*, *trains_per_part* or *frames_per_part* must be
+        specified. You can pass any combination of these.
 
         Parameters
         ----------
@@ -312,9 +313,49 @@ class MultimodDetectorBase:
         trains_per_part: int
             A maximum number of trains in each part. Parts will often have
             fewer trains than this.
+        frames_per_part: int
+            A target number of frames in each part. Each chunk should have up
+            to this many frames, but chunks always contain complete trains,
+            so if this is less than one train, you may get single train chunks
+            with more frames. When ``frames_per_part`` is used, the final
+            chunk may be much smaller than the others.
         """
-        for s in split_trains(len(self.train_ids), parts, trains_per_part):
-            yield self.select_trains(s)
+        if {parts, trains_per_part, frames_per_part} == {None}:
+            raise ValueError(
+                "One of parts, trains_per_part, frames_per_part must be specified"
+            )
+        if frames_per_part is None:
+            for s in split_trains(len(self.train_ids), parts, trains_per_part):
+                yield self.select_trains(s)
+        else:
+            # frames_per_part was specified. We don't assume that the number
+            # of frames per train is constant, so we'll iterate over trains
+            # and cut off each chunk when we reach the relevant number.
+            if not self.train_ids:
+                return  # No data to split
+
+            if trains_per_part is None:
+                trains_per_part = np.inf
+            if parts:
+                trains_per_part = min(trains_per_part, len(self.train_ids) // parts)
+
+            chunk_start = 0
+            ntrains = 1
+            nframes = self.frame_counts.iloc[0]
+
+            for frame_ct in self.frame_counts.iloc[1:]:
+                ntrains += 1
+                nframes += frame_ct
+                if (ntrains > trains_per_part) or (nframes > frames_per_part):
+                    # We've got a full chunk
+                    chunk_end = chunk_start + ntrains - 1
+                    yield self.select_trains(np.s_[chunk_start:chunk_end])
+                    chunk_start = chunk_end
+                    ntrains = 1
+                    nframes = frame_ct
+
+            # There will always be at least the last train left to yield
+            yield self.select_trains(np.s_[chunk_start:])
 
     @staticmethod
     def _concat(arrays, index, fill_value, astype):

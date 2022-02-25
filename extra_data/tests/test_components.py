@@ -289,6 +289,29 @@ def test_split_trains(mock_fxe_raw_run):
     arr = parts[-1].get_array('image.data', pulses=np.s_[:1])
     assert arr.shape == (16, 5, 1, 256, 256)
 
+    # Split by a number of frames
+    parts = list(det.split_trains(frames_per_part=256))
+    assert [len(p.train_ids) for p in parts] == [2] * 10
+
+    # frames_per_part less than one train (128 frames in this example)
+    parts = list(det.split_trains(frames_per_part=100))
+    assert [len(p.train_ids) for p in parts] == [1] * 20
+
+    # trains_per_part cuts off before frames_per_part
+    parts = list(det.split_trains(trains_per_part=3, frames_per_part=1024))
+    assert [len(p.train_ids) for p in parts] == ([3] * 6) + [2]
+
+    # trains_per_part cuts off before frames_per_part
+    parts = list(det.split_trains(trains_per_part=3, frames_per_part=1024))
+    assert [len(p.train_ids) for p in parts] == ([3] * 6) + [2]
+
+    # parts cuts off before frames_per_part
+    parts = list(det.split_trains(parts=6, frames_per_part=1024))
+    assert [len(p.train_ids) for p in parts] == ([3] * 6) + [2]
+
+    # frames_per_part > all frames in selection
+    parts = list(det.split_trains(frames_per_part=3000))
+    assert [len(p.train_ids) for p in parts] == [20]
 
 def test_iterate(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
