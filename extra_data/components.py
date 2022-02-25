@@ -288,7 +288,18 @@ class MultimodDetectorBase:
         )
 
     def select_trains(self, trains):
-        """Select a subset of trains from this data as a new object."""
+        """Select a subset of trains from this data as a new object.
+
+        Slice trains by position within this data::
+
+            sel = det.select_trains(np.s_[:5])
+
+        Or select trains by train ID, with a slice or a list::
+
+            from extra_data import by_id
+            sel1 = det.select_trains(by_id[142844490 : 142844495])
+            sel2 = det.select_trains(by_id[[142844490, 142844493, 142844494]])
+        """
         # Using a copy to bypass the source & train checks in __init__
         res = copy(self)
         res.data = self.data.select_trains(trains)
