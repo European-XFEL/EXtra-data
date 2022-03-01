@@ -496,6 +496,16 @@ def test_select(mock_fxe_raw_run):
     for source, source_data in data.items():
         assert set(source_data.keys()) == {'image.pulseId', 'metadata'}
 
+    sel_by_list = run.select([
+        ('*/DET/*', 'image.pulseId'),
+        'FXE_XAD_GEC/CAM/*',
+    ])
+    assert 'SPB_XTD9_XGM/DOOCS/MAIN' not in sel_by_list.control_sources
+    assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in sel_by_list.instrument_sources
+    assert sel_by_list['FXE_DET_LPD1M-1/DET/0CH0:xtdf'].keys() == {'image.pulseId'}
+    assert 'FXE_XAD_GEC/CAM/CAMERA_NODATA' in sel_by_list.control_sources
+    assert 'FXE_XAD_GEC/CAM/CAMERA_NODATA:daqOutput' in sel_by_list.instrument_sources
+
     # Basic selection machinery, dict-based API
     sel_by_dict = run.select({
         'SA1_XTD2_XGM/DOOCS/MAIN': None,
