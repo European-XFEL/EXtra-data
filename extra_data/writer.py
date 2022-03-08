@@ -251,7 +251,6 @@ class VirtualFileWriter(FileWriter):
     def add_dataset(self, source, key):
         keydata = self.data[source, key]
         path = f"{keydata.section}/{source}/{key.replace('.', '/')}"
-        print("path", path)
 
         if keydata.shape[0] == 0:  # No data
             self.file.create_dataset(path, shape=keydata.shape, dtype=keydata.dtype)
