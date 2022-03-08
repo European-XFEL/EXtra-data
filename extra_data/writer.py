@@ -199,14 +199,10 @@ class VirtualFileWriter(FileWriter):
 
         super().__init__(path,  data)
 
-    def _assemble_data(self, source, key):
+    def _assemble_data(self, keydata):
         """Assemble chunks of data into a virtual layout"""
         # First, get a list of all non-empty data chunks
-        chunks = [c for c in self.data._find_data_chunks(source, key)
-                  if (c.counts > 0).any()]
-        chunks.sort(key = lambda c: c.train_ids[0])
-        if not chunks:
-            return None, None
+        chunks = keydata._data_chunks
 
         # Create the layout, which will describe what data is where
         n_total = np.sum([c.counts.sum() for c in chunks])
@@ -225,11 +221,7 @@ class VirtualFileWriter(FileWriter):
 
         assert output_cursor == n_total
 
-        # Make an array of which train ID each data entry is for:
-        train_ids = np.concatenate([
-            np.repeat(c.train_ids, c.counts.astype(np.intp)) for c in chunks
-        ])
-        return layout, train_ids
+        return layout
 
     # In big detector data, these fields are like extra indexes.
     # So we'll copy them to the output file for fast access, rather than
@@ -257,14 +249,17 @@ class VirtualFileWriter(FileWriter):
         self._make_index(source, key, a.coords['trainId'].values)
 
     def add_dataset(self, source, key):
-        layout, train_ids = self._assemble_data(source, key)
-        if not layout:
-            return  # No data
+        keydata = self.data[source, key]
+        path = f"{keydata.section}/{source}/{key.replace('.', '/')}"
+        print("path", path)
 
-        path = f"{self._section(source)}/{source}/{key.replace('.', '/')}"
-        self.file.create_virtual_dataset(path, layout)
+        if keydata.shape[0] == 0:  # No data
+            self.file.create_dataset(path, shape=keydata.shape, dtype=keydata.dtype)
+        else:
+            layout = self._assemble_data(keydata)
+            self.file.create_virtual_dataset(path, layout)
 
-        self._make_index(source, key, train_ids)
+        self._make_index(source, key, keydata.train_id_coordinates())
         if source in self.data.instrument_sources:
             self.data_sources.add(f"INSTRUMENT/{source}/{key.partition('.')[0]}")
         else:
