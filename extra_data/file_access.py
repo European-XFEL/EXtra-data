@@ -180,10 +180,12 @@ class FileAccess(metaclass=MetaFileAccess):
     @property
     def file(self):
         open_files_limiter.touch(self.filename)
-        if self._file is None:
-            self._file = h5py.File(self.filename, 'r')
+        # Local var to avoid a race condition when another thread calls .close()
+        file = self._file
+        if file is None:
+            file = self._file = h5py.File(self.filename, 'r')
 
-        return self._file
+        return file
 
     @property
     def valid_train_ids(self):
