@@ -94,11 +94,11 @@ def test_iter_trains(mock_spb_raw_run):
         break
 
 
-def test_iter_trains_keep_dims(mock_jungfrau_run):
+def test_iter_trains_keepdims(mock_jungfrau_run):
     run = RunDirectory(mock_jungfrau_run)
     jf_data = run['SPB_IRDA_JF4M/DET/JNGFR01:daqOutput', 'data.adc']
 
-    for _, v in jf_data.trains(keep_dims=True):
+    for _, v in jf_data.trains(keepdims=True):
         assert v.shape == (1, 16, 512, 1024)
 
 
@@ -120,14 +120,14 @@ def test_get_train(mock_spb_raw_run):
         xgm_beam_x.train_from_index(9999)
 
 
-def test_get_train_keep_dims(mock_jungfrau_run):
+def test_get_train_keepdims(mock_jungfrau_run):
     run = RunDirectory(mock_jungfrau_run)
     jf_adc = run['SPB_IRDA_JF4M/DET/JNGFR01:daqOutput', 'data.adc']
 
-    _, val = jf_adc.train_from_id(10005, keep_dims=True)
+    _, val = jf_adc.train_from_id(10005, keepdims=True)
     assert val.shape == (1, 16, 512, 1024)
 
-    _, val = jf_adc.train_from_index(-10, keep_dims=True)
+    _, val = jf_adc.train_from_index(-10, keepdims=True)
     assert val.shape == (1, 16, 512, 1024)
 
 

@@ -36,21 +36,21 @@ def test_iterate_trains_flat_keys(mock_agipd_data):
             assert ('SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.data') in data
 
 
-def test_iterate_trains_keep_dims(mock_jungfrau_run):
+def test_iterate_trains_keepdims(mock_jungfrau_run):
     run = RunDirectory(mock_jungfrau_run)
     for _, data in islice(run.select(
         '*JF4M/DET/*', 'data.adc'
-    ).trains(keep_dims=True), 10):
+    ).trains(keepdims=True), 10):
 
         assert data[
             'SPB_IRDA_JF4M/DET/JNGFR01:daqOutput']['data.adc'].shape == (
                 1, 16, 512, 1024)
 
 
-def test_get_train_keep_dims(mock_jungfrau_run):
+def test_get_train_keepdims(mock_jungfrau_run):
     run = RunDirectory(mock_jungfrau_run)
     _, data = run.select(
-        '*JF4M/DET/*', 'data.adc').train_from_index(0, keep_dims=True)
+        '*JF4M/DET/*', 'data.adc').train_from_index(0, keepdims=True)
     assert data[
         'SPB_IRDA_JF4M/DET/JNGFR01:daqOutput']["data.adc"].shape == (
             1, 16, 512, 1024)
@@ -189,9 +189,11 @@ def test_iterate_spb_raw_run(mock_spb_raw_run):
     assert data[device]['data.image.pixels'].shape == (1024, 768)
 
 
-def test_iterate_spb_raw_run_keep_dims(mock_spb_raw_run):
+def test_iterate_spb_raw_run_keepdims(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
-    trains_iter = run.trains(keep_dims=True)
+    trains_iter = run.select(
+        'SPB_IRU_CAM/CAM/SIDEMIC:daqOutput',
+        'data.image.pixels').trains(keepdims=True)
     _, data = next(trains_iter)
 
     assert data[
