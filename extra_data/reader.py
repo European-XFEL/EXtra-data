@@ -296,7 +296,7 @@ class DataCollection:
         return False
 
     def trains(self, devices=None, train_range=None, *, require_all=False,
-               flat_keys=False, keepdims=False):
+               flat_keys=False, keep_dims=False):
         """Iterate over all trains in the data and gather all sources.
 
         ::
@@ -327,7 +327,7 @@ class DataCollection:
             iteration indexed by source and then key. True returns a
             flat dictionary indexed by (source, key) tuples.
 
-        keepdims: bool
+        keep_dims: bool
             False (default) drops the first dimension when there is
             a single entry. True preserves this dimension.
 
@@ -345,10 +345,10 @@ class DataCollection:
         if train_range is not None:
             dc = dc.select_trains(train_range)
         return iter(TrainIterator(dc, require_all=require_all,
-                                  flat_keys=flat_keys, keepdims=keepdims))
+                                  flat_keys=flat_keys, keep_dims=keep_dims))
 
     def train_from_id(
-        self, train_id, devices=None, *, flat_keys=False, keepdims=False):
+        self, train_id, devices=None, *, flat_keys=False, keep_dims=False):
         """Get train data for specified train ID.
 
         Parameters
@@ -362,7 +362,7 @@ class DataCollection:
         flat_keys: bool
             False (default) returns a nested dict indexed by source and then key.
             True returns a flat dictionary indexed by (source, key) tuples.
-        keepdims: bool
+        keep_dims: bool
             False (default) drops the first dimension when there is
             a single entry. True preserves this dimension.
 
@@ -414,7 +414,7 @@ class DataCollection:
                     continue
 
                 path = '/INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
-                if count == 1 and not keepdims:
+                if count == 1 and not keep_dims:
                     source_data[key] = file.file[path][first]
                 else:
                     source_data[key] = file.file[path][first : first + count]
@@ -427,7 +427,7 @@ class DataCollection:
         return train_id, res
 
     def train_from_index(
-        self, train_index, devices=None, *, flat_keys=False, keepdims=False):
+        self, train_index, devices=None, *, flat_keys=False, keep_dims=False):
         """Get train data of the nth train in this data.
 
         Parameters
@@ -440,7 +440,7 @@ class DataCollection:
         flat_keys: bool
             False (default) returns a nested dict indexed by source and then key.
             True returns a flat dictionary indexed by (source, key) tuples.
-        keepdims: bool
+        keep_dims: bool
             False (default) drops the first dimension when there is
             a single entry. True preserves this dimension.
 
@@ -455,7 +455,7 @@ class DataCollection:
         train_id = self.train_ids[train_index]
         return self.train_from_id(
             int(train_id), devices=devices,
-            flat_keys=flat_keys, keepdims=keepdims)
+            flat_keys=flat_keys, keep_dims=keep_dims)
 
     def get_data_counts(self, source, key):
         """Get a count of data points in each train for the given data field.
@@ -1286,10 +1286,10 @@ class TrainIterator:
     Created by :meth:`DataCollection.trains`.
     """
     def __init__(
-        self, data, require_all=True, flat_keys=False, keepdims=False):
+        self, data, require_all=True, flat_keys=False, keep_dims=False):
         self.data = data
         self.require_all = require_all
-        self.keepdims = keepdims
+        self.keep_dims = keep_dims
         # {(source, key): (f, dataset)}
         self._datasets_cache = {}
 
@@ -1352,7 +1352,7 @@ class TrainIterator:
                 group = key.partition('.')[0]
                 firsts, counts = file.get_index(source, group)
                 first, count = firsts[pos], counts[pos]
-                if count == 1 and not self.keepdims:
+                if count == 1 and not self.keep_dims:
                     self._set_result(res, source, key, ds[first])
                 elif count > 0:
                     self._set_result(res, source, key,
