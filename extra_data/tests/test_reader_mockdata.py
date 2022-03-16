@@ -36,6 +36,26 @@ def test_iterate_trains_flat_keys(mock_agipd_data):
             assert ('SPB_DET_AGIPD1M-1/DET/7CH0:xtdf', 'image.data') in data
 
 
+def test_iterate_trains_keep_dims(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    for _, data in islice(run.select(
+        '*JF4M/DET/*', 'data.adc'
+    ).trains(keep_dims=True), 10):
+
+        assert data[
+            'SPB_IRDA_JF4M/DET/JNGFR01:daqOutput']['data.adc'].shape == (
+                1, 16, 512, 1024)
+
+
+def test_get_train_keep_dims(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    _, data = run.select(
+        '*JF4M/DET/*', 'data.adc').train_from_index(0, keep_dims=True)
+    assert data[
+        'SPB_IRDA_JF4M/DET/JNGFR01:daqOutput']["data.adc"].shape == (
+            1, 16, 512, 1024)
+
+
 def test_get_train_bad_device_name(mock_spb_control_data_badname):
     # Check that we can handle devices which don't have the standard Karabo
     # name structure A/B/C.
@@ -167,6 +187,19 @@ def test_iterate_spb_raw_run(mock_spb_raw_run):
     device = 'SPB_IRU_CAM/CAM/SIDEMIC:daqOutput'
     assert device in data
     assert data[device]['data.image.pixels'].shape == (1024, 768)
+
+
+def test_iterate_spb_raw_run_keep_dims(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    trains_iter = run.select(
+        'SPB_IRU_CAM/CAM/SIDEMIC:daqOutput',
+        'data.image.pixels').trains(keep_dims=True)
+    _, data = next(trains_iter)
+
+    assert data[
+        'SPB_IRU_CAM/CAM/SIDEMIC:daqOutput']['data.image.pixels'
+    ].shape == (1, 1024, 768)
+
 
 def test_properties_fxe_raw_run(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)

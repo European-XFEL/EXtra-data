@@ -93,6 +93,15 @@ def test_iter_trains(mock_spb_raw_run):
         assert isinstance(v, np.float32)
         break
 
+
+def test_iter_trains_keep_dims(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    jf_data = run['SPB_IRDA_JF4M/DET/JNGFR01:daqOutput', 'data.adc']
+
+    for _, v in jf_data.trains(keep_dims=True):
+        assert v.shape == (1, 16, 512, 1024)
+
+
 def test_get_train(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
     xgm_beam_x = run['SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value']
@@ -109,6 +118,17 @@ def test_get_train(mock_spb_raw_run):
 
     with pytest.raises(IndexError):
         xgm_beam_x.train_from_index(9999)
+
+
+def test_get_train_keep_dims(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    jf_adc = run['SPB_IRDA_JF4M/DET/JNGFR01:daqOutput', 'data.adc']
+
+    _, val = jf_adc.train_from_id(10005, keep_dims=True)
+    assert val.shape == (1, 16, 512, 1024)
+
+    _, val = jf_adc.train_from_index(-10, keep_dims=True)
+    assert val.shape == (1, 16, 512, 1024)
 
 
 def test_data_counts(mock_reduced_spb_proc_run):

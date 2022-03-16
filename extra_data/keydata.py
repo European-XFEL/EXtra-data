@@ -403,7 +403,7 @@ class KeyData:
 
         return None, 0
 
-    def train_from_id(self, tid):
+    def train_from_id(self, tid, keep_dims=False):
         """Get data for the given train ID as a numpy array.
 
         Returns (train ID, array)
@@ -417,19 +417,19 @@ class KeyData:
 
         firsts, counts = fa.get_index(self.source, self._key_group)
         first, count = firsts[ix], counts[ix]
-        if count == 1:
+        if count == 1 and not keep_dims:
             return tid, fa.file[self.hdf5_data_path][first]
         else:
             return tid, fa.file[self.hdf5_data_path][first: first+count]
 
-    def train_from_index(self, i):
+    def train_from_index(self, i, keep_dims=False):
         """Get data for a train by index (starting at 0) as a numpy array.
 
         Returns (train ID, array)
         """
-        return self.train_from_id(self.train_ids[i])
+        return self.train_from_id(self.train_ids[i], keep_dims=keep_dims)
 
-    def trains(self):
+    def trains(self, keep_dims=False):
         """Iterate through trains containing data for this key
 
         Yields pairs of (train ID, array). Skips trains where data is missing.
@@ -438,7 +438,7 @@ class KeyData:
             start = chunk.first
             ds = chunk.dataset
             for tid, count in zip(chunk.train_ids, chunk.counts):
-                if count > 1:
+                if count > 1 or keep_dims:
                     yield tid, ds[start: start+count]
                 elif count == 1:
                     yield tid, ds[start]

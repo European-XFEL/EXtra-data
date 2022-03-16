@@ -148,6 +148,16 @@ def test_stack_detector_data_jungfrau(mock_jungfrau_run):
     assert comb.shape == (16, 8, 512, 1024)
 
 
+def test_stack_detector_data_jungfrau(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    _, data = run.select('*JF4M/DET/*', 'data.adc').train_from_index(0, keep_dims=True)
+
+    comb = stack_detector_data(
+        data, 'data.adc', modules=8, pattern=r'/DET/JNGFR(\d+)', starts_at=1
+    )
+    assert comb.shape == (1, 16, 8, 512, 1024)
+
+
 def test_stackview_squeeze():
     # Squeeze not dropping stacking dim
     data = {0: np.zeros((1, 4)), 1: np.zeros((1, 4))}
