@@ -301,10 +301,6 @@ def test_split_trains(mock_fxe_raw_run):
     parts = list(det.split_trains(trains_per_part=3, frames_per_part=1024))
     assert [len(p.train_ids) for p in parts] == ([3] * 6) + [2]
 
-    # trains_per_part cuts off before frames_per_part
-    parts = list(det.split_trains(trains_per_part=3, frames_per_part=1024))
-    assert [len(p.train_ids) for p in parts] == ([3] * 6) + [2]
-
     # parts cuts off before frames_per_part
     parts = list(det.split_trains(parts=6, frames_per_part=1024))
     assert [len(p.train_ids) for p in parts] == ([3] * 6) + [2]
