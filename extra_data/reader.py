@@ -864,18 +864,15 @@ class DataCollection:
     def select_trains(self, train_range):
         """Select a subset of trains from this data.
 
-        Choose a slice of trains by train ID::
-
-            from extra_data import by_id
-            sel = run.select_trains(by_id[142844490:142844495])
-
-        Or select a list of trains::
-
-            sel = run.select_trains(by_id[[142844490, 142844493, 142844494]])
-
-        Or select trains by index within this collection::
+        Slice trains by position within this data::
 
             sel = run.select_trains(np.s_[:5])
+
+        Or select trains by train ID, with a slice or a list::
+
+            from extra_data import by_id
+            sel1 = run.select_trains(by_id[142844490 : 142844495])
+            sel2 = run.select_trains(by_id[[142844490, 142844493, 142844494]])
 
         Returns a new :class:`DataCollection` object for the selected trains.
 

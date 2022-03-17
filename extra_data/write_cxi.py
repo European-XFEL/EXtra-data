@@ -46,9 +46,6 @@ class VirtualCXIWriterBase:
             frame_counts.index.values, frame_counts.values.astype(np.intp)
         )
 
-        # Cumulative sum gives the end of each train, subtract to get start
-        self.train_id_to_ix = frame_counts.cumsum() - frame_counts
-
         # For AGIPD, DSSC & LPD detectors modules are numbered from 0.
         # Overridden for JUNGFRAU to number from 1.
         self.modulenos = list(range(self.nmodules))

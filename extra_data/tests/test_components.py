@@ -265,6 +265,60 @@ def test_get_dask_array_jungfrau(mock_jungfrau_run):
     np.testing.assert_array_equal(arr.coords['train'], np.arange(10000, 10100))
 
 
+def test_select_trains(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    det = LPD1M(run.select_trains(np.s_[:20]))
+    assert len(det.train_ids) == 20
+    det = det.select_trains(np.s_[:2])
+    assert len(det.train_ids) == 2
+
+    arr = det.get_array('image.data')
+    assert arr.shape == (16, 2, 128, 256, 256)
+
+
+def test_split_trains(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    det = LPD1M(run.select_trains(np.s_[:20]))
+    assert len(det.train_ids) == 20
+
+    parts = list(det.split_trains(parts=4))
+    assert len(parts) == 4
+    assert [len(p.train_ids) for p in parts] == [5, 5, 5, 5]
+    assert sum([p.train_ids for p in parts], []) == det.train_ids
+
+    arr = parts[-1].get_array('image.data', pulses=np.s_[:1])
+    assert arr.shape == (16, 5, 1, 256, 256)
+
+    # Split by a number of frames
+    parts = list(det.split_trains(frames_per_part=256))
+    assert [len(p.train_ids) for p in parts] == [2] * 10
+
+    # frames_per_part less than one train (128 frames in this example)
+    parts = list(det.split_trains(frames_per_part=100))
+    assert [len(p.train_ids) for p in parts] == [1] * 20
+
+    # trains_per_part cuts off before frames_per_part
+    parts = list(det.split_trains(trains_per_part=3, frames_per_part=1024))
+    assert [len(p.train_ids) for p in parts] == ([3] * 6) + [2]
+
+    # parts cuts off before frames_per_part
+    parts = list(det.split_trains(parts=6, frames_per_part=1024))
+    assert [len(p.train_ids) for p in parts] == ([3] * 6) + [2]
+
+    # frames_per_part > all frames in selection
+    parts = list(det.split_trains(frames_per_part=3000))
+    assert [len(p.train_ids) for p in parts] == [20]
+
+
+def test_split_trains_jungfrau(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    jf = JUNGFRAU(run.select_trains(np.s_[:20]))
+    assert jf.frames_per_train == 16
+
+    parts = list(jf.split_trains(frames_per_part=64))
+    assert [len(p.train_ids) for p in parts] == [4] * 5
+
+
 def test_iterate(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run.select_trains(by_index[:2]))

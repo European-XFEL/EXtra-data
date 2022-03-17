@@ -35,6 +35,10 @@ DSSC and JUNGFRAU, pulling together the separate modules into a single array.
 
    .. automethod:: trains
 
+   .. automethod:: select_trains
+
+   .. automethod:: split_trains
+
    .. automethod:: write_frames
 
    .. automethod:: write_virtual_cxi
@@ -50,6 +54,12 @@ DSSC and JUNGFRAU, pulling together the separate modules into a single array.
    .. automethod:: get_dask_array
 
    .. automethod:: trains
+
+   .. automethod:: select_trains
+
+   .. automethod:: split_trains
+
+   .. automethod:: write_virtual_cxi
 
 .. autofunction:: identify_multimod_detectors
 

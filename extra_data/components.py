@@ -1,14 +1,17 @@
 """Interfaces to data from specific instruments
 """
 import logging
+import re
+from copy import copy
+from warnings import warn
+
 import numpy as np
 import pandas as pd
-import re
 import xarray
 
 from .exceptions import SourceNameError
 from .reader import DataCollection, by_id, by_index
-from .read_machinery import roi_shape, DataChunk
+from .read_machinery import DataChunk, roi_shape, split_trains
 from .writer import FileWriter
 from .write_cxi import XtdfCXIWriter, JUNGFRAUCXIWriter
 
@@ -94,6 +97,7 @@ class MultimodDetectorBase:
     _source_re = re.compile(r'(?P<detname>.+)/DET/(\d+)CH')
     # Override in subclass
     _main_data_key = ''  # Key to use for checking data counts match
+    _frames_per_entry = 1  # Override if separate pulse dimension in files
     module_shape = (0, 0)
     n_modules = 0
 
@@ -135,17 +139,13 @@ class MultimodDetectorBase:
         self.modno_to_source = {m: s for (s, m) in source_to_modno.items()}
         assert len(self.modno_to_source) == len(self.source_to_modno)
 
-        train_id_arr = np.asarray(self.data.train_ids)
-        split_indices = np.where(np.diff(train_id_arr) != 1)[0] + 1
-        self.train_id_chunks = np.split(train_id_arr, split_indices)
-        self.frame_counts = frame_counts[train_id_arr]
+        self.frame_counts = frame_counts[self.data.train_ids]
 
         self.train_ids_perframe = np.repeat(
             self.frame_counts.index.values, self.frame_counts.values.astype(np.intp)
         )
-
-        # Cumulative sum gives the end of each train, subtract to get start
-        self.train_id_to_ix = self.frame_counts.cumsum() - self.frame_counts
+        # If we add extra instance attributes, check whether they should be
+        # updated in .select_trains() below.
 
     @classmethod
     def _find_detector_name(cls, data):
@@ -253,16 +253,121 @@ class MultimodDetectorBase:
         return self.data.train_ids
 
     @property
+    def train_id_chunks(self):
+        # Used to be used internally. Kept temporarily in case anyone else used it.
+        warn(
+            "detector.train_id_chunks is likely to be removed in the future. "
+            "Please contact da-support@xfel.eu if you're using it",
+            stacklevel=2
+        )
+        train_id_arr = np.asarray(self.data.train_ids)
+        split_indices = np.where(np.diff(train_id_arr) != 1)[0] + 1
+        return np.split(train_id_arr, split_indices)
+
+    @property
+    def train_id_to_ix(self):
+        # Used to be used internally. Kept temporarily in case anyone else used it.
+        warn(
+            "detector.train_id_to_ix is likely to be removed in the future. "
+            "Please contact da-support@xfel.eu if you're using it",
+            stacklevel=2
+        )
+        # Cumulative sum gives the end of each train, subtract to get start
+        return self.frame_counts.cumsum() - self.frame_counts
+
+    @property
     def frames_per_train(self):
         counts = set(self.frame_counts.unique()) - {0}
         if len(counts) > 1:
             raise ValueError(f"Varying number of frames per train: {counts}")
-        return counts.pop()
+        return counts.pop() * self._frames_per_entry
 
     def __repr__(self):
         return "<{}: Data interface for detector {!r} with {} modules>".format(
             type(self).__name__, self.detector_name, len(self.source_to_modno),
         )
+
+    def select_trains(self, trains):
+        """Select a subset of trains from this data as a new object.
+
+        Slice trains by position within this data::
+
+            sel = det.select_trains(np.s_[:5])
+
+        Or select trains by train ID, with a slice or a list::
+
+            from extra_data import by_id
+            sel1 = det.select_trains(by_id[142844490 : 142844495])
+            sel2 = det.select_trains(by_id[[142844490, 142844493, 142844494]])
+        """
+        # Using a copy to bypass the source & train checks in __init__
+        res = copy(self)
+        res.data = self.data.select_trains(trains)
+        res.frame_counts = self.frame_counts[res.data.train_ids]
+        res.train_ids_perframe = np.repeat(
+            res.frame_counts.index.values, res.frame_counts.values.astype(np.intp)
+        )
+        return res
+
+    def split_trains(self, parts=None, trains_per_part=None, frames_per_part=None):
+        """Split this data into chunks with a fraction of the trains each.
+
+        At least one of *parts*, *trains_per_part* or *frames_per_part* must be
+        specified. You can pass any combination of these.
+
+        Parameters
+        ----------
+
+        parts: int
+            How many parts to split the data into. If trains_per_part is also
+            specified, this is a minimum, and it may make more parts.
+            It may also make fewer if there are fewer trains in the data.
+        trains_per_part: int
+            A maximum number of trains in each part. Parts will often have
+            fewer trains than this.
+        frames_per_part: int
+            A target number of frames in each part. Each chunk should have up
+            to this many frames, but chunks always contain complete trains,
+            so if this is less than one train, you may get single train chunks
+            with more frames. When ``frames_per_part`` is used, the final
+            chunk may be much smaller than the others.
+        """
+        if {parts, trains_per_part, frames_per_part} == {None}:
+            raise ValueError(
+                "One of parts, trains_per_part, frames_per_part must be specified"
+            )
+        if frames_per_part is None:
+            for s in split_trains(len(self.train_ids), parts, trains_per_part):
+                yield self.select_trains(s)
+        else:
+            # frames_per_part was specified. We don't assume that the number
+            # of frames per train is constant, so we'll iterate over trains
+            # and cut off each chunk when we reach the relevant number.
+            if not self.train_ids:
+                return  # No data to split
+
+            if trains_per_part is None:
+                trains_per_part = np.inf
+            if parts:
+                trains_per_part = min(trains_per_part, len(self.train_ids) // parts)
+
+            chunk_start = 0
+            ntrains = 1
+            nentries = self.frame_counts.iloc[0]
+
+            for frame_ct in self.frame_counts.iloc[1:]:
+                ntrains += 1
+                nentries += frame_ct
+                if (ntrains > trains_per_part) or (nentries * self._frames_per_entry > frames_per_part):
+                    # We've got a full chunk
+                    chunk_end = chunk_start + ntrains - 1
+                    yield self.select_trains(np.s_[chunk_start:chunk_end])
+                    chunk_start = chunk_end
+                    ntrains = 1
+                    nentries = frame_ct
+
+            # There will always be at least the last train left to yield
+            yield self.select_trains(np.s_[chunk_start:])
 
     @staticmethod
     def _concat(arrays, index, fill_value, astype):
@@ -1335,6 +1440,10 @@ class JUNGFRAU(MultimodDetectorBase):
             self.n_modules = max(modno for (_, modno) in self._source_matches(
                 data, self.detector_name
             ))
+
+        # In burst mode, JUNGFRAU can have 16 frames per train
+        src = next(iter(self.source_to_modno))
+        self._frames_per_entry = self.data[src, self._main_data_key].entry_shape[0]
 
     @staticmethod
     def _label_dims(arr):
