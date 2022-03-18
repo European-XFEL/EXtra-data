@@ -29,6 +29,8 @@ def test_use_voview(mock_spb_raw_run, tmp_path):
     run = RunDirectory(str(new_run_dir))
     assert [f.filename for f in run.files] == [str(voview_file)]
     assert len(run.train_ids) == 64
+    assert run.run_metadata()['dataFormatVersion'] == \
+           run_orig.run_metadata()['dataFormatVersion']
 
     assert 'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf' in run.instrument_sources
     assert 'SA1_XTD2_XGM/DOOCS/MAIN' in run.control_sources
