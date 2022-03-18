@@ -666,8 +666,14 @@ class DataCollection:
 
         elif isinstance(selection, Iterable):
             # selection = [('src_glob', 'key_glob'), ...]
+            # OR          ['src_glob', 'src_glob', ...]
             sources_data_multi = defaultdict(list)
-            for (src_glob, key_glob) in selection:
+            for globs in selection:
+                if isinstance(globs, str):
+                    src_glob = globs
+                    key_glob = '*'
+                else:
+                    src_glob, key_glob = globs
                 for source, keys in self._select_glob(src_glob, key_glob).items():
                     sources_data_multi[source].append(
                         self._sources_data[source].select_keys(keys)
@@ -734,10 +740,13 @@ class DataCollection:
             # Select data in the image group for any detector sources
             sel = run.select('*/DET/*', 'image.*')
 
-        2. With an iterable of (source, key) glob patterns::
+        2. With an iterable of source glob patterns, or (source, key) patterns::
 
             # Select image.data and image.mask for any detector sources
             sel = run.select([('*/DET/*', 'image.data'), ('*/DET/*', 'image.mask')])
+
+            # Select & align undulator & XGM devices
+            sel = run.select(['*XGM/*', 'MID_XTD1_UND/DOOCS/ENERGY'], require_all=True)
 
            Data is included if it matches any of the pattern pairs.
 
