@@ -903,8 +903,8 @@ def test_get_run_value(mock_fxe_control_data):
 
 def test_get_run_value_union_multirun(mock_fxe_control_data, mock_fxe_control_data1):
     f = H5File(mock_fxe_control_data)
-    f3 = H5File(mock_fxe_control_data1)
-    data = f.union(f2, f3)
+    f2 = H5File(mock_fxe_control_data1)
+    data = f.union(f2)
     with pytest.raises(MultiRunError):
         data.get_run_value('FXE_XAD_GEC/CAM/CAMERA', 'firmwareVersion')
 
