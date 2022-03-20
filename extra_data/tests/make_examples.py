@@ -143,7 +143,7 @@ def make_agipd_example_file(path, format_version='0.5'):
     f.create_dataset('INSTRUMENT/SPB_DET_AGIPD1M-1/DET/7CH0:xtdf/trailer/status',
                         (256,), 'u8', maxshape=(None,))  # Empty in example
 
-def make_fxe_da_file(path, format_version='0.5'):
+def make_fxe_da_file(path, format_version='0.5', firsttrain=10000):
     """Make the structure of a file with non-detector data from the FXE experiment
 
     Based on .../FXE/201830/p900023/r0450/RAW-R0450-DA01-S00001.h5
@@ -154,7 +154,7 @@ def make_fxe_da_file(path, format_version='0.5'):
         XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
         GECCamera('FXE_XAD_GEC/CAM/CAMERA'),
         GECCamera('FXE_XAD_GEC/CAM/CAMERA_NODATA', nsamples=0)
-    ], ntrains=400, chunksize=200, format_version=format_version)
+    ], ntrains=400, chunksize=200, firsttrain=firsttrain, format_version=format_version)
 
 def make_sa3_da_file(path, ntrains=500, format_version='0.5'):
     """Make the structure of a file with non-detector data from SASE3 tunnel

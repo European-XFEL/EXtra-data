@@ -1,13 +1,14 @@
 import fnmatch
 import re
-from typing import Optional, List
+from typing import Dict, List, Optional
 
 import h5py
 
-from .exceptions import PropertyNameError
+from .exceptions import MultiRunError, PropertyNameError, SourceNameError
 from .file_access import FileAccess
 from .keydata import KeyData
-from .read_machinery import glob_wildcards_re, select_train_ids
+from .read_machinery import glob_wildcards_re, same_run, select_train_ids
+
 
 class SourceData:
     """Data for one key in one source
@@ -16,13 +17,14 @@ class SourceData:
     """
     def __init__(
             self, source, *, sel_keys, train_ids, files, section,
-            inc_suspect_trains=True,
+            is_single_run, inc_suspect_trains=True
     ):
         self.source = source
         self.sel_keys = sel_keys
         self.train_ids = train_ids
         self.files: List[FileAccess] = files
         self.section = section
+        self.is_single_run = is_single_run
         self.inc_suspect_trains = inc_suspect_trains
 
     def __repr__(self):
@@ -184,6 +186,7 @@ class SourceData:
             train_ids=self.train_ids,
             files=self.files,
             section=self.section,
+            is_single_run=self.is_single_run,
             inc_suspect_trains=self.inc_suspect_trains
         )
 
@@ -203,8 +206,72 @@ class SourceData:
                 if f.has_train_ids(tids, self.inc_suspect_trains)
             ] or [self.files[0]],
             section=self.section,
+            is_single_run=self.is_single_run,
             inc_suspect_trains=self.inc_suspect_trains
         )
+
+    def run_metadata(self) -> Dict:
+        """Get a dictionary of metadata about the run
+
+        From file format version 1.0, the files capture: creationDate,
+        daqLibrary, dataFormatVersion, karaboFramework, proposalNumber,
+        runNumber, sequenceNumber, updateDate.
+        """
+        if not self.is_single_run:
+            raise MultiRunError()
+
+        return self.files[0].metadata()
+
+    def run_value(self, key):
+        """Get a single value from the RUN section of data files.
+
+        This method is intended for use with data from a single run. If you
+        combine data from multiple runs, it will raise MultiRunError.
+
+        Returns the RUN parameter value corresponding to the *key* argument.
+        """
+        print('sourcedtata', self.is_single_run)
+        if not self.is_single_run:
+            raise MultiRunError()
+
+        if not self._is_control:
+            raise SourceNameError(self.source)
+
+        # Arbitrary file - should be the same across a run
+        ds = self.files[0].file['RUN'][self.source].get(key.replace('.', '/'))
+        if isinstance(ds, h5py.Group):
+            # Allow for the .value suffix being omitted
+            ds = ds.get('value')
+        if not isinstance(ds, h5py.Dataset):
+            raise PropertyNameError(key, self.source)
+
+        val = ds[0]
+        if isinstance(val, bytes):  # bytes -> str
+            return val.decode('utf-8', 'surrogateescape')
+        return val
+
+    def run_values(self):
+        """Get a dict of all RUN values for this source
+
+        This includes keys which are also in CONTROL.
+        """
+        if not self.is_single_run:
+            raise MultiRunError()
+
+        if not self._is_control:
+            raise SourceNameError(self.source)
+
+        res = {}
+        def visitor(path, obj):
+            if isinstance(obj, h5py.Dataset):
+                val = obj[0]
+                if isinstance(val, bytes):
+                    val = val.decode('utf-8', 'surrogateescape')
+                res[path.replace('/', '.')] = val
+
+        # Arbitrary file - should be the same across a run
+        self.files[0].file['RUN'][self.source].visititems(visitor)
+        return res
 
     def union(self, *others) -> 'SourceData':
         """Combine two or more ``SourceData`` objects
@@ -225,5 +292,6 @@ class SourceData:
             train_ids=sorted(train_ids),
             files=sorted(files, key=lambda f: f.filename),
             section=self.section,
+            is_single_run=same_run(self, *others),
             inc_suspect_trains=self.inc_suspect_trains
         )
