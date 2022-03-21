@@ -1,6 +1,27 @@
 Release Notes
 =============
 
+1.11
+----
+
+- New ``keep_dims`` option for :meth:`~.DataCollection.trains`,
+  :meth:`~.DataCollection.train_from_id` and :meth:`~.DataCollection.train_from_index`.
+  Normally the trains/pulses dimension is dropped from the arrays these methods
+  return if it has length 1, but passing ``keep_dims=True`` will preserve this
+  dimension (:ghpull:`288`).
+- New :meth:`~.LPD1M.select_trains` and :meth:`~.LPD1M.split_trains` methods
+  for multi-module detector data (:ghpull:`278`).
+- :meth:`~.DataCollection.select` now accepts a list of source name patterns,
+  which is more convenient for some use cases (:ghpull:`287`).
+- Fix ``open_run(..., data='all')`` for runs with no proc data (:ghpull:`281`).
+- Fix single run status when opening a run with a virtual overview file
+  (:ghpull:`290`).
+- Sources with no data recorded in a run are now represented in virtual overview
+  files (:ghpull:`287`).
+- Fix a race condition where files were closed in one thread as they were opened
+  in another (:ghpull:`289`).
+
+
 1.10
 ----
 
