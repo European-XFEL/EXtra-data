@@ -263,7 +263,7 @@ class VirtualFileWriter(FileWriter):
         else:
             self.data_sources.add(f"CONTROL/{source}")
 
-        return path
+        return keydata.hdf5_data_path
 
     def copy_source(self, source):
         pass  # Override base class copying data
