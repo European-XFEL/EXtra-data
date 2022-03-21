@@ -250,13 +250,12 @@ class VirtualFileWriter(FileWriter):
 
     def add_dataset(self, source, key):
         keydata = self.data[source, key]
-        path = f"{keydata.section}/{source}/{key.replace('.', '/')}"
 
         if keydata.shape[0] == 0:  # No data
-            self.file.create_dataset(path, shape=keydata.shape, dtype=keydata.dtype)
+            self.file.create_dataset(keydata.hdf5_data_path, shape=keydata.shape, dtype=keydata.dtype)
         else:
             layout = self._assemble_data(keydata)
-            self.file.create_virtual_dataset(path, layout)
+            self.file.create_virtual_dataset(keydata.hdf5_data_path, layout)
 
         self._make_index(source, key, keydata.train_id_coordinates())
         if source in self.data.instrument_sources:
