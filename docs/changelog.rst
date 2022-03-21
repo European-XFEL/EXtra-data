@@ -4,6 +4,8 @@ Release Notes
 1.11
 ----
 
+2022-03-21
+
 - New ``keep_dims`` option for :meth:`~.DataCollection.trains`,
   :meth:`~.DataCollection.train_from_id` and :meth:`~.DataCollection.train_from_index`.
   Normally the trains/pulses dimension is dropped from the arrays these methods
@@ -25,6 +27,8 @@ Release Notes
 1.10
 ----
 
+2022-02-01
+
 - EXtra-data can now generate and use "virtual overview" files (:ghpull:`69`).
   A virtual overview file is a single file containing the metadata and indices
   of an entire run, and links to the source files for the data (using HDF5
@@ -44,12 +48,16 @@ Release Notes
 1.9.1
 -----
 
+2021-11-30
+
 - Fix errors from :meth:`~.KeyData.data_counts` and
   :meth:`~.KeyData.drop_empty_trains` when different train IDs exist for
   different sources (:ghpull:`257`).
 
 1.9
 ---
+
+2021-11-25
 
 - New :meth:`.KeyData.as_single_value` method to check that a key remains
   constant (within a specified tolerance) through the data, and return it as
@@ -77,6 +85,8 @@ Deprecations & potentially breaking changes:
 1.8.1
 -----
 
+2021-11-01
+
 - Fixed two different bugs introduced in 1.8 affecting loading data for
   multi-module detectors with :meth:`~.LPD1M.get_array` when only some of the
   modules captured data for a given train (:ghpull:`234`).
@@ -85,6 +95,8 @@ Deprecations & potentially breaking changes:
 
 1.8
 ---
+
+2021-10-06
 
 - New API for inspecting the data associated with a single source (:ghpull:`206`).
   Use a source name to get a :class:`.SourceData` object::
@@ -115,6 +127,8 @@ Deprecations & potentially breaking changes:
 1.7
 ---
 
+2021-08-03
+
 - New methods to split data into chunks with a similar number of trains in
   each: :meth:`.DataCollection.split_trains` and :meth:`.KeyData.split_trains`
   (:ghpull:`184`).
@@ -139,11 +153,15 @@ Deprecations & potentially breaking changes:
 1.6.1
 -----
 
+2021-05-14
+
 - Fix a check which made it very slow to open runs with thousands of files
   (:ghpull:`183`).
 
 1.6
 ---
+
+2021-05-11
 
 - :ref:`suspect-trains` are now included by default (:ghpull:`178`). Pass
   ``inc_suspect_trains=False`` to exclude them (as in 1.5), or the
@@ -166,6 +184,8 @@ Deprecations & potentially breaking changes:
 1.5
 ---
 
+2021-04-22
+
 - Exclude :ref:`suspect-trains`, fixing occasional issues in particular with
   AGIPD data containing bad train IDs (:ghpull:`121`).
 - Avoid converting train IDs to floats when using
@@ -185,12 +205,16 @@ Deprecations & potentially breaking changes:
 1.4.1
 -----
 
+2021-03-10
+
 - Fix :meth:`~.LPD1M.get_array` for raw DSSC & LPD data with multiple sequence
   files per module (:ghpull:`155`).
 - Drop unnecessary dependency on scipy (:ghpull:`147`).
 
 1.4
 ---
+
+2021-02-12
 
 New features:
 
@@ -245,6 +269,8 @@ Fixes and improvements
 1.3
 ---
 
+2020-08-03
+
 New features:
 
 .. This directive allows the :option: below to link correctly.
@@ -280,6 +306,8 @@ Fixes and improvements:
 
 1.2
 ---
+
+2020-06-04
 
 New features:
 
@@ -325,6 +353,8 @@ Fixes and improvements:
 1.1
 ---
 
+2020-03-06
+
 - Opening and validating run directories now handles files in parallel, which
   should make it substantially faster (:ghpull:`30`).
 - Various data access operations no longer require finding all the keys for
@@ -337,6 +367,8 @@ Fixes and improvements:
 
 1.0
 ---
+
+2020-02-21
 
 - New :meth:`~.LPD1M.get_dask_array` method for accessing detector data with
   Dask (:ghpull:`18`).
@@ -358,6 +390,8 @@ This version requires Python 3.6 or above.
 
 0.8
 ---
+
+2019-11-18
 
 First separated version. No functional changes from karabo_data 0.7.
 
