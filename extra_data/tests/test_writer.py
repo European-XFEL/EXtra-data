@@ -59,3 +59,6 @@ def test_write_virtual(mock_fxe_raw_run):
 
             r = f.get_run_value('SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value')
             assert isinstance(r, np.float32)
+
+            cam_nodata = f['FXE_XAD_GEC/CAM/CAMERA_NODATA:daqOutput', 'data.image.pixels']
+            assert cam_nodata.shape == (0, 255, 1024)
