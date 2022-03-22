@@ -1,10 +1,12 @@
-import h5py
 import os
 import os.path as osp
+
+import h5py
 import numpy as np
 
 from .mockdata import write_file
 from .mockdata.adc import ADC
+from .mockdata.agipd import AGIPD1MFPGA, AGIPD1MPSC, AGIPD500KFPGA, AGIPDMDL
 from .mockdata.base import write_base_index
 from .mockdata.basler_camera import BaslerCamera as BaslerCam
 from .mockdata.dctrl import DCtrl
@@ -13,14 +15,13 @@ from .mockdata.gauge import Gauge
 from .mockdata.gec_camera import GECCamera
 from .mockdata.imgfel import IMGFELCamera, IMGFELMotor
 from .mockdata.jungfrau import (
-    JUNGFRAUModule, JUNGFRAUControl, JUNGFRAUMonitor, JUNGFRAUPower,
+    JUNGFRAUControl, JUNGFRAUModule, JUNGFRAUMonitor, JUNGFRAUPower
 )
 from .mockdata.motor import Motor
 from .mockdata.mpod import MPOD
 from .mockdata.tsens import TemperatureSensor
 from .mockdata.uvlamp import UVLamp
 from .mockdata.xgm import XGM
-
 
 vlen_bytes = h5py.special_dtype(vlen=bytes)
 
@@ -313,6 +314,49 @@ def make_reduced_spb_run(dir_path, raw=True, rng=None, format_version='0.5'):
                  BaslerCam('SPB_IRU_CAM/CAM/SIDEMIC', sensor_size=(1024, 768))
                ], ntrains=32, firsttrain=10032, chunksize=32,
                format_version=format_version)
+
+
+def make_agipd1m_run(
+    dir_path,
+    rep_rate=True,
+    gain_setting=True,
+    integration_time=True,
+    bias_voltage=True
+):
+    # Naming based on /gpfs/exfel/exp/SPB/202130/p900203/raw/r9015
+    for modno in range(16):
+        path = osp.join(dir_path, f'RAW-R9015-AGIPD{modno:02}-S00000.h5')
+        write_file(path, [
+            AGIPDModule(
+                f'SPB_DET_AGIPD1M-1/DET/{modno}CH0', frames_per_train=64)
+        ], ntrains=100, chunksize=32, format_version='1.0')
+
+    write_file(osp.join(dir_path, 'RAW-R9015-AGIPD1MCTRL00-S00000.h5'), [
+        AGIPDMDL(
+              'SPB_IRU_AGIPD1M1/MDL/FPGA_COMP',
+              rep_rate=rep_rate,
+              gain_setting=gain_setting,
+              integration_time=integration_time,
+        ),
+        AGIPD1MFPGA('SPB_IRU_AGIPD1M1/FPGA/MASTER_H1'),
+        AGIPD1MPSC('SPB_IRU_AGIPD1M/PSC/HV', bias_voltage=bias_voltage),
+     ], ntrains=100, chunksize=1, format_version='1.0')
+
+
+def make_agipd500k_run(dir_path):
+    # Naming based on /gpfs/exfel/exp/SPB/202130/p900203/raw/r9023
+    for modno in range(8):
+        path = osp.join(dir_path, f'RAW-R9023-AGIPD{modno:02}-S00000.h5')
+        write_file(path, [
+            AGIPDModule(
+                f'HED_DET_AGIPD500K2G/DET/{modno}CH0', frames_per_train=64)
+        ], ntrains=100, chunksize=32, format_version='1.0')
+
+    write_file(osp.join(dir_path, 'RAW-R9023-AGIPD500K2G00-S00000.h5'), [
+        AGIPDMDL('HED_EXP_AGIPD500K2G/MDL/FPGA_COMP'),
+        AGIPD500KFPGA('HED_EXP_AGIPD500K2G/FPGA/M_0'),
+     ], ntrains=100, chunksize=1, format_version='1.0')
+
 
 def make_jungfrau_run(dir_path):
     # Naming based on /gpfs/exfel/exp/SPB/202022/p002732/raw/r0012
