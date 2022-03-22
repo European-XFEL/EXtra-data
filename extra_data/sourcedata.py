@@ -227,3 +227,9 @@ class SourceData:
             section=self.section,
             inc_suspect_trains=self.inc_suspect_trains
         )
+
+    def _pasha_functor_(self):
+        """Integration with pasha for map operations."""
+
+        from .pasha_functor import ExtraDataFunctor
+        return ExtraDataFunctor(self)
