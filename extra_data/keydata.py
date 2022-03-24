@@ -265,10 +265,12 @@ class KeyData:
         return np.concatenate(chunks_trainids)
 
     def xarray(self, extra_dims=None, roi=(), name=None):
-        """Load this data as a labelled xarray.DataArray.
+        """Load this data as a labelled xarray array or dataset.
 
         The first dimension is labelled with train IDs. Other dimensions may be
-        named by passing a list of names to *extra_dims*.
+        named by passing a list of names to *extra_dims*. For scalar datatypes,
+        an xarray.DataArray is returned. If the data is stored in a structured
+        datatype, an xarray.Dataset is returned with a variable for each field.
 
         Parameters
         ----------
@@ -285,7 +287,7 @@ class KeyData:
             each entry, selection looks like roi=np.s_[:8, 5:10] .
         name: str
             Name the array itself. The default is the source and key joined
-            by a dot.
+            by a dot. Ignored for structured data when a dataset is returned.
         """
         import xarray
 
@@ -299,13 +301,21 @@ class KeyData:
         # Train ID index
         coords = {'trainId': self.train_id_coordinates()}
 
-        if name is None:
-            name = f'{self.source}.{self.key}'
+        if ndarr.dtype.names is not None:
+            # Structured dtype.
+            return xarray.Dataset(
+                {field: (dims, ndarr[field]) for field in ndarr.dtype.names},
+                coords=coords)
+        else:
+            if name is None:
+                name = f'{self.source}.{self.key}'
 
-            if name.endswith('.value') and self.section == 'CONTROL':
-                name = name[:-6]
+                if name.endswith('.value') and self.section == 'CONTROL':
+                    name = name[:-6]
 
-        return xarray.DataArray(ndarr, dims=dims, coords=coords, name=name)
+            # Primitive dtype.
+            return xarray.DataArray(
+                ndarr, dims=dims, coords=coords, name=name)
 
     def series(self):
         """Load this data as a pandas Series. Only for 1D data.
