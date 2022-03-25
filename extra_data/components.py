@@ -1425,7 +1425,7 @@ class JUNGFRAU(MultimodDetectorBase):
     # HED_IA1_JF500K1/DET/JNGFR01:daqOutput    (e.g. in p 2656, r 230)
     # FXE_XAD_JF1M/DET/RECEIVER-1
     _source_re = re.compile(
-        r'(?P<detname>.+_(JNGFR|JF[14]M|JF500K\d|JF500K))/DET/'
+        r'(?P<detname>.+_(JNGFR|JF[14]M|JF500K\d?))/DET/'
         r'(MODULE_|RECEIVER-|JNGFR)(?P<modno>\d+)'
     )
     _main_data_key = 'data.adc'
