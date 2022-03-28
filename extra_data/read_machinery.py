@@ -7,9 +7,7 @@ import math
 import os.path as osp
 import re
 import time
-from collections import defaultdict
 from glob import iglob
-from typing import Union
 from warnings import warn
 
 import numpy as np

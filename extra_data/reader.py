@@ -544,11 +544,7 @@ class DataCollection:
         key: str
             Key of parameter within that device, e.g. "triggerMode".
         """
-        try:
-            source_data = self._sources_data[source]
-        except KeyError:
-            raise SourceNameError(source)
-        return source_data.run_value(key)
+        return self._get_source_data(source).run_value(key)
 
     def get_run_values(self, source) -> dict:
         """Get a dict of all RUN values for the given source
@@ -561,11 +557,7 @@ class DataCollection:
         source: str
             Control device name, e.g. "HED_OPT_PAM/CAM/SAMPLE_CAM_4".
         """
-        try:
-            source_data = self._sources_data[source]
-        except KeyError:
-            raise SourceNameError(source)
-        return source_data.run_values()
+        return self._get_source_data(source).run_values()
 
     def union(self, *others):
         """Join the data in this collection with one or more others.
