@@ -46,7 +46,6 @@ setup(name="EXtra-data",
       },
       install_requires=[
           'h5py>=2.10',
-          'matplotlib',
           'numpy',
           'pandas',
           'xarray',
