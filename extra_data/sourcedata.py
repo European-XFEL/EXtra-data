@@ -235,7 +235,8 @@ class SourceData:
             raise MultiRunError()
 
         if not self._is_control:
-            raise SourceNameError(self.source)
+            raise ValueError('Only CONTROL sources have run values, '
+                             f'{self.source} is an INSTRUMENT source')
 
         # Arbitrary file - should be the same across a run
         ds = self.files[0].file['RUN'][self.source].get(key.replace('.', '/'))
@@ -259,7 +260,8 @@ class SourceData:
             raise MultiRunError()
 
         if not self._is_control:
-            raise SourceNameError(self.source)
+            raise ValueError('Only CONTROL sources have run values, '
+                             f'{self.source} is an INSTRUMENT source')
 
         res = {}
         def visitor(path, obj):

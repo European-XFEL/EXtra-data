@@ -101,6 +101,6 @@ def test_run_value(mock_spb_raw_run):
     value = xgm.run_value('pulseEnergy.conversion.value')
     assert isinstance(value, np.float64)
 
-    with pytest.raises(SourceNameError):
+    with pytest.raises(ValueError):
         # no run values for instrument sources
         am0.run_values()
