@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from extra_data import RunDirectory, by_id, by_index
-from extra_data.exceptions import PropertyNameError
+from extra_data.exceptions import PropertyNameError, SourceNameError
 
 def test_get_sourcedata(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
@@ -91,3 +91,16 @@ def test_union(mock_spb_raw_run):
 
     with pytest.raises(ValueError):
         xgm.union(am0)
+
+
+def test_run_value(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
+    am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf']
+
+    value = xgm.run_value('pulseEnergy.conversion.value')
+    assert isinstance(value, np.float64)
+
+    with pytest.raises(ValueError):
+        # no run values for instrument sources
+        am0.run_values()

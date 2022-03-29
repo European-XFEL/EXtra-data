@@ -10,16 +10,9 @@ You should have received a copy of the 3-Clause BSD License along with this
 program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 """
 
-from collections import defaultdict
-from collections.abc import Iterable
 import datetime
 import fnmatch
-import h5py
-from itertools import groupby
 import logging
-from multiprocessing import Pool
-import numpy as np
-from operator import index
 import os
 import os.path as osp
 import re
@@ -27,27 +20,27 @@ import signal
 import sys
 import tempfile
 import time
+from collections import defaultdict
+from collections.abc import Iterable
+from itertools import groupby
+from multiprocessing import Pool
+from operator import index
 from typing import Tuple
 from warnings import warn
 
-from .exceptions import (
-    SourceNameError, PropertyNameError, TrainIDError, MultiRunError,
-)
+import h5py
+import numpy as np
+
+from . import locality, voview
+from .exceptions import (MultiRunError, PropertyNameError, SourceNameError,
+                         TrainIDError)
+from .file_access import FileAccess
 from .keydata import KeyData
-from .read_machinery import (
-    DETECTOR_SOURCE_RE,
-    FilenameInfo,
-    by_id,
-    by_index,
-    select_train_ids,
-    split_trains,
-    find_proposal,
-    glob_wildcards_re,
-)
+from .read_machinery import (DETECTOR_SOURCE_RE, FilenameInfo, by_id, by_index,
+                             find_proposal, glob_wildcards_re, same_run,
+                             select_train_ids, split_trains)
 from .run_files_map import RunFilesMap
 from .sourcedata import SourceData
-from . import locality, voview
-from .file_access import FileAccess
 from .utils import available_cpu_cores
 
 __all__ = [
@@ -108,6 +101,7 @@ class DataCollection:
                     train_ids=train_ids,
                     files=files,
                     section=section,
+                    is_single_run=self.is_single_run,
                     inc_suspect_trains=self.inc_suspect_trains,
                 )
                 for ((src, section), files) in files_by_sources.items()
@@ -550,25 +544,7 @@ class DataCollection:
         key: str
             Key of parameter within that device, e.g. "triggerMode".
         """
-        if not self.is_single_run:
-            raise MultiRunError
-
-        if source not in self.control_sources:
-            raise SourceNameError(source)
-
-        # Arbitrary file - should be the same across a run
-        fa = self._sources_data[source].files[0]
-        ds = fa.file['RUN'][source].get(key.replace('.', '/'))
-        if isinstance(ds, h5py.Group):
-            # Allow for the .value suffix being omitted
-            ds = ds.get('value')
-        if not isinstance(ds, h5py.Dataset):
-            raise PropertyNameError(key, source)
-
-        val = ds[0]
-        if isinstance(val, bytes):  # bytes -> str
-            return val.decode('utf-8', 'surrogateescape')
-        return val
+        return self._get_source_data(source).run_value(key)
 
     def get_run_values(self, source) -> dict:
         """Get a dict of all RUN values for the given source
@@ -581,24 +557,7 @@ class DataCollection:
         source: str
             Control device name, e.g. "HED_OPT_PAM/CAM/SAMPLE_CAM_4".
         """
-        if not self.is_single_run:
-            raise MultiRunError
-
-        if source not in self.control_sources:
-            raise SourceNameError(source)
-
-        # Arbitrary file - should be the same across a run
-        fa = self._sources_data[source].files[0]
-        res = {}
-        def visitor(path, obj):
-            if isinstance(obj, h5py.Dataset):
-                val = obj[0]
-                if isinstance(val, bytes):
-                    val = val.decode('utf-8', 'surrogateescape')
-                res[path.replace('/', '.')] = val
-
-        fa.file['RUN'][source].visititems(visitor)
-        return res
+        return self._get_source_data(source).run_values()
 
     def union(self, *others):
         """Join the data in this collection with one or more others.
@@ -610,24 +569,12 @@ class DataCollection:
         Returns a new :class:`DataCollection` object.
         """
         sources_data_multi = defaultdict(list)
-        # DataCollection union of format version = 0.5 (no run/proposal # in
-        # files) is not considered a single run.
-        proposal_nos = set()
-        run_nos = set()
         for dc in (self,) + others:
-            md = dc.run_metadata() if dc.is_single_run else {}
-            proposal_nos.add(md.get("proposalNumber", -1))
-            run_nos.add(md.get("runNumber", -1))
             for source, srcdata in dc._sources_data.items():
                 sources_data_multi[source].append(srcdata)
 
         sources_data = {src: src_datas[0].union(*src_datas[1:])
                         for src, src_datas in sources_data_multi.items()}
-
-        same_run = (
-            len(proposal_nos) == 1 and (-1 not in proposal_nos)
-            and len(run_nos) == 1 and (-1 not in run_nos)
-        )
 
         train_ids = sorted(set().union(*[sd.train_ids for sd in sources_data.values()]))
         files = set().union(*[sd.files for sd in sources_data.values()])
@@ -635,7 +582,7 @@ class DataCollection:
         return DataCollection(
             files, sources_data=sources_data, train_ids=train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
-            is_single_run=same_run,
+            is_single_run=same_run(self, *others),
         )
 
     def _expand_selection(self, selection):

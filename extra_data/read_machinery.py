@@ -2,15 +2,15 @@
 
 The public API is in extra_data.reader; this is internal code.
 """
-from glob import iglob
 import logging
 import math
-import numpy as np
 import os.path as osp
 import re
 import time
+from glob import iglob
 from warnings import warn
 
+import numpy as np
 
 log = logging.getLogger(__name__)
 
@@ -250,6 +250,24 @@ def find_proposal(propno):
         return d
 
     raise Exception("Couldn't find proposal dir for {!r}".format(propno))
+
+
+def same_run(*args) -> bool:
+    """return True if arguments objects contain data from the same RUN
+
+    arguments can be of type *DataCollection* or *SourceData*
+    """
+    # DataCollection union of format version = 0.5 (no run/proposal # in
+    # files) is not considered a single run.
+    proposal_nos = set()
+    run_nos = set()
+    for dc in args:
+        md = dc.run_metadata() if dc.is_single_run else {}
+        proposal_nos.add(md.get("proposalNumber", -1))
+        run_nos.add(md.get("runNumber", -1))
+
+    return (len(proposal_nos) == 1 and (-1 not in proposal_nos)
+            and len(run_nos) == 1 and (-1 not in run_nos))
 
 
 glob_wildcards_re = re.compile(r'([*?[])')
