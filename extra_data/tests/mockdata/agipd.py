@@ -15,6 +15,7 @@ class AGIPDMDL(DeviceBase):
         self.gain_setting = gain_setting
         self.integration_time = integration_time
 
+        # A sample of some of the available keys.
         self.control_keys = [
             ('acquisitionTime', 'u2', ()),
             ('bunchStructure.nPulses', 'u2', ()),
@@ -52,6 +53,7 @@ class AGIPDMDL(DeviceBase):
 
 
 class AGIPD1MFPGA(DeviceBase):
+    # A sample of some of the available keys.
     control_keys = [
         ('adcLatency', 'u4', ()),
         ('adcTrigger', 'u4', ()),
@@ -75,6 +77,7 @@ class AGIPD1MFPGA(DeviceBase):
 
 
 class AGIPD500KFPGA(DeviceBase):
+    # A sample of some of the available keys.
     control_keys = [
         ('highVoltage.actual', 'u2', ()),
         ('highVoltage.target', 'u2', ()),
@@ -85,8 +88,6 @@ class AGIPD500KFPGA(DeviceBase):
         ctrl_grp = f'CONTROL/{self.device_id}'
         run_grp = f'RUN/{self.device_id}'
         for grp in [ctrl_grp, run_grp]:
-            print("grp", grp)
-
             length = self.ntrains if grp == ctrl_grp else 1
             f[f"{grp}/highVoltage/actual/value"] = np.array([200]*length)
 
@@ -98,7 +99,7 @@ class AGIPD1MPSC(DeviceBase):
     ):
         super().__init__(device_id)
         self.bias_voltage = bias_voltage
-
+        # A sample of some of the available keys.
         self.control_keys = [
             ('applyInProgress', '|u1', ()),
             ('autoRearm', '|u1', ()),
@@ -107,17 +108,15 @@ class AGIPD1MPSC(DeviceBase):
             ('channels.U0.voltage', 'f4', ()),
             ('channels.U0.superVisionMaxTerminalVoltage', 'f4', ()),
             ('channels.U0.voltageRampRate', 'f4', ()),
-            ('channels.U0.measurmentCurrent', 'f4', ()),
+            ('channels.U0.measurementCurrent', 'f4', ()),
             ('channels.U0.current', 'f4', ()),
             ('channels.U0.supervisionMaxCurrent', 'f4', ()),
             ('channels.U0.currentRiseRate', 'f4', ()),
             ('channels.U0.currentFallRate', 'f4', ()),
-            ('channels.U0.measurmentTemperature', 'i4', ()),
+            ('channels.U0.measurementTemperature', 'i4', ()),
             ('channels.U0.supervisionBehavior', 'i4', ()),
             ('channels.U0.tripTimeMaxCurrent', 'i4', ()),
             ('channels.U0.configMaxSenseVoltage', 'f4', ()),
-            ('channels.U0.measurmentSenseVoltage', 'f4', ()),
-
         ]
 
     def write_control(self, f):
@@ -127,5 +126,5 @@ class AGIPD1MPSC(DeviceBase):
         if self.bias_voltage:
             for grp in [ctrl_grp, run_grp]:
                 length = self.ntrains if grp == ctrl_grp else 1
-                f[f"{grp}/channels/U0/measurmentSenseVoltage/value"] = np.array(  # noqa
+                f[f"{grp}/channels/U0/measurementSenseVoltage/value"] = np.array(  # noqa
                     [300]*length)
