@@ -1421,9 +1421,11 @@ class JUNGFRAU(MultimodDetectorBase):
     # We appear to have a few different formats for source names:
     # SPB_IRDA_JNGFR/DET/MODULE_1:daqOutput  (e.g. in p 2566, r 61)
     # SPB_IRDA_JF4M/DET/JNGFR03:daqOutput    (e.g. in p 2732, r 12)
+    # FXE_XAD_JF500K/DET/JNGFR03:daqOutput    (e.g. in p 2478, r 52)
+    # HED_IA1_JF500K1/DET/JNGFR01:daqOutput    (e.g. in p 2656, r 230)
     # FXE_XAD_JF1M/DET/RECEIVER-1
     _source_re = re.compile(
-        r'(?P<detname>.+_(JNGFR|JF[14]M))/DET/'
+        r'(?P<detname>.+_(JNGFR|JF[14]M|JF500K\d?))/DET/'
         r'(MODULE_|RECEIVER-|JNGFR)(?P<modno>\d+)'
     )
     _main_data_key = 'data.adc'
