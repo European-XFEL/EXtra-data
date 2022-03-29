@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 
 import h5py
 
-from .exceptions import MultiRunError, PropertyNameError, SourceNameError
+from .exceptions import MultiRunError, PropertyNameError
 from .file_access import FileAccess
 from .keydata import KeyData
 from .read_machinery import glob_wildcards_re, same_run, select_train_ids
