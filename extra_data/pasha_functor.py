@@ -1,10 +1,9 @@
-
 from os import getpid
 
 import numpy as np
-from pasha.functor import gen_split_slices
 
 from . import DataCollection, SourceData, KeyData
+from .read_machinery import split_trains
 
 
 class ExtraDataFunctor:
@@ -31,7 +30,7 @@ class ExtraDataFunctor:
             return cls(value)
 
     def split(self, num_workers):
-        return gen_split_slices(self.n_trains, n_parts=num_workers)
+        return split_trains(self.n_trains, parts=num_workers)
 
     def iterate(self, share):
         subobj = self.obj.select_trains(np.s_[share])
