@@ -1,6 +1,9 @@
 import gc
 import pickle
 
+import cloudpickle
+import pytest
+
 from ..file_access import FileAccess
 
 
@@ -24,9 +27,10 @@ def test_registry(mock_sa3_control_data):
     assert len(fa._keys_cache) == 1
 
 
-def test_pickle(mock_sa3_control_data):
+@pytest.mark.parametrize('pickle_mod', (pickle, cloudpickle))
+def test_pickle(pickle_mod, mock_sa3_control_data):
     fa = FileAccess(mock_sa3_control_data)
-    b = pickle.dumps(fa)
+    b = pickle_mod.dumps(fa)
 
     # Load some data to populate caches
     fa.get_index('SA3_XTD10_IMGFEL/CAM/BEAMVIEW2:daqOutput', 'data')
@@ -36,7 +40,7 @@ def test_pickle(mock_sa3_control_data):
     assert len(fa._keys_cache) == 1
 
     # Unpickling should get a reference to the existing object, not a duplicate.
-    fa2 = pickle.loads(b)
+    fa2 = pickle_mod.loads(b)
 
     assert fa2 is fa
 
@@ -48,7 +52,7 @@ def test_pickle(mock_sa3_control_data):
     del fa, fa2
     gc.collect()
 
-    fa3 = pickle.loads(b)
+    fa3 = pickle_mod.loads(b)
     assert len(fa3._index_cache) == 0
     assert len(fa3._keys_cache) == 0
     assert 'SA3_XTD10_IMGFEL/CAM/BEAMVIEW2:daqOutput' in fa3.instrument_sources
