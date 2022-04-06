@@ -64,6 +64,7 @@ setup(name="EXtra-data",
               'psutil',
           ],
           'test': [
+              'cloudpickle',
               'coverage',
               'dask[array]',
               'nbval',
