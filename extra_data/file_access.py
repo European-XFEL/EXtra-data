@@ -282,12 +282,16 @@ class FileAccess(metaclass=MetaFileAccess):
     def __repr__(self):
         return "{}({})".format(type(self).__name__, repr(self.filename))
 
-    @classmethod
-    def _from_pickle(cls, filename, state):
+    # This is a staticmethod rather than a classmethod, because cloudpickle
+    # (used in Dask, clusterfutures, etc.) tries to save bound classmethods
+    # 'by value', which includes the registry, and that goes wrong.
+    # The staticmethod is pickled 'by reference', avoiding that issue.
+    @staticmethod
+    def _from_pickle(filename, state):
         """Called when an instance is loaded from a pickle"""
         inst = file_access_registry.get(filename, None)
         if inst is None:
-            inst = file_access_registry[filename] = cls.__new__(cls)
+            inst = file_access_registry[filename] = FileAccess.__new__(FileAccess)
             inst.__dict__.update(state)
 
         return inst
