@@ -216,18 +216,22 @@ class KeyData:
 
     # Getting data as different kinds of array: -------------------------------
 
-    def ndarray(self, roi=()):
+    def ndarray(self, roi=(), out=None):
         """Load this data as a numpy array
 
         *roi* may be a ``numpy.s_[]`` expression to load e.g. only part of each
-        image from a camera.
+        image from a camera. If *out* is not given, a suitable array will be
+        allocated.
         """
         if not isinstance(roi, tuple):
             roi = (roi,)
 
-        out = np.empty(
-            self.shape[:1] + roi_shape(self.entry_shape, roi), dtype=self.dtype
-        )
+        req_shape = self.shape[:1] + roi_shape(self.entry_shape, roi)
+
+        if out is None:
+            out = np.empty(req_shape, dtype=self.dtype)
+        elif out is not None and out.shape != req_shape:
+            raise ValueError(f'requires output array of shape {req_shape}')
 
         # Read the data from each chunk into the result array
         dest_cursor = 0

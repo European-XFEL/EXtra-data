@@ -236,6 +236,7 @@ def test_drop_empty_trains(mock_sa3_control_data):
     assert frame_counts.shape == (250,)
     assert frame_counts.min() == 1
 
+
 def test_single_value(mock_sa3_control_data, monkeypatch):
     f = H5File(mock_sa3_control_data)
 
@@ -282,6 +283,18 @@ def test_single_value(mock_sa3_control_data, monkeypatch):
         intensity.as_single_value()
 
     np.testing.assert_equal(intensity.as_single_value(rtol=1), np.median(data))
+
+
+def test_ndarray_out(mock_spb_raw_run):
+    f = RunDirectory(mock_spb_raw_run)
+    cam = f['SPB_IRU_CAM/CAM/SIDEMIC:daqOutput', 'data.image.dims']
+
+    buf_new = cam.ndarray()  # New copy of data.
+    buf_in = np.zeros(cam.shape, dtype=cam.dtype)
+    buf_out = cam.ndarray(out=buf_in)  # In-place copy of data.
+
+    np.testing.assert_allclose(buf_new, buf_out)
+    assert buf_in is buf_out
 
 
 @pytest.fixture()
