@@ -267,10 +267,16 @@ class KeyData:
     def xarray(self, extra_dims=None, roi=(), name=None):
         """Load this data as a labelled xarray array or dataset.
 
-        The first dimension is labelled with train IDs. Other dimensions may be
-        named by passing a list of names to *extra_dims*. For scalar datatypes,
-        an xarray.DataArray is returned. If the data is stored in a structured
-        datatype, an xarray.Dataset is returned with a variable for each field.
+        The first dimension is labelled with train IDs. Other dimensions
+        may be named by passing a list of names to *extra_dims*.
+
+        For scalar datatypes, an xarray.DataArray is returned using either
+        the supplied *name* or the concatenated source and key name if omitted.
+
+        If the data is stored in a structured datatype, an xarray.Dataset
+        is returned with a variable for each field. The data of these
+        variables will be non-contiguous in memory, use
+        `Dataset.copy(deep=true)` to obtain a contiguous copy.
 
         Parameters
         ----------
