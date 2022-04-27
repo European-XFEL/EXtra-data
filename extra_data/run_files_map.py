@@ -103,7 +103,7 @@ class RunFilesMap:
                 self.cache_file = path
                 log.debug("Loaded cached files map from %s", path)
                 break
-            except (FileNotFoundError, json.JSONDecodeError):
+            except (FileNotFoundError, PermissionError, json.JSONDecodeError,):
                 pass
 
         for info in loaded_data:
