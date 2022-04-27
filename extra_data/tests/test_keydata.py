@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import xarray as xr
 import pytest
 
 import h5py
@@ -282,6 +283,22 @@ def test_single_value(mock_sa3_control_data, monkeypatch):
         intensity.as_single_value()
 
     np.testing.assert_equal(intensity.as_single_value(rtol=1), np.median(data))
+
+
+def test_xarray_structured_data(mock_remi_run):
+    run = RunDirectory(mock_remi_run)
+    dset = run['SQS_REMI_DLD6/DET/TOP:output', 'rec.hits'].xarray()
+
+    assert isinstance(dset, xr.Dataset)
+    assert list(dset.data_vars.keys()) == ['x', 'y', 't', 'm']
+
+    arrs = list(dset.data_vars.values())
+
+    assert all([arr.shape == (100, 50) for arr in arrs])
+    assert all([arr.dtype == np.float64 for arr in arrs[:3]])
+    assert arrs[3].dtype == np.int32
+
+    np.testing.assert_equal(dset.coords['trainId'], np.arange(10000, 10100))
 
 
 @pytest.fixture()

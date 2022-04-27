@@ -19,6 +19,7 @@ from .mockdata.jungfrau import (
 )
 from .mockdata.motor import Motor
 from .mockdata.mpod import MPOD
+from .mockdata.proc import ReconstructedDLD6
 from .mockdata.tsens import TemperatureSensor
 from .mockdata.uvlamp import UVLamp
 from .mockdata.xgm import XGM
@@ -370,6 +371,11 @@ def make_jungfrau_run(dir_path):
         JUNGFRAUControl('SPB_IRDA_JF4M/DET/CONTROL'),
         JUNGFRAUMonitor('SPB_IRDA_JF4M/MDL/MONITOR'),
         JUNGFRAUPower('SPB_IRDA_JF4M/MDL/POWER'),
+    ], ntrains=100, chunksize=1, format_version='1.0')
+
+def make_remi_run(dir_path):
+    write_file(osp.join(dir_path, f'CORR-R0210-REMI01-S00000.h5'), [
+        ReconstructedDLD6('SQS_REMI_DLD6/DET/TOP'),
     ], ntrains=100, chunksize=1, format_version='1.0')
 
 def make_scs_run(dir_path):

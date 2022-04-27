@@ -123,6 +123,13 @@ def mock_scs_run():
 
 
 @pytest.fixture(scope='session')
+def mock_remi_run():
+    with TemporaryDirectory() as td:
+        make_examples.make_remi_run(td)
+        yield td
+
+
+@pytest.fixture(scope='session')
 def empty_h5_file():
     with TemporaryDirectory() as td:
         path = osp.join(td, 'empty.h5')
