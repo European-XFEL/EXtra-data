@@ -2,7 +2,7 @@ from os import getpid
 
 import numpy as np
 
-from . import DataCollection, SourceData, KeyData
+from . import DataCollection, KeyData
 from .read_machinery import split_trains
 
 
@@ -12,8 +12,7 @@ class ExtraDataFunctor:
     This functor wraps an EXtra-data DataCollection, SourceData or
     KeyData and performs the map operation over its trains. The kernel
     is passed the current train's index in the collection, the train ID
-    and the data mapping (for DataCollection and SourceData) or data
-    entry (for KeyData).
+    and the data mapping (for DataCollection) or data entry (for KeyData).
     """
 
     def __init__(self, obj):
@@ -26,7 +25,7 @@ class ExtraDataFunctor:
 
     @classmethod
     def wrap(cls, value):
-        if isinstance(value, (DataCollection, SourceData, KeyData)):
+        if isinstance(value, (DataCollection, KeyData)):
             return cls(value)
 
     def split(self, num_workers):
@@ -45,21 +44,7 @@ class ExtraDataFunctor:
                 f.close()
 
         index_it = range(*share.indices(self.n_trains))
-
-        if isinstance(subobj, SourceData):
-            # SourceData has no trains() iterator yet, so simulate it
-            # ourselves by reconstructing a DataCollection object and
-            # use its trains() iterator.
-            dc = DataCollection(
-                subobj.files, {subobj.source: subobj}, subobj.train_ids,
-                inc_suspect_trains=subobj.inc_suspect_trains,
-                is_single_run=True)
-            data_it = ((train_id, data[subobj.source])
-                       for train_id, data in dc.trains())
-        else:
-            # Use the regular trains() iterator for DataCollection and
-            # KeyData
-            data_it = subobj.trains()
+        data_it = subobj.trains()
 
         for index, (train_id, data) in zip(index_it, data_it):
             yield index, train_id, data
