@@ -1521,33 +1521,20 @@ def open_run(
         :class:`multiprocessing.Process`).
     """
     if data == 'all':
+        data = ('proc', 'raw')
+
+    if isinstance(data, (list, tuple)):
         common_args = dict(
             proposal=proposal, run=run, include=include,
-            file_filter=file_filter, inc_suspect_trains=inc_suspect_trains)
+            file_filter=file_filter, inc_suspect_trains=inc_suspect_trains,
+            parallelize=parallelize, _use_voview=_use_voview,
+        )
 
-        # Open the raw data
-        dc = open_run(**common_args, data='raw')
-
-        try:
-            # Attempt to open proc data, but this may not exist
-            proc_dc = open_run(**common_args, data='proc')
-        except FileNotFoundError:
-            warn("Proc data is not available for this run")
-        else:
-            # Deselect to those raw sources not present in proc.
-            raw_extra = dc.deselect(
-                [(src, '*') for src in dc.all_sources & proc_dc.all_sources])
-
-            if raw_extra.files:
-                # If raw is not a subset of proc, merge the "extra" raw
-                # sources into proc sources and re-enable is_single_run.
-                dc = proc_dc.union(raw_extra)
-                dc.is_single_run = True
-            else:
-                # If raw is a subset of proc, just use proc.
-                dc = proc_dc
-
-        return dc
+        # TODO: Handle e.g. proc is missing
+        dcs = [open_run(**common_args, data=section) for section in data]
+        view = _overlay(dcs, data)
+        view.is_single_run = True
+        return view
 
     if isinstance(proposal, str):
         if ('/' not in proposal) and not proposal.startswith('p'):
@@ -1570,3 +1557,14 @@ def open_run(
         inc_suspect_trains=inc_suspect_trains, parallelize=parallelize,
         _use_voview=_use_voview,
     )
+
+
+def _overlay(dcs, names):
+    assert len(dcs) == len(names)
+    layers = [dc._sources_data for dc in dcs]
+
+    files = set()
+    for layer in layers:
+        for srcdata in layer.values():
+            files.update(srcdata.files)
+    return DataCollection(files=files, sources_data=layers, layer_names=names)
