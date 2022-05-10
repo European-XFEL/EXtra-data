@@ -20,7 +20,7 @@ import signal
 import sys
 import tempfile
 import time
-from collections import defaultdict
+from collections import ChainMap, defaultdict
 from collections.abc import Iterable
 from itertools import groupby
 from multiprocessing import Pool
@@ -73,12 +73,13 @@ class DataCollection:
     """
     def __init__(
             self, files, sources_data=None, train_ids=None, ctx_closes=False, *,
-            inc_suspect_trains=True, is_single_run=False,
+            inc_suspect_trains=True, is_single_run=False, layer_names=('',),
     ):
         self.files = list(files)
         self.ctx_closes = ctx_closes
         self.inc_suspect_trains = inc_suspect_trains
         self.is_single_run = is_single_run
+        self._layer_names = tuple(layer_names)
 
         if train_ids is None:
             if inc_suspect_trains:
@@ -97,15 +98,20 @@ class DataCollection:
                     files_by_sources[source, 'INSTRUMENT'].append(f)
             sources_data = {
                 src: SourceData(src,
-                    sel_keys=None,
-                    train_ids=train_ids,
-                    files=files,
-                    section=section,
-                    is_single_run=self.is_single_run,
-                    inc_suspect_trains=self.inc_suspect_trains,
-                )
+                                sel_keys=None,
+                                train_ids=train_ids,
+                                files=files,
+                                section=section,
+                                is_single_run=self.is_single_run,
+                                inc_suspect_trains=self.inc_suspect_trains,
+                                )
                 for ((src, section), files) in files_by_sources.items()
             }
+        elif isinstance(sources_data, list):
+            if len(sources_data) == 1:
+                sources_data = sources_data[0]
+            else:
+                sources_data = ChainMap(*sources_data)
         self._sources_data = sources_data
 
         # Throw an error if we have conflicting data for the same source
@@ -342,7 +348,7 @@ class DataCollection:
                                   flat_keys=flat_keys, keep_dims=keep_dims))
 
     def train_from_id(
-        self, train_id, devices=None, *, flat_keys=False, keep_dims=False):
+            self, train_id, devices=None, *, flat_keys=False, keep_dims=False):
         """Get train data for specified train ID.
 
         Parameters
@@ -421,7 +427,7 @@ class DataCollection:
         return train_id, res
 
     def train_from_index(
-        self, train_index, devices=None, *, flat_keys=False, keep_dims=False):
+            self, train_index, devices=None, *, flat_keys=False, keep_dims=False):
         """Get train data of the nth train in this data.
 
         Parameters
@@ -559,6 +565,12 @@ class DataCollection:
         """
         return self._get_source_data(source).run_values()
 
+    @property
+    def _layers(self):
+        if isinstance(self._sources_data, ChainMap):
+            return self._sources_data.maps
+        return [self._sources_data]
+
     def union(self, *others):
         """Join the data in this collection with one or more others.
 
@@ -591,7 +603,7 @@ class DataCollection:
             # {source: {key1, key2}}
             # {source: set()} or {source: None} -> all keys for this source
 
-            res = {}
+            new_layers = [{} for _ in self._layer_names]
             for source, in_keys in selection.items():
                 if source not in self.all_sources:
                     raise SourceNameError(source)
@@ -607,31 +619,43 @@ class DataCollection:
                         f"{in_keys!r})"
                     )
 
-                res[source] = self._sources_data[source].select_keys(in_keys)
+                for old_layer, new_layer in zip(self._layers, new_layers):
+                    if source in old_layer:
+                        new_layer[source] = old_layer[source].select_keys(in_keys)
 
-            return res
+            return new_layers
 
         elif isinstance(selection, Iterable):
             # selection = [('src_glob', 'key_glob'), ...]
             # OR          ['src_glob', 'src_glob', ...]
-            sources_data_multi = defaultdict(list)
+
+            # Multiple patterns can match the same source, and if so we want
+            # to union matched keys for that source. Use a defaultdict of lists
+            # to hold potentially overlapping SourceData objects:
+            new_layers_multi = [defaultdict(list) for _ in self._layer_names]
             for globs in selection:
                 if isinstance(globs, str):
                     src_glob = globs
                     key_glob = '*'
                 else:
                     src_glob, key_glob = globs
-                for source, keys in self._select_glob(src_glob, key_glob).items():
-                    sources_data_multi[source].append(
-                        self._sources_data[source].select_keys(keys)
-                    )
-            return {src: src_datas[0].union(*src_datas[1:])
-                    for src, src_datas in sources_data_multi.items()}
+                globbed_layers = self._select_glob(src_glob, key_glob)
+                for glob_layer, layer_multi in zip(globbed_layers, new_layers_multi):
+                    for source, srcdata in glob_layer.items():
+                        layer_multi[source].append(srcdata)
+
+            # Within each layer, union the selected keys for each source:
+            return [
+                {
+                    src: src_datas[0].union(*src_datas[1:])
+                    for src, src_datas in layer_multi.items()
+                }
+                for layer_multi in new_layers_multi
+            ]
         elif isinstance(selection, DataCollection):
             return self._expand_selection(selection.selection)
         elif isinstance(selection, KeyData):
-            src = selection.source
-            return {src: self._sources_data[src].select_keys({selection.key})}
+            return self._expand_selection({selection.source: {selection.key}})
         else:
             raise TypeError("Unknown selection type: {}".format(type(selection)))
 
@@ -646,36 +670,35 @@ class DataCollection:
             ctrl_key_glob = key_glob + '.value'
             ctrl_key_re = re.compile(fnmatch.translate(ctrl_key_glob))
 
-        matched = {}
-        for source in self.all_sources:
-            if not source_re.match(source):
-                continue
+        new_layers = []
+        for old_layer in self._layers:
+            new_layer = {}
+            new_layers.append(new_layer)
+            for source, srcdata in old_layer.items():
+                if not source_re.match(source):
+                    continue
 
-            if key_glob == '*':
-                # When the selection refers to all keys, make sure this
-                # is restricted to the current selection of keys for
-                # this source.
-
-                if self.selection[source] is None:
-                    matched[source] = None
+                if key_glob == '*':
+                    # When the selection refers to all keys, make sure this
+                    # is restricted to the current selection of keys for
+                    # this source.
+                    new_layer[source] = srcdata
+                elif glob_wildcards_re.search(key_glob) is None:
+                    # Selecting a single key (no wildcards in pattern)
+                    # This check should be faster than scanning all keys:
+                    k = ctrl_key_glob if source in self.control_sources else key_glob
+                    if k in srcdata:
+                        new_layer[source] = srcdata.select_keys({k})
                 else:
-                    matched[source] = self.selection[source]
-            elif glob_wildcards_re.search(key_glob) is None:
-                # Selecting a single key (no wildcards in pattern)
-                # This check should be faster than scanning all keys:
-                k = ctrl_key_glob if source in self.control_sources else key_glob
-                if k in self._sources_data[source]:
-                    matched[source] = {k}
-            else:
-                r = ctrl_key_re if source in self.control_sources else key_re
-                keys = set(filter(r.match, self.keys_for_source(source)))
-                if keys:
-                    matched[source] = keys
+                    r = ctrl_key_re if source in self.control_sources else key_re
+                    keys = set(filter(r.match, srcdata.keys()))
+                    if keys:
+                        new_layer[source] = srcdata.select_keys(keys)
 
-        if not matched:
+        if not any(new_layers):
             raise ValueError("No matches for pattern {}"
                              .format((source_glob, key_glob)))
-        return matched
+        return new_layers
 
     def select(self, seln_or_source_glob, key_glob='*', require_all=False):
         """Select a subset of sources and keys from this data.
@@ -735,7 +758,7 @@ class DataCollection:
         """
         if isinstance(seln_or_source_glob, str):
             seln_or_source_glob = [(seln_or_source_glob, key_glob)]
-        sources_data = self._expand_selection(seln_or_source_glob)
+        new_layers = self._expand_selection(seln_or_source_glob)
 
         if require_all:
             # Select only those trains for which all selected sources
@@ -743,41 +766,53 @@ class DataCollection:
             # respective INDEX section.
 
             train_ids = self.train_ids
+            sources_seen = set()
 
-            for source, srcdata in sources_data.items():
+            for new_layer in new_layers:
+                for source, srcdata in new_layer.items():
+                    # Only use train IDs from first instance of each source
+                    if source in sources_seen:
+                        continue
+                    sources_seen.add(source)
 
-                for group in srcdata._index_group_names():
-                    # Empty list would be converted to np.float64 array.
-                    source_tids = np.empty(0, dtype=np.uint64)
+                    for group in srcdata._index_group_names():
+                        # Empty list would be converted to np.float64 array.
+                        source_tids = np.empty(0, dtype=np.uint64)
 
-                    for f in self._sources_data[source].files:
-                        valid = True if self.inc_suspect_trains else f.validity_flag
-                        # Add the trains with data in each file.
-                        _, counts = f.get_index(source, group)
-                        source_tids = np.union1d(
-                            f.train_ids[valid & (counts > 0)], source_tids
-                        )
+                        for f in self._sources_data[source].files:
+                            valid = True if self.inc_suspect_trains else f.validity_flag
+                            # Add the trains with data in each file.
+                            _, counts = f.get_index(source, group)
+                            source_tids = np.union1d(
+                                f.train_ids[valid & (counts > 0)], source_tids
+                            )
 
-                    # Remove any trains previously selected, for which this
-                    # selected source and key group has no data.
-                    train_ids = np.intersect1d(train_ids, source_tids)
+                        # Remove any trains previously selected, for which this
+                        # selected source and key group has no data.
+                        train_ids = np.intersect1d(train_ids, source_tids)
 
-            sources_data = {
-                src: srcdata._only_tids(train_ids)
-                for src, srcdata in sources_data.items()
-            }
+            new_layers = [
+                {
+                    src: srcdata._only_tids(train_ids)
+                    for src, srcdata in new_layer.items()
+                }
+                for new_layer in new_layers
+            ]
 
             train_ids = list(train_ids)  # Convert back to a list.
 
         else:
             train_ids = self.train_ids
 
-        files = set().union(*[sd.files for sd in sources_data.values()])
+        files = set()
+        for layer in new_layers:
+            for srcdata in layer.values():
+                files.update(srcdata.files)
 
         return DataCollection(
-            files, sources_data, train_ids=train_ids,
+            files, new_layers, train_ids=train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
-            is_single_run=self.is_single_run
+            is_single_run=self.is_single_run, layer_names=self._layer_names,
         )
 
     def deselect(self, seln_or_source_glob, key_glob='*'):
@@ -794,27 +829,32 @@ class DataCollection:
         deselection = self._expand_selection(seln_or_source_glob)
 
         # Subtract deselection from selection on self
-        sources_data = {}
-        for source, srcdata in self._sources_data.items():
-            if source not in deselection:
-                sources_data[source] = srcdata
-                continue
+        new_layers = []
+        for old_layer, desel_layer in zip(self._layers, deselection):
+            new_layer = {}
+            new_layers.append(new_layer)
+            for source, srcdata in old_layer.items():
+                if source not in desel_layer:
+                    new_layer[source] = srcdata
+                    continue
 
-            desel_keys = deselection[source].sel_keys
-            if desel_keys is None:
-                continue  # Drop the entire source
+                desel_keys = desel_layer[source].sel_keys
+                if desel_keys is None:
+                    continue  # Drop the entire source
 
-            remaining_keys = srcdata.keys() - desel_keys
+                remaining_keys = srcdata.keys() - desel_keys
 
-            if remaining_keys:
-                sources_data[source] = srcdata.select_keys(remaining_keys)
+                if remaining_keys:
+                    new_layer[source] = srcdata.select_keys(remaining_keys)
 
-        files = set().union(*[sd.files for sd in sources_data.values()])
-
+        files = set()
+        for layer in new_layers:
+            for srcdata in layer.values():
+                files.update(srcdata.files)
         return DataCollection(
-            files, sources_data=sources_data, train_ids=self.train_ids,
+            files, sources_data=new_layers, train_ids=self.train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
-            is_single_run=self.is_single_run,
+            is_single_run=self.is_single_run, layer_names=self._layer_names,
         )
 
     def select_trains(self, train_range):
@@ -839,17 +879,23 @@ class DataCollection:
         """
         new_train_ids = select_train_ids(self.train_ids, train_range)
 
-        sources_data = {
-            src: srcdata._only_tids(new_train_ids)
-            for src, srcdata in self._sources_data.items()
-        }
+        layers = [
+            {
+                src: srcdata._only_tids(new_train_ids)
+                for src, srcdata in layer.items()
+            }
+            for layer in self._layers
+        ]
 
-        files = set().union(*[sd.files for sd in sources_data.values()])
+        files = set()
+        for layer in layers:
+            for srcdata in layer.values():
+                files.update(srcdata.files)
 
         return DataCollection(
-            files, sources_data=sources_data, train_ids=new_train_ids,
+            files, sources_data=layers, train_ids=new_train_ids,
             inc_suspect_trains=self.inc_suspect_trains,
-            is_single_run=self.is_single_run,
+            is_single_run=self.is_single_run, layer_names=self._layer_names,
         )
 
     def split_trains(self, parts=None, trains_per_part=None):
