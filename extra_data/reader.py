@@ -98,13 +98,13 @@ class DataCollection:
                     files_by_sources[source, 'INSTRUMENT'].append(f)
             sources_data = {
                 src: SourceData(src,
-                                sel_keys=None,
-                                train_ids=train_ids,
-                                files=files,
-                                section=section,
-                                is_single_run=self.is_single_run,
-                                inc_suspect_trains=self.inc_suspect_trains,
-                                )
+                    sel_keys=None,
+                    train_ids=train_ids,
+                    files=files,
+                    section=section,
+                    is_single_run=self.is_single_run,
+                    inc_suspect_trains=self.inc_suspect_trains,
+                )
                 for ((src, section), files) in files_by_sources.items()
             }
         elif isinstance(sources_data, list):
