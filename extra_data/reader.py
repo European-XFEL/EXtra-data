@@ -571,6 +571,16 @@ class DataCollection:
             return self._sources_data.maps
         return [self._sources_data]
 
+    def layer(self, name):
+        ix = self._layer_names.index(name)
+        sources_dict = self._layers[ix]
+        files = set().union(*[sd.files for sd in sources_dict.values()])
+        return DataCollection(
+            files, sources_data=sources_dict, train_ids=self.train_ids,
+            inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=self.is_single_run, layer_names=(name,),
+        )
+
     def union(self, *others):
         """Join the data in this collection with one or more others.
 
