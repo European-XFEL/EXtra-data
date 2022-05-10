@@ -580,21 +580,40 @@ class DataCollection:
 
         Returns a new :class:`DataCollection` object.
         """
-        sources_data_multi = defaultdict(list)
-        for dc in (self,) + others:
-            for source, srcdata in dc._sources_data.items():
-                sources_data_multi[source].append(srcdata)
+        def union_layer(sources_dicts):
+            sources_data_multi = defaultdict(list)
+            for source_dict in sources_dicts:
+                for source, srcdata in source_dict.items():
+                    sources_data_multi[source].append(srcdata)
 
-        sources_data = {src: src_datas[0].union(*src_datas[1:])
-                        for src, src_datas in sources_data_multi.items()}
+            return {src: src_datas[0].union(*src_datas[1:])
+                    for src, src_datas in sources_data_multi.items()}
 
-        train_ids = sorted(set().union(*[sd.train_ids for sd in sources_data.values()]))
-        files = set().union(*[sd.files for sd in sources_data.values()])
+        dcs = (self,) + others
+        if len(set(dc._layer_names for dc in dcs)) == 1:
+            # All collections have identical layers (e.g. ('raw', 'proc'))
+            # Union each layer separately and preserve these in output.
+            new_layers = [
+                union_layer([dc._layers[i] for dc in dcs])
+                for i in range(len(self._layer_names))
+            ]
+            layer_names = self._layer_names
+        else:
+            # Layers don't match: flatten to a single layer
+            new_layers = [union_layer([dc._sources_data for dc in dcs])]
+            layer_names = ('',)
+
+        files = set()
+        train_ids = set()
+        for layer in new_layers:
+            for srcdata in layer.values():
+                files.update(srcdata.files)
+                train_ids.update(srcdata.train_ids)
 
         return DataCollection(
-            files, sources_data=sources_data, train_ids=train_ids,
+            files, sources_data=new_layers, train_ids=sorted(train_ids),
             inc_suspect_trains=self.inc_suspect_trains,
-            is_single_run=same_run(self, *others),
+            is_single_run=same_run(self, *others), layer_names=layer_names,
         )
 
     def _expand_selection(self, selection):
