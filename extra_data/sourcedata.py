@@ -230,7 +230,6 @@ class SourceData:
 
         Returns the RUN parameter value corresponding to the *key* argument.
         """
-        print('sourcedtata', self.is_single_run)
         if not self.is_single_run:
             raise MultiRunError()
 
