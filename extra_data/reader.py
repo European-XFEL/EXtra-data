@@ -1382,7 +1382,7 @@ def RunDirectory(
     files = [osp.join(path, f) for f in fnmatch.filter(files, include)]
     sel_files = file_filter(files)
     if not sel_files:
-        raise Exception(
+        raise FileNotFoundError(
             f"No HDF5 files found in {path} with glob pattern {include}")
 
     if _use_voview and (sel_files == files):

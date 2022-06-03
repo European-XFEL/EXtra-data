@@ -841,6 +841,11 @@ def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
         with pytest.raises(Exception):
             open_run(proposal=2012, run=999)
 
+        # run directory exists but contains no data
+        os.makedirs(os.path.join(prop_dir, 'proc', 'r0238'))
+        with catch_warnings(record=True) as w:
+            open_run(proposal=2012, run=238, data='all')
+            assert len(w) == 1
 
 def test_open_file(mock_sa3_control_data):
     f = H5File(mock_sa3_control_data)
