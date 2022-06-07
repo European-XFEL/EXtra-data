@@ -3,7 +3,9 @@
 
 Python 3 tools for reading European XFEL's HDF5 files.
 
-[Documentation](https://extra-data.readthedocs.io/en/latest/)
+[EXtra-data documentation](https://extra-data.readthedocs.io/en/latest/)
+
+See also: [European XFEL data analysis documentation](https://rtd.xfel.eu/docs/data-analysis-user-documentation/en/latest/index.html)
 
 Installing
 ==========
