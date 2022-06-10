@@ -1,6 +1,28 @@
 Release Notes
 =============
 
+1.12
+----
+
+2022-06-10
+
+- :class:`.SourceData` objects now expose RUN information for control sources
+  via new ``.run_value()`` and ``.run_values()`` methods, and metadata about the
+  run from a new ``.run_metadata()`` method (:ghpull:`293`).
+- :meth:`.KeyData.ndarray` can now read into a pre-allocated array passed
+  as the ``out`` parameter (:ghpull:`307`)
+- :meth:`.KeyData.xarray` can return an xarray Dataset object to represent data
+  with named fields (:ghpull:`301`).
+- The :class:`~.JUNGFRAU` data access class now recognises 'JF500K' in source
+  names (:ghpull:`300`).
+- Fix sending around FileAccess objects with cloudpickle, which is used by Dask
+  and clusterfutures (:ghpull:`303`).
+- Fix permissions errors from opening the run files map JSON files
+  (:ghpull:`304`).
+- Fix errors opening runs with ``data='all'`` with an empty proc folder
+  (:ghpull:`317`).
+- The ``QuickView`` class deprecated in version 1.9 was removed.
+
 1.11
 ----
 
