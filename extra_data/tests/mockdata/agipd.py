@@ -116,7 +116,6 @@ class AGIPD1MPSC(DeviceBase):
             ('channels/U0/superVisionMaxTerminalVoltage', 'f4', ()),
             ('channels/U0/voltageRampRate', 'f4', ()),
             ('channels/U0/measurementCurrent', 'f4', ()),
-            ('channels/U0/measurementSenseVoltage', 'f4', ()),
             ('channels/U0/current', 'f4', ()),
             ('channels/U0/supervisionMaxCurrent', 'f4', ()),
             ('channels/U0/currentRiseRate', 'f4', ()),
@@ -126,6 +125,9 @@ class AGIPD1MPSC(DeviceBase):
             ('channels/U0/tripTimeMaxCurrent', 'i4', ()),
             ('channels/U0/configMaxSenseVoltage', 'f4', ()),
         ]
+        if bias_voltage:
+            self.control_keys.append(
+                ('channels/U0/measurementSenseVoltage', 'f8', ()))
 
     def write_control(self, f):
         super().write_control(f)
@@ -133,4 +135,5 @@ class AGIPD1MPSC(DeviceBase):
         run_grp = f'RUN/{self.device_id}/'
         if self.bias_voltage:
             for grp in [ctrl_grp, run_grp]:
-                f[grp + 'channels/U0/measurementSenseVoltage/value'][()] = 300
+                g = f[grp]
+                g['channels/U0/measurementSenseVoltage/value'][()] = 300.0
