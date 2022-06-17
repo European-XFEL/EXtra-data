@@ -8,12 +8,14 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 import xarray
+from extra_geom import (AGIPD_1MGeometry, AGIPD_500K2GGeometry,
+                        DSSC_1MGeometry, JUNGFRAU_Geometry, LPD_1MGeometry)
 
-from .exceptions import SourceNameError
-from .reader import DataCollection, by_id, by_index
+from .exceptions import SourceNameError, PropertyNameError
 from .read_machinery import DataChunk, roi_shape, split_trains
+from .reader import DataCollection, by_id, by_index
+from .write_cxi import JUNGFRAUCXIWriter, XtdfCXIWriter
 from .writer import FileWriter
-from .write_cxi import XtdfCXIWriter, JUNGFRAUCXIWriter
 
 __all__ = [
     'AGIPD1M',
@@ -442,6 +444,26 @@ class MultimodDetectorBase:
 
         return xarray.DataArray(out, dims=dims, coords=coords)
 
+    def get_data(self, geometry=None, *, fill_value=None, roi=(), astype=None,
+                 use_mask=False, asic_seams=False):
+        """
+        """
+        geometry = geometry or self.default_geometry()
+        data = self.get_array(self._main_data_key, fill_value=fill_value, roi=roi, astype=astype)
+
+        if use_mask:
+            try:
+                mask = self.get_array('image.mask', fill_value=False, roi=roi, astype=np.bool_)
+            except PropertyNameError:
+                pass  # no mask available in this data
+            else:
+                data = data * ~mask
+
+        if asic_seams and hasattr(geometry, 'asic_seams'):
+            data = data * ~geometry.asic_seams()
+
+        assembled, centre = geometry.position_modules(data)
+        return assembled, centre
 
     def get_dask_array(self, key, fill_value=None, astype=None):
         """Get a labelled Dask array of detector data
