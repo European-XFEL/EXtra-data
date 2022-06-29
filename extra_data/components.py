@@ -8,10 +8,10 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 import xarray
-from extra_geom import (AGIPD_1MGeometry, AGIPD_500K2GGeometry,
-                        DSSC_1MGeometry, JUNGFRAU_Geometry, LPD_1MGeometry)
+from extra_geom import (AGIPD_500K2GGeometry, Epix10KGeometry, Epix100Geometry,
+                        JUNGFRAUGeometry, PNCCDGeometry)
 
-from .exceptions import SourceNameError, PropertyNameError
+from .exceptions import PropertyNameError, SourceNameError
 from .read_machinery import DataChunk, roi_shape, split_trains
 from .reader import DataCollection, by_id, by_index
 from .write_cxi import JUNGFRAUCXIWriter, XtdfCXIWriter
@@ -23,6 +23,9 @@ __all__ = [
     'DSSC1M',
     'LPD1M',
     'JUNGFRAU',
+    'PNCCD',
+    'Epix100',
+    'Epix10K',
     'identify_multimod_detectors',
 ]
 
@@ -444,11 +447,17 @@ class MultimodDetectorBase:
 
         return xarray.DataArray(out, dims=dims, coords=coords)
 
+    def _default_geometry(self):
+        """Return a default geometry for the data"""
+        raise Exception(
+            f'Component {self.__class__.__name__} with {self.n_modules} modules'
+            ' does not provide a default geometry')
+
     def get_data(self, geometry=None, *, fill_value=None, roi=(), astype=None,
                  use_mask=False, asic_seams=False):
+        """Get the detector data with geometry and masking.
         """
-        """
-        geometry = geometry or self.default_geometry()
+        geometry = geometry or self._default_geometry()
         data = self.get_array(self._main_data_key, fill_value=fill_value, roi=roi, astype=astype)
 
         if use_mask:
@@ -1287,6 +1296,9 @@ class AGIPD500K(XtdfDetectorBase):
     module_shape = (512, 128)
     n_modules = 8
 
+    def _default_geometry(self):
+        return AGIPD_500K2GGeometry.from_origin()
+
 
 @multimod_detectors
 class DSSC1M(XtdfDetectorBase):
@@ -1469,6 +1481,11 @@ class JUNGFRAU(MultimodDetectorBase):
         src = next(iter(self.source_to_modno))
         self._frames_per_entry = self.data[src, self._main_data_key].entry_shape[0]
 
+    def _default_geometry(self):
+        if self.n_modules == 1:
+            return JUNGFRAUGeometry.from_module_positions()
+        super()._default_geometry()
+
     @staticmethod
     def _label_dims(arr):
         # Label dimensions to match the AGIPD/DSSC/LPD data access
@@ -1564,6 +1581,53 @@ class JUNGFRAU(MultimodDetectorBase):
             zero for integer arrays)
         """
         JUNGFRAUCXIWriter(self).write(filename, fillvalues=fillvalues)
+
+
+@multimod_detectors
+class PNCCD(MultimodDetectorBase):
+    """An interface to PNCCD data
+
+    Detector names are like ''
+    """
+    _source_re = re.compile(r'(?P<detname>.+_AGIPD500K.*)/DET/(?P<modno>\d+)CH')
+    module_shape = PNCCDGeometry.expected_data_shape[-2:]
+    n_modules = 2
+
+    def _default_geometry(self):
+        return PNCCDGeometry.from_relative_positions()
+
+
+@multimod_detectors
+class Epix100(MultimodDetectorBase):
+    """An interface to Epix100 data
+
+    Detector names are like ''
+    """
+    _source_re = re.compile(r'(?P<detname>.+_AGIPD500K.*)/DET/(?P<modno>\d+)CH')
+    module_shape = Epix100Geometry.expected_data_shape[-2:]
+    n_modules = 1
+
+    def _default_geometry(self):
+        if self.detector_name == 'HED_IA1_EPX100-2':
+            # module 2  at HED has a different geometry, for more details, see:
+            # https://extra-geom.readthedocs.io/en/latest/geometry.html#extra_geom.Epix100Geometry.from_origin
+            return Epix100Geometry.from_relative_positions(top=[386.5, 364.5, 0.], bottom=[386.5, -12.5, 0.])
+        return Epix100Geometry.from_origin()
+
+
+@multimod_detectors
+class Epix10K(MultimodDetectorBase):
+    """An interface to Epix10K data
+
+    Detector names are like ''
+    """
+    _source_re = re.compile(r'(?P<detname>.+_AGIPD500K.*)/DET/(?P<modno>\d+)CH')
+    module_shape = Epix10KGeometry.expected_data_shape[-2:]
+    n_modules = 1
+
+    def _default_geometry(self):
+        return Epix10KGeometry.from_origin()
+
 
 def identify_multimod_detectors(
         data, detector_name=None, *, single=False, clses=None
