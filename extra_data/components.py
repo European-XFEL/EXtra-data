@@ -454,20 +454,26 @@ class MultimodDetectorBase:
             ' does not provide a default geometry')
 
     def get_data(self, geometry=None, *, fill_value=None, roi=(), astype=None,
-                 use_mask=False, asic_seams=False):
-        """Get the detector data with geometry and masking.
+                 mask=False, asic_seams=False):
+        """Get assembled detector data with geometry and mask.
         """
         geometry = geometry or self._default_geometry()
         data = self.get_array(self._main_data_key, fill_value=fill_value, roi=roi, astype=astype)
 
-        if use_mask:
+        if mask:
             try:
-                mask = self.get_array('image.mask', fill_value=False, roi=roi, astype=np.bool_)
+                if isinstance(mask, int) and not isinstance(mask, bool):
+                    # mask only the selected bits if an int is passed to the mask arg
+                    mask = (self.get_array('image.mask', roi=roi) & mask).astype(np.bool_)
+                else:
+                    mask = self.get_array('image.mask', fill_value=False, roi=roi, astype=np.bool_)
             except PropertyNameError:
                 pass  # no mask available in this data
             else:
                 data = data * ~mask
 
+        if hasattr(geometry, 'normalize_data'):
+            data = geometry.normalize_data(data)
         if asic_seams and hasattr(geometry, 'asic_seams'):
             data = data * ~geometry.asic_seams()
 
