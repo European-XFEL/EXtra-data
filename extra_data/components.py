@@ -459,6 +459,12 @@ class MultimodDetectorBase:
         """
         geometry = geometry or self._default_geometry()
         data = self.get_array(self._main_data_key, fill_value=fill_value, roi=roi, astype=astype)
+        data = data.transpose(..., 'module', *data.dims[-2:]).data
+
+        if hasattr(geometry, '_ensure_shape'):
+            data = geometry._ensure_shape(data)
+        if asic_seams and hasattr(geometry, 'asic_seams'):
+            data = data * ~geometry.asic_seams()
 
         if mask:
             try:
@@ -471,11 +477,6 @@ class MultimodDetectorBase:
                 pass  # no mask available in this data
             else:
                 data = data * ~mask
-
-        if hasattr(geometry, 'normalize_data'):
-            data = geometry.normalize_data(data)
-        if asic_seams and hasattr(geometry, 'asic_seams'):
-            data = data * ~geometry.asic_seams()
 
         assembled, centre = geometry.position_modules(data)
         return assembled, centre
@@ -1595,7 +1596,8 @@ class PNCCD(MultimodDetectorBase):
 
     Detector names are like ''
     """
-    _source_re = re.compile(r'(?P<detname>.+_AGIPD500K.*)/DET/(?P<modno>\d+)CH')
+    _source_re = re.compile(r'(?P<detname>.+_PNCCD1MP)/CAL/PNCCD_FMT-(?P<modno>\d+)')
+    _main_data_key = 'data.image'
     module_shape = PNCCDGeometry.expected_data_shape[-2:]
     n_modules = 2
 
@@ -1609,7 +1611,8 @@ class Epix100(MultimodDetectorBase):
 
     Detector names are like ''
     """
-    _source_re = re.compile(r'(?P<detname>.+_AGIPD500K.*)/DET/(?P<modno>\d+)CH')
+    _source_re = re.compile(r'(?P<detname>.+_(EPX100|EPIX)-(?P<modno>\d+))/DET/RECEIVER')
+    _main_data_key = 'data.image.pixels'
     module_shape = Epix100Geometry.expected_data_shape[-2:]
     n_modules = 1
 
@@ -1619,20 +1622,6 @@ class Epix100(MultimodDetectorBase):
             # https://extra-geom.readthedocs.io/en/latest/geometry.html#extra_geom.Epix100Geometry.from_origin
             return Epix100Geometry.from_relative_positions(top=[386.5, 364.5, 0.], bottom=[386.5, -12.5, 0.])
         return Epix100Geometry.from_origin()
-
-
-@multimod_detectors
-class Epix10K(MultimodDetectorBase):
-    """An interface to Epix10K data
-
-    Detector names are like ''
-    """
-    _source_re = re.compile(r'(?P<detname>.+_AGIPD500K.*)/DET/(?P<modno>\d+)CH')
-    module_shape = Epix10KGeometry.expected_data_shape[-2:]
-    n_modules = 1
-
-    def _default_geometry(self):
-        return Epix10KGeometry.from_origin()
 
 
 def identify_multimod_detectors(

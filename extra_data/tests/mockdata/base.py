@@ -109,7 +109,7 @@ class DeviceBase:
             if len(trainids) > 0:
                 tid[:self.nsamples] = trainids
             for (topic, datatype, dims) in self.instrument_keys:
-                f.create_dataset('INSTRUMENT/%s/%s' % (dev_chan, topic),
+                f.create_dataset('INSTRUMENT/%s/%s' % (dev_chan, topic.replace('.', '/')),
                                  (Npad,) + dims, datatype, maxshape=((None,) + dims))
 
     def datasource_ids(self):
