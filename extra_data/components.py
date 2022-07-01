@@ -455,7 +455,25 @@ class MultimodDetectorBase:
 
     def get_data(self, geometry=None, *, fill_value=None, roi=(), astype=None,
                  mask=False, asic_seams=False):
-        """Get assembled detector data with geometry and mask.
+        """Get assembled data with geometry and mask applied.
+
+        geometry:
+            An extra_geom geometry object.
+        fill_value: int or float, optional
+            Value to use for missing values. If None (default) the fill value
+            is 0 for integers and np.nan for floats.
+        roi: tuple
+          Specify e.g. ``np.s_[10:60, 100:200]`` to select pixels within each
+          module when reading data. The selection is applied to each individual
+          module, so it may only be useful when working with a single module.
+        astype: Type
+          Data type of the output array. If None (default) the dtype matches the
+          input array dtype
+        mask: (int, bool)
+            if True, use the mask present in the data (if in use with CORR data). If an
+            int is provided, it will only mask the selected bits.
+        asic_seams: bool
+            mask asic edges if the geometry implements it.
         """
         geometry = geometry or self._default_geometry()
         data = self.get_array(self._main_data_key, fill_value=fill_value, roi=roi, astype=astype)
