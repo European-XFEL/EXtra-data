@@ -8,7 +8,7 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 import xarray
-from extra_geom import (AGIPD_500K2GGeometry, Epix10KGeometry, Epix100Geometry,
+from extra_geom import (AGIPD_500K2GGeometry, Epix100Geometry,
                         JUNGFRAUGeometry, PNCCDGeometry)
 
 from .exceptions import PropertyNameError, SourceNameError
@@ -25,7 +25,6 @@ __all__ = [
     'JUNGFRAU',
     'PNCCD',
     'Epix100',
-    'Epix10K',
     'identify_multimod_detectors',
 ]
 
