@@ -50,6 +50,7 @@ setup(name="EXtra-data",
           ],
       },
       install_requires=[
+          'extra_geom',
           'h5py>=2.10',
           'numpy',
           'pandas',
