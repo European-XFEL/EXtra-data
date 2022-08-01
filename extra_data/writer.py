@@ -117,7 +117,8 @@ class FileWriter:
             metadata = {}
 
         metadata_grp = self.file.create_group('METADATA')
-        if metadata.get('dataFormatVersion') == '1.0':
+        format_version = float(metadata.get('dataFormatVersion'))
+        if format_version >= 1.0:
             self.write_sources(metadata_grp.create_group('dataSources'))
 
             # File format 1.0 should also have INDEX/flag
