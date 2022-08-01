@@ -850,7 +850,7 @@ def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
 def test_open_file(mock_sa3_control_data):
     f = H5File(mock_sa3_control_data)
     file_access = f.files[0]
-    assert file_access.format_version in ('0.5', '1.0')
+    assert file_access.format_version in ('0.5', '1.0', '1.2')
     assert 'SA3_XTD10_VAC/TSENS/S30180K' in f.control_sources
     if file_access.format_version == '0.5':
         assert 'METADATA/dataSourceId' in file_access.file
@@ -971,7 +971,7 @@ def test_run_metadata(mock_spb_raw_run):
     if run.files[0].format_version == '0.5':
         assert md == {'dataFormatVersion': '0.5'}
     else:
-        assert md['dataFormatVersion'] == '1.0'
+        assert md['dataFormatVersion'] in ('1.0', '1.2')
         assert set(md) == {
             'dataFormatVersion', 'creationDate', 'updateDate', 'daqLibrary',
             'karaboFramework', 'proposalNumber', 'runNumber', 'runType',
