@@ -1,6 +1,6 @@
 """Interfaces to data from specific instruments
 """
-import functools
+import inspect
 import logging
 import re
 from copy import copy
@@ -515,8 +515,6 @@ class MultimodDetectorBase:
             out[i] = f(arr[:, i], **kw)
 
     def _frame_func_to_chunk_func(self, f, out_shape=None, out_dtype=None):
-        import inspect
-
         eg_srcdata = self.data[min(self.source_to_modno)]
         main_group = self._main_data_key.rpartition('.')[0] + '.'
         data_keys = {k.rpartition('.')[2]: k for k in eg_srcdata.keys()
@@ -561,10 +559,17 @@ class MultimodDetectorBase:
             # limiting step will be loading data, so you want fewer workers
             # (or split it over multiple nodes)
             frames_per_part = 1000
-        chunks = self.split_trains(parts, trains_per_part, frames_per_part)
+        chunks = list(self.split_trains(parts, trains_per_part, frames_per_part))
+
+        map_kwargs = {}
+        if 'key' in inspect.signature(mapper).parameters:
+            # Dask workaround: avoid pickling & clumsily md5-ing function to
+            # produce task keys
+            from secrets import token_hex
+            map_kwargs['key'] = [f"map-frames-{token_hex(16)}" for _ in chunks]
 
         chunk_func = self._frame_func_to_chunk_func(f)
-        results_iter = mapper(chunk_func, chunks)
+        results_iter = mapper(chunk_func, chunks, **map_kwargs)
 
         if out is None:
             if out_shape is not None:
@@ -575,6 +580,9 @@ class MultimodDetectorBase:
         # Assemble per-chunk results into output list/array
         out_cursor = 0
         for chunk_res in results_iter:
+            if hasattr(chunk_res, 'result'):
+                # Dask returns futures rather than direct results
+                chunk_res = chunk_res.result()
             to = out_cursor + len(chunk_res)
             out[out_cursor : to] = chunk_res
             out_cursor = to
