@@ -474,7 +474,7 @@ class MultimodDetectorBase:
 
     def _get_data(self, key, *, fill_value=None, roi=(), astype=None):
         """Get data as a plain NumPy array with no labels"""
-        train_ids = np.asarray(self.data.train_ids)
+        train_ids = self.train_ids_perframe
 
         eg_src = min(self.source_to_modno)
         eg_keydata = self.data[eg_src, key]
