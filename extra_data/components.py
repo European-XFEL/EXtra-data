@@ -531,7 +531,7 @@ class MultimodDetectorBase:
 
         def chunk_func(chunk):
             if out_shape is not None:
-                out = self._out_array((chunk.n_frames, *out_shape), dtype=out_dtype)
+                out = chunk._out_array((chunk.n_frames, *out_shape), dtype=out_dtype)
             else:
                 out = [None] * chunk.n_frames
             chunk._apply_framewise(f, out, data_params)
