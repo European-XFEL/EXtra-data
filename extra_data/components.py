@@ -472,22 +472,24 @@ class MultimodDetectorBase:
 
         return self._concat(arrays, modnos, fill_value, astype)
 
-    def _get_data(self, key, *, fill_value=None, roi=(), astype=None):
+    def _get_data(self, key, *, fill_value=None, roi=(), astype=None, module_gaps=True):
         """Get data as a plain NumPy array with no labels"""
         train_ids = self.train_ids_perframe
 
         eg_src = min(self.source_to_modno)
         eg_keydata = self.data[eg_src, key]
 
+        module_dim = self.n_modules if module_gaps else len(self.modno_to_source)
+
         # Find the shape of 1 frame for 1 module with the ROI applied
-        out_shape = ((self.n_modules, len(train_ids))
+        out_shape = ((module_dim, len(train_ids))
                      + roi_shape(eg_keydata.entry_shape, roi))
 
         dtype = eg_keydata.dtype if astype is None else np.dtype(astype)
         out = self._out_array(out_shape, dtype, fill_value=fill_value)
 
-        for modno, source in sorted(self.modno_to_source.items()):
-            mod_ix = modno - self._modnos_start_at
+        for i, (modno, source) in enumerate(sorted(self.modno_to_source.items())):
+            mod_ix = (modno - self._modnos_start_at) if module_gaps else i
             for chunk in self.data._find_data_chunks(source, key):
                 for tgt_slice, chunk_slice in self._split_align_chunk(chunk, train_ids):
                     chunk.dataset.read_direct(
@@ -948,34 +950,35 @@ class XtdfDetectorBase(MultimodDetectorBase):
         """
         if subtrain_index not in {'pulseId', 'cellId'}:
             raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
+        if not key.startswith('image.'):
+            return super().get_dask_array(key, fill_value=fill_value, astype=astype)
+
         arrays = []
-        modnos = []
-        for modno, source in sorted(self.modno_to_source.items()):
-            modnos.append(modno)
-            mod_arr = self.data.get_dask_array(source, key, labelled=True)
+        from dask.delayed import delayed
+        from dask.array import concatenate, from_delayed
 
-            # At present, all the per-pulse data is stored in the 'image' key.
-            # If that changes, this check will need to change as well.
-            if key.startswith('image.'):
-                # Add pulse IDs to create multi-level index
-                inner_ix = self.data.get_array(source, 'image.' + subtrain_index)
-                # Raw files have a spurious extra dimension
-                if inner_ix.ndim >= 2 and inner_ix.shape[1] == 1:
-                    inner_ix = inner_ix[:, 0]
+        eg_src = min(self.source_to_modno)
+        eg_keydata = self.data[eg_src, key]
 
-                mod_arr = mod_arr.rename({'trainId': 'train_pulse'})
+        dtype = eg_keydata.dtype if astype is None else np.dtype(astype)
 
-                mod_arr.coords['train_pulse'] = self._make_image_index(
-                    mod_arr.coords['train_pulse'].values, inner_ix.values,
-                    inner_name=subtrain_index,
-                ).set_names('trainId', level=0)
-                # This uses 'trainId' where a concrete array from the same class
-                # uses 'train'. I didn't notice that inconsistency when I
-                # introduced it, and now code may be relying on each name.
+        for chunk in self.split_trains(trains_per_part=5):
+            d = delayed(chunk._get_data)(
+                key, fill_value=fill_value,
+                astype=astype, module_gaps=False,
+            )
+            shape = ((len(self.modno_to_source), len(chunk.train_ids_perframe))
+                     + eg_keydata.entry_shape)
 
-            arrays.append(mod_arr)
+            arrays.append(from_delayed(d, shape=shape, dtype=dtype))
 
-        return self._concat(arrays, modnos, fill_value, astype)
+        arr = concatenate(arrays, axis=1)
+
+        frame_idx = self._make_image_index(
+            self.train_ids_perframe, self._collect_inner_ids(subtrain_index),
+            inner_name=subtrain_index[:-2]
+        )
+        return self._guess_axes(arr, frame_idx, unstack_pulses=False, modnos=sorted(self.modno_to_source))
 
     def trains(self, pulses=np.s_[:], require_all=True):
         """Iterate over trains for detector data.
