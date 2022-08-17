@@ -1018,15 +1018,17 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         return out
 
     def dask_array(self, *, labelled=True, subtrain_index='pulseId',
-                   fill_value=None, astype=None):
+                   fill_value=None, astype=None, frames_per_chunk=None):
         from dask.delayed import delayed
         from dask.array import concatenate, from_delayed
 
         entry_size = (self.dtype.itemsize *
             len(self.modno_to_keydata) * np.product(self._eg_keydata.entry_shape)
         )
-        # Aim for 1GB chunks, with an arbitrary maximum of 1024 frames
-        split = self.split_trains(frames_per_part=min(1024 ** 3 / entry_size, 1024))
+        if frames_per_chunk is None:
+            # Aim for 2GB chunks, with an arbitrary maximum of 1024 frames
+            frames_per_chunk = min(2 * 1024 ** 3 / entry_size, 1024)
+        split = self.split_trains(frames_per_part=frames_per_chunk)
 
         arr = concatenate([from_delayed(
             delayed(c.ndarray)(fill_value=fill_value, astype=astype),
