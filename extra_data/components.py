@@ -1011,7 +1011,7 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         if unstack_pulses:
             # Separate train & pulse dimensions, and arrange dimensions
             # so that the data is contiguous in memory.
-            dim_order = ['module'] + out.coords['train_pulse'].names + self.dimensions[2:]
+            dim_order = ['module'] + out.indexes['train_pulse'].names + self.dimensions[2:]
             return out.unstack('train_pulse').transpose(*dim_order)
 
         return out
