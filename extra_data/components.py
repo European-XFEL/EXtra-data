@@ -399,19 +399,6 @@ class MultimodDetectorBase:
             # There will always be at least the last train left to yield
             yield self.select_trains(np.s_[chunk_start:])
 
-    @staticmethod
-    def _concat(arrays, index, fill_value, astype):
-        dtype = arrays[0].dtype if astype is None else np.dtype(astype)
-        if fill_value is None:
-            fill_value = np.nan if dtype.kind == 'f' else 0
-        fill_value = dtype.type(fill_value)
-
-        return xarray.concat(
-            [a.astype(dtype, copy=False) for a in arrays],
-            pd.Index(index, name='module'),
-            fill_value=fill_value
-        )
-
     def get_array(self, key, *, fill_value=None, roi=(), astype=None):
         """Get a labelled array of detector data
 
@@ -447,14 +434,7 @@ class MultimodDetectorBase:
           Data type of the output array. If None (default) the dtype matches the
           input array dtype
         """
-        arrays = []
-        modnos = []
-        for modno, source in sorted(self.modno_to_source.items()):
-            modnos.append(modno)
-            mod_arr = self.data.get_dask_array(source, key, labelled=True)
-            arrays.append(mod_arr)
-
-        return self._concat(arrays, modnos, fill_value, astype)
+        return self[key].dask_array(labelled=True, fill_value=fill_value, astype=astype)
 
     def trains(self, require_all=True):
         """Iterate over trains for detector data.
@@ -668,34 +648,19 @@ class XtdfDetectorBase(MultimodDetectorBase):
         """
         if subtrain_index not in {'pulseId', 'cellId'}:
             raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
-        arrays = []
-        modnos = []
-        for modno, source in sorted(self.modno_to_source.items()):
-            modnos.append(modno)
-            mod_arr = self.data.get_dask_array(source, key, labelled=True)
-
-            # At present, all the per-pulse data is stored in the 'image' key.
-            # If that changes, this check will need to change as well.
-            if key.startswith('image.'):
-                # Add pulse IDs to create multi-level index
-                inner_ix = self.data.get_array(source, 'image.' + subtrain_index)
-                # Raw files have a spurious extra dimension
-                if inner_ix.ndim >= 2 and inner_ix.shape[1] == 1:
-                    inner_ix = inner_ix[:, 0]
-
-                mod_arr = mod_arr.rename({'trainId': 'train_pulse'})
-
-                mod_arr.coords['train_pulse'] = self._make_image_index(
-                    mod_arr.coords['train_pulse'].values, inner_ix.values,
-                    inner_name=subtrain_index,
-                ).set_names('trainId', level=0)
-                # This uses 'trainId' where a concrete array from the same class
-                # uses 'train'. I didn't notice that inconsistency when I
-                # introduced it, and now code may be relying on each name.
-
-            arrays.append(mod_arr)
-
-        return self._concat(arrays, modnos, fill_value, astype)
+        if key.startswith('image.'):
+            arr = self[key].dask_array(
+                labelled=True, subtrain_index=subtrain_index,
+                fill_value=fill_value, astype=astype
+            )
+            # Preserve the quirks of this method before refactoring
+            if self[key]._extraneous_dim:
+                arr = arr.expand_dims('tmp_name', axis=2)
+            renames = {'train': 'trainId', subtrain_index[:-2]: subtrain_index}
+            renames.update({name: f'dim_{i}' for i, name in enumerate(arr.dims[2:])})
+            return arr.rename(renames)
+        else:
+            return super().get_dask_array(key, fill_value=fill_value, astype=astype)
 
     def trains(self, pulses=np.s_[:], require_all=True):
         """Iterate over trains for detector data.
@@ -850,10 +815,30 @@ class MultimodKeyData:
         from xarray import DataArray
         arr = self.ndarray(fill_value=fill_value, roi=roi, astype=astype)
 
-        # Train ID index
         coords = {'module': self.modules, 'trainId': self.train_id_coordinates()}
-
         return DataArray(arr, dims=self.dimensions, coords=coords)
+
+    def dask_array(self, *, labelled=False, fill_value=None, astype=None):
+        from dask.delayed import delayed
+        from dask.array import concatenate, from_delayed
+
+        entry_size = (self.dtype.itemsize *
+            len(self.modno_to_keydata) * np.product(self._eg_keydata.entry_shape)
+        )
+        # Aim for 1GB chunks, with an arbitrary maximum of 256 trains
+        split = self.split_trains(frames_per_part=min(1024 ** 3 / entry_size, 256))
+
+        arr = concatenate([from_delayed(
+            delayed(c.ndarray)(fill_value=fill_value, astype=astype),
+            shape=c.shape, dtype=self.dtype
+        ) for c in split], axis=1)
+
+        if labelled:
+            from xarray import DataArray
+            coords = {'module': self.modules, 'trainId': self.train_id_coordinates()}
+            return DataArray(arr, dims=self.dimensions, coords=coords)
+
+        return arr
 
 
 class XtdfImageMultimodKeyData(MultimodKeyData):
@@ -1008,27 +993,50 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
 
         return out
 
-    def xarray(self, *, pulses=None, fill_value=None, roi=(), astype=None,
-               subtrain_index='pulseId', unstack_pulses=False):
-        arr = self.ndarray(fill_value=fill_value, roi=roi, astype=astype)
-
+    def _wrap_xarray(self, arr, subtrain_index='pulseId'):
+        from xarray import DataArray
         inner_ids = self.det._collect_inner_ids(subtrain_index)
         index = self.det._make_image_index(
             self.det.train_ids_perframe, inner_ids, subtrain_index[:-2]
         )[self._sel_frames]
 
-        out = xarray.DataArray(arr, dims=self.dimensions, coords={
+        return DataArray(arr, dims=self.dimensions, coords={
             'train_pulse': index, 'module': self.modules,
         })
+
+    def xarray(self, *, pulses=None, fill_value=None, roi=(), astype=None,
+               subtrain_index='pulseId', unstack_pulses=False):
+        arr = self.ndarray(fill_value=fill_value, roi=roi, astype=astype)
+        out = self._wrap_xarray(arr, subtrain_index)
 
         if unstack_pulses:
             # Separate train & pulse dimensions, and arrange dimensions
             # so that the data is contiguous in memory.
-            dim_order = ['module'] + index.names + self.dimensions[2:]
+            dim_order = ['module'] + out.coords['train_pulse'].names + self.dimensions[2:]
             return out.unstack('train_pulse').transpose(*dim_order)
 
         return out
 
+    def dask_array(self, *, labelled=True, subtrain_index='pulseId',
+                   fill_value=None, astype=None):
+        from dask.delayed import delayed
+        from dask.array import concatenate, from_delayed
+
+        entry_size = (self.dtype.itemsize *
+            len(self.modno_to_keydata) * np.product(self._eg_keydata.entry_shape)
+        )
+        # Aim for 1GB chunks, with an arbitrary maximum of 1024 frames
+        split = self.split_trains(frames_per_part=min(1024 ** 3 / entry_size, 1024))
+
+        arr = concatenate([from_delayed(
+            delayed(c.ndarray)(fill_value=fill_value, astype=astype),
+            shape=c.shape, dtype=self.dtype
+        ) for c in split], axis=1)
+
+        if labelled:
+            return self._wrap_xarray(arr, subtrain_index)
+
+        return arr
 
 class FramesFileWriter(FileWriter):
     """Write selected detector frames in European XFEL HDF5 format"""
