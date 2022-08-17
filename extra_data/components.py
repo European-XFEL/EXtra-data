@@ -985,7 +985,6 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             # Ensure ROI applies to pixel dimensions, not the extra
             # dim in raw data (except AGIPD, where it is data/gain)
             roi = np.index_exp[:] + roi
-        print(f"{out_shape=}, {out.shape=}, {reading_view.shape=}, {self._extraneous_dim=}")
 
         for mod_ix, (modno, kd) in enumerate(sorted(self.modno_to_keydata.items())):
             for chunk in kd._data_chunks:
