@@ -806,6 +806,21 @@ class MultimodKeyData:
     def dimensions(self):
         return ['module', 'trainId'] + ['dim_%d' % i for i in range(self.ndim - 2)]
 
+    @property
+    def dtype(self):
+        return self._eg_keydata.dtype
+
+    def _with_selected_det(self, det_selected):
+        # Overridden for XtdfImageMultimodKeyData to preserve pulse selection
+        return MultimodKeyData(det_selected, self.key)
+
+    def select_trains(self, trains):
+        return self._with_selected_det(self.det.select_trains(trains))
+
+    def split_trains(self, parts=None, trains_per_part=None, frames_per_part=None):
+        for det_split in self.det.split_trains(parts, trains_per_part, frames_per_part):
+            yield self._with_selected_det(det_split)
+
     def ndarray(self, *, fill_value=None, out=None, roi=(), astype=None, module_gaps=False):
         """Get data as a plain NumPy array with no labels"""
         train_ids = np.asarray(self.det.train_ids)
@@ -844,7 +859,7 @@ class MultimodKeyData:
 class XtdfImageMultimodKeyData(MultimodKeyData):
     _sel_frames_cached = None
 
-    def __init__(self, det: XtdfDetectorBase, key, pulse_sel=np.s_[0:MAX_PULSES:1]):
+    def __init__(self, det: XtdfDetectorBase, key, pulse_sel=by_index[0:MAX_PULSES:1]):
         super().__init__(det, key)
         self.det = det  # Makes PyCharm happy that det is XtdfDetectorBase
         self._pulse_sel = pulse_sel
@@ -897,6 +912,10 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             # Everything else seems to be 1D, but just in case
             entry_dims = [f'dim_{i}' for i in range(ndim_inner)]
         return ['module', 'train_pulse'] + entry_dims
+
+    # Used for .select_trains() and .split_trains()
+    def _with_selected_det(self, det_selected):
+        return XtdfImageMultimodKeyData(det_selected, self.key, self._pulse_sel)
 
     def select_pulses(self, pulses):
         pulses = _check_pulse_selection(pulses)
