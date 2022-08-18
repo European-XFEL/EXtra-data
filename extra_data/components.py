@@ -1017,7 +1017,7 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
 
         return out
 
-    def dask_array(self, *, labelled=True, subtrain_index='pulseId',
+    def dask_array(self, *, labelled=False, subtrain_index='pulseId',
                    fill_value=None, astype=None, frames_per_chunk=None):
         from dask.delayed import delayed
         from dask.array import concatenate, from_delayed
