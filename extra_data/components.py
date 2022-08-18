@@ -645,6 +645,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
           data type of the output array. If None (default) the dtype matches the
           input array dtype
         """
+        from xarray import DataArray
         if subtrain_index not in {'pulseId', 'cellId'}:
             raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
         if key.startswith('image.'):
@@ -655,10 +656,13 @@ class XtdfDetectorBase(MultimodDetectorBase):
             # Preserve the quirks of this method before refactoring
             if self[key]._extraneous_dim:
                 arr = arr.expand_dims('tmp_name', axis=2)
-            arr.coords['train_pulse'] = arr.indexes['train_pulse'].rename({
-                'train': 'trainId', subtrain_index[:-2]: subtrain_index
+            frame_idx = arr.indexes['train_pulse'].set_names(
+                ['trainId', subtrain_index], level=[0, -1]
+            )
+            dims = ['module', 'train_pulse'] + [f'dim_{i}' for i in range(arr.ndim - 2)]
+            return DataArray(arr.data, dims=dims, coords={
+                'train_pulse': frame_idx, 'module': arr.indexes['module'],
             })
-            return arr.rename({name: f'dim_{i}' for i, name in enumerate(arr.dims[2:])})
         else:
             return super().get_dask_array(key, fill_value=fill_value, astype=astype)
 
