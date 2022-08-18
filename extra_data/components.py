@@ -7,7 +7,6 @@ from warnings import warn
 
 import numpy as np
 import pandas as pd
-import xarray
 
 from .exceptions import SourceNameError
 from .reader import DataCollection, by_id, by_index
@@ -1180,6 +1179,7 @@ class MPxDetectorTrainIterator:
           for the train id tid - train id dimension is kept indexing frames
           within tid.
         """
+        from xarray import DataArray
         file, pos, ds = self._find_data(source, key, tid)
         if file is None:
             return None
@@ -1188,9 +1188,9 @@ class MPxDetectorTrainIterator:
         firsts, counts = file.get_index(source, group)
         first, count = firsts[pos], counts[pos]
         if count == 1:
-            return xarray.DataArray(ds[first])
+            return DataArray(ds[first])
         else:
-            return xarray.DataArray(ds[first : first + count])
+            return DataArray(ds[first : first + count])
 
     def _get_pulse_data(self, source, key, tid):
         """
@@ -1212,6 +1212,7 @@ class MPxDetectorTrainIterator:
         xarray.DataArray
           Array of selected per pulse data.
         """
+        from xarray import DataArray
         file, pos, ds = self._find_data(source, key, tid)
         if file is None:
             return None
@@ -1253,7 +1254,7 @@ class MPxDetectorTrainIterator:
         dims = self.data[key].dimensions[1:]  # excluding 'module' dim
         coords = {'train_pulse': train_pulse_ids}
 
-        arr = xarray.DataArray(data, coords=coords, dims=dims)
+        arr = DataArray(data, coords=coords, dims=dims)
 
         # Separate train & pulse dimensions, and arrange dimensions
         # so that the data is contiguous in memory.
@@ -1312,6 +1313,7 @@ class MPxDetectorTrainIterator:
           xarray
             Assembled data array.
         """
+        import xarray
         key_module_arrays = {}
 
         for modno, source in sorted(self.data.modno_to_source.items()):
