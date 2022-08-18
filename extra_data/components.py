@@ -656,9 +656,9 @@ class XtdfDetectorBase(MultimodDetectorBase):
             # Preserve the quirks of this method before refactoring
             if self[key]._extraneous_dim:
                 arr = arr.expand_dims('tmp_name', axis=2)
-            arr.coords['train_pulse'] = arr.indexes['train_pulse'].rename(
-                ['trainId', subtrain_index]
-            )
+            arr.coords['train_pulse'] = arr.indexes['train_pulse'].rename({
+                'train': 'trainId', subtrain_index[:-2]: subtrain_index
+            })
             return arr.rename({name: f'dim_{i}' for i, name in enumerate(arr.dims[2:])})
         else:
             return super().get_dask_array(key, fill_value=fill_value, astype=astype)

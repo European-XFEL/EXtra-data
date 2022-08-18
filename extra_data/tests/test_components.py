@@ -249,6 +249,7 @@ def test_get_dask_array_lpd_parallelgain(mock_lpd_parallelgain_run):
     assert det.detector_name == 'FXE_DET_LPD1M-1'
 
     arr = det.get_dask_array('image.data')
+    print(arr)
     assert arr.shape == (16, 2 * 3 * 100, 1, 256, 256)
     assert arr.dims[:2] == ('module', 'train_pulse')
     np.testing.assert_array_equal(arr.coords['pulseId'], np.tile(np.arange(100), 6))
