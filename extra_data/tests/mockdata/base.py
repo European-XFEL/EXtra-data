@@ -4,7 +4,7 @@ import re
 
 import h5py
 import numpy as np
-
+from packaging import version
 
 class DeviceBase:
     # Override these in subclasses
@@ -196,6 +196,11 @@ def write_base_index(f, N, first=10000, chunksize=16, format_version='0.5'):
         # timestamps are stored as a single uint64 with nanoseconds resolution
         ts = datetime.now(tz=timezone.utc).timestamp() * 10**9
         ds[:N] = [ts + i * 10**8 for i in range(N)]
+
+    if version.parse(format_version) >= version.parse("1.2"):
+        # origin
+        ds = f.create_dataset("INDEX/origin", (Npad,), 'i4', maxshape=(None,))
+        ds[:N] = -1 * np.ones(N)
 
     # trainIds
     ds = f.create_dataset('INDEX/trainId', (Npad,), 'u8', maxshape=(None,))
