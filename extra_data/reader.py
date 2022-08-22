@@ -1448,7 +1448,8 @@ def open_run(
     if data == 'all':
         common_args = dict(
             proposal=proposal, run=run, include=include,
-            file_filter=file_filter, inc_suspect_trains=inc_suspect_trains)
+            file_filter=file_filter, inc_suspect_trains=inc_suspect_trains,
+            parallelize=parallelize)
 
         # Open the raw data
         dc = open_run(**common_args, data='raw')
