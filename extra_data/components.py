@@ -383,7 +383,7 @@ class MultimodDetectorBase:
         )
 
     @staticmethod
-    def _out_array(shape, dtype, fill_value=None):
+    def _make_output_array(shape, dtype, fill_value=None):
         if fill_value is None:
             fill_value = np.nan if dtype.kind == 'f' else 0
         fill_value = dtype.type(fill_value)
@@ -393,7 +393,77 @@ class MultimodDetectorBase:
         else:
             return np.full(shape, fill_value, dtype=dtype)
 
-    def get_array(self, key, *, fill_value=None, roi=(), astype=None):
+    def _output_array_dtype(self, key, astype=None):
+        eg_src = min(self.source_to_modno)
+        eg_keydata = self.data[eg_src, key]
+
+        return eg_keydata.dtype if astype is None else np.dtype(astype)
+
+    def output_array_shape(self, key, roi=()):
+        """Get the shape for an output array for a key.
+
+        Parameters
+        ----------
+        key: str
+          The data to be stored in the array, e.g. 'image.data' for pixel values.
+        roi: tuple
+          Specify e.g. ``np.s_[10:60, 100:200]`` to select pixels within each
+          module when reading data. The selection is applied to each individual
+          module, so it may only be useful when working with a single module.
+          For AGIPD raw data, each module records a frame as a 3D array with 2
+          entries on the first dimension, for data & gain information, so
+          ``roi=np.s_[0]`` will select only the data part of each frame.
+        """
+        eg_src = min(self.source_to_modno)
+        eg_keydata = self.data[eg_src, key]
+
+        return ((len(self.modno_to_source), len(self.data.train_ids))
+                # Find the shape of 1 frame for 1 module with the ROI applied
+                + roi_shape(eg_keydata.entry_shape, roi))
+
+    def output_array(self, key, fill_value=None, roi=(), astype=None):
+        """Allocate an output array for a key.
+
+        Parameters
+        ----------
+        key: str
+          The data to be stored in the array, e.g. 'image.data' for pixel values.
+        fill_value: int or float, optional
+            Value to use for missing values. If None (default) the fill value
+            is 0 for integers and np.nan for floats.
+        roi: tuple
+          Specify e.g. ``np.s_[10:60, 100:200]`` to select pixels within each
+          module when reading data. The selection is applied to each individual
+          module, so it may only be useful when working with a single module.
+          For AGIPD raw data, each module records a frame as a 3D array with 2
+          entries on the first dimension, for data & gain information, so
+          ``roi=np.s_[0]`` will select only the data part of each frame.
+        astype: Type
+          Data type of the output array. If None (default) the dtype matches the
+          input array dtype.
+        """
+        out_shape = self.output_array_shape(key, roi=roi)
+        dtype = self._output_array_dtype(key, astype=astype)
+
+        return self._make_output_array(out_shape, dtype, fill_value=fill_value)
+
+    @staticmethod
+    def _validate_out_array(out, expected_shape, expected_dtype):
+        if out.dtype != expected_dtype:
+            raise ValueError(f"Output array has dtype {out.dtype}, but it must be {expected_dtype}")
+        elif out.shape != expected_shape:
+            out_view = out.view()
+
+            try:
+                out_view.shape = expected_shape
+            except AttributeError:
+                raise ValueError(f"Output array with shape {out.shape} cannot be reshaped into {expected_shape} without copying")
+
+            return out_view
+        else:
+            return out
+
+    def get_array(self, key, *, fill_value=None, roi=(), astype=None, out=None):
         """Get a labelled array of detector data
 
         Parameters
@@ -410,19 +480,20 @@ class MultimodDetectorBase:
         astype: Type
           Data type of the output array. If None (default) the dtype matches the
           input array dtype
+        out: np.ndarray
+          Array to write data into. Note that the size of the array must be
+          enough to hold all the required data, but the array may be reshaped if
+          necessary (as long as no copying is required for the reshaping).
         """
         train_ids = np.asarray(self.data.train_ids)
 
-        eg_src = min(self.source_to_modno)
-        eg_keydata = self.data[eg_src, key]
+        dtype = self._output_array_dtype(key, astype=astype)
 
-        # Find the shape of 1 frame for 1 module with the ROI applied
-        out_shape = ((len(self.modno_to_source), len(train_ids))
-                     + roi_shape(eg_keydata.entry_shape, roi))
-
-        dtype = eg_keydata.dtype if astype is None else np.dtype(astype)
-        out = self._out_array(out_shape, dtype, fill_value=fill_value)
-
+        if out is None:
+            out = self.output_array(key, fill_value=fill_value, roi=roi, astype=astype)
+        else:
+            out_shape = self.output_array_shape(key, roi=roi)
+            out = self._validate_out_array(out, out_shape, dtype)
 
         modnos = []
         for mod_ix, (modno, source) in enumerate(sorted(self.modno_to_source.items())):
@@ -441,7 +512,6 @@ class MultimodDetectorBase:
         coords = {'module': modnos, 'trainId': train_ids}
 
         return xarray.DataArray(out, dims=dims, coords=coords)
-
 
     def get_dask_array(self, key, fill_value=None, astype=None):
         """Get a labelled Dask array of detector data
@@ -701,9 +771,121 @@ class XtdfDetectorBase(MultimodDetectorBase):
                 axis=0, out=mod_out[tgt_pulse_sel]
             )
 
+    def _reshape_roi(self, keydata, roi):
+        if keydata.ndim >= 2 and keydata.entry_shape[0] == 1:
+            # Ensure ROI applies to pixel dimensions, not the extra
+            # dim in raw data (except AGIPD, where it is data/gain)
+            roi = np.index_exp[:] + roi
+
+        return roi
+
+    def output_array_shape(self, key, pulses=np.s_[:], unstack_pulses=True, roi=()):
+        """Get the shape for an output array for a key.
+
+        Parameters
+        ----------
+        key: str
+          The data to be stored in the array, e.g. 'image.data' for pixel values.
+        pulses: slice, array, by_id or by_index
+          Select the pulses to include from each train. by_id selects by pulse
+          ID, by_index by index within the data being read. The default includes
+          all pulses. Only used for per-pulse data.
+        roi: tuple
+          Specify e.g. ``np.s_[10:60, 100:200]`` to select pixels within each
+          module when reading data. The selection is applied to each individual
+          module, so it may only be useful when working with a single module.
+          For AGIPD raw data, each module records a frame as a 3D array with 2
+          entries on the first dimension, for data & gain information, so
+          ``roi=np.s_[0]`` will select only the data part of each frame.
+        """
+        if key.startswith("image."):
+            pulses = _check_pulse_selection(pulses)
+
+            if isinstance(pulses, by_index):
+                sel_frames = self._select_pulse_indices(pulses, self.frame_counts)
+                pulse_ids = None
+            else:  # by_id
+                pulse_ids = self._collect_inner_ids('pulseId')
+                sel_frames = self._select_pulse_ids(pulses, pulse_ids)
+
+            # Total number of frames to read
+            nframes_sel = sel_frames.sum()
+
+            # If the user wants the pulses unstacked, then we have the problem
+            # of a potentially varying number of frames per train. There's no
+            # way around over-allocating to make an array that can hold the
+            # maximum number of frames, but we have to take this into account
+            # now or we'll be forced to resize and copy later.
+            if unstack_pulses:
+                # Find the train with the most selected pulses. This will
+                # give the size of the pulse dimension in the unstacked array.
+                max_frames = 0
+                # Also look for any trains without frames, which we can skip entirely
+                non_empty_trains = 0
+                current_frame_idx = 0
+
+                for tid in self.frame_counts.index:
+                    train_end_frame = int(current_frame_idx + self.frame_counts[tid])
+                    frame_selection = sel_frames[int(current_frame_idx):train_end_frame]
+                    frames_in_train = frame_selection.sum()
+
+                    max_frames = max(max_frames, frames_in_train)
+                    current_frame_idx += self.frame_counts[tid]
+
+                    if frames_in_train > 0:
+                        non_empty_trains += 1
+
+                # Total number of frames to allocate for
+                nframes_sel = max_frames * non_empty_trains
+
+            eg_src = min(self.source_to_modno)
+            eg_keydata = self.data[eg_src, key]
+
+            roi = self._reshape_roi(eg_keydata, roi)
+            _roi_shape = roi_shape(eg_keydata.entry_shape, roi)
+
+            return (len(self.modno_to_source), nframes_sel) + _roi_shape
+        else:
+            return super().output_array_shape(key, roi=roi)
+
+    def output_array(self, key, pulses=np.s_[:], unstack_pulses=True,
+                     fill_value=None, roi=(), astype=None):
+        """Allocate an output array for a key.
+
+        Parameters
+        ----------
+        key: str
+          The data to be stored in the array, e.g. 'image.data' for pixel values.
+        pulses: slice, array, by_id or by_index
+          Select the pulses to include from each train. by_id selects by pulse
+          ID, by_index by index within the data being read. The default includes
+          all pulses. Only used for per-pulse data.
+        fill_value: int or float, optional
+            Value to use for missing values. If None (default) the fill value
+            is 0 for integers and np.nan for floats.
+        roi: tuple
+          Specify e.g. ``np.s_[10:60, 100:200]`` to select pixels within each
+          module when reading data. The selection is applied to each individual
+          module, so it may only be useful when working with a single module.
+          For AGIPD raw data, each module records a frame as a 3D array with 2
+          entries on the first dimension, for data & gain information, so
+          ``roi=np.s_[0]`` will select only the data part of each frame.
+        astype: Type
+          Data type of the output array. If None (default) the dtype matches the
+          input array dtype.
+        """
+        if key.startswith("image."):
+            out_shape = self.output_array_shape(key, pulses=pulses,
+                                                unstack_pulses=unstack_pulses, roi=roi)
+            dtype = self._output_array_dtype(key, astype=astype)
+
+            return self._make_output_array(out_shape, dtype, fill_value=fill_value)
+        else:
+            return super().output_array(key, fill_value=fill_value, roi=roi, astype=astype)
+
     def _get_pulse_data(self, key, pulses, unstack_pulses=True,
                         fill_value=None, subtrain_index='pulseId', roi=(),
-                        astype=None):
+                        astype=None, out=None):
         """Get a labelled array of per-pulse data (image.*) for xtdf detector"""
         pulses = _check_pulse_selection(pulses)
 
@@ -714,21 +896,17 @@ class XtdfDetectorBase(MultimodDetectorBase):
             pulse_ids = self._collect_inner_ids('pulseId')
             sel_frames = self._select_pulse_ids(pulses, pulse_ids)
 
-        nframes_sel = sel_frames.sum()
-
         eg_src = min(self.source_to_modno)
         eg_keydata = self.data[eg_src, key]
 
-        if eg_keydata.ndim >= 2 and eg_keydata.entry_shape[0] == 1:
-            # Ensure ROI applies to pixel dimensions, not the extra
-            # dim in raw data (except AGIPD, where it is data/gain)
-            roi = np.index_exp[:] + roi
+        if out is None:
+            out = self.output_array(key, pulses=pulses, fill_value=fill_value, roi=roi, astype=astype)
+        else:
+            out_shape = self.output_array_shape(key, pulses=pulses, roi=roi)
+            dtype = self._output_array_dtype(key, astype=astype)
+            out = self._validate_out_array(out, out_shape, dtype)
 
-        _roi_shape = roi_shape(eg_keydata.entry_shape, roi)
-        out_shape = (len(self.modno_to_source), nframes_sel) + _roi_shape
-
-        dtype = eg_keydata.dtype if astype is None else np.dtype(astype)
-        out = self._out_array(out_shape, dtype, fill_value=fill_value)
+        roi = self._reshape_roi(eg_keydata, roi)
 
         modnos = []
         for mod_ix, (modno, source) in enumerate(sorted(self.modno_to_source.items())):
@@ -750,7 +928,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
 
     def get_array(self, key, pulses=np.s_[:], unstack_pulses=True, *,
                   fill_value=None, subtrain_index='pulseId', roi=(),
-                  astype=None):
+                  astype=None, out=None):
         """Get a labelled array of detector data
 
         Parameters
@@ -781,7 +959,11 @@ class XtdfDetectorBase(MultimodDetectorBase):
           ``roi=np.s_[0]`` will select only the data part of each frame.
         astype: Type
           data type of the output array. If None (default) the dtype matches the
-          input array dtype
+          input array dtype.
+        out: np.ndarray
+          Array to write data into. Note that the size of the array must be
+          enough to hold all the required data, but the array may be reshaped if
+          necessary (as long as no copying is required for the reshaping).
         """
         if subtrain_index not in {'pulseId', 'cellId'}:
             raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
@@ -792,10 +974,11 @@ class XtdfDetectorBase(MultimodDetectorBase):
             return self._get_pulse_data(
                 key, pulses, unstack_pulses, fill_value=fill_value,
                 subtrain_index=subtrain_index, roi=roi, astype=astype,
+                out=out
             )
         else:
             return super().get_array(
-                key, fill_value=fill_value, roi=roi, astype=astype
+                key, fill_value=fill_value, roi=roi, astype=astype, out=out
             )
 
     def get_dask_array(self, key, subtrain_index='pulseId', fill_value=None,
