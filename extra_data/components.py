@@ -625,7 +625,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
         )
 
     @staticmethod
-    def _guess_axes(data, train_pulse_ids, unstack_pulses, modnos=None):
+    def _guess_axes(data, train_pulse_ids, unstack_pulses, fill_value=None, modnos=None):
         shape = data.shape
         if modnos is not None:
             shape = shape[1:]
@@ -644,31 +644,99 @@ class XtdfDetectorBase(MultimodDetectorBase):
         # should look for a more reliable way.
         if ndim == 4:
             # image.data in raw data
-            dims = ['train_pulse', 'data_gain', 'slow_scan', 'fast_scan']
+            dims = ['data_gain', 'slow_scan', 'fast_scan']
         elif ndim == 3:
             # image.data, image.gain, image.mask in calibrated data
-            dims = ['train_pulse', 'slow_scan', 'fast_scan']
+            dims = ['slow_scan', 'fast_scan']
         else:
             # Everything else seems to be 1D
-            dims = ['train_pulse']
+            dims = []
 
-        coords = {'train_pulse': train_pulse_ids}
+        coords = { }
+
+        # Separate train & pulse dimensions, and arrange dimensions
+        # so that the data is contiguous in memory.
+        if unstack_pulses:
+            # Start figuring out what the proper shape and coordinates should
+            # be. The train ID and pulse ID (and gain ID in the case of LPD) are
+            # stored in levels of train_pulse_ids, a pandas.MultiIndex. Note
+            # that we avoid DataArray.unstack() because that makes a copy (on
+            # top of putting the unstacked dimensions in the wrong location).
+            old_shape = data.shape
+            new_shape = []
+            for level in range(train_pulse_ids.nlevels):
+                # Get the IDs
+                vals = np.unique(train_pulse_ids.get_level_values(level))
+                # Add to the shape
+                new_shape += [vals.size]
+                # Assign coordinates
+                coords[train_pulse_ids.names[level]] = vals
+
+            # Now that we've added the train/pulse/gain IDs, we can add other
+            # dimensions guessed from the shape of the data.
+            if ndim >= 3:
+                new_shape += shape[-ndim + 1:]
+
+            # If we have more than one module, add that to the shape
+            if modnos is not None:
+                new_shape = [len(modnos)] + new_shape
+
+            dims = train_pulse_ids.names + dims
+            old_data = data
+            data = data.view().reshape(*new_shape)
+
+            # Now we check if the number of frames varies. If it does, then we
+            # have a problem because the frames are loaded into memory
+            # contiguously, even though they should *not* be contiguous. This
+            # makese the data in memory out-of-sync with the indices, so we need
+            # to move some frames to their correct location in the output
+            # array.
+            #
+            # Imagine a selection of 3 trains with 5 frames in the first
+            # train, and 2 in the others. They will be loaded into memory like
+            # this ('||' denotes a train boundary):
+            #   [T1F1, T1F2, T1F3, T1F4, T1F5 || T2F1, T2F2, T3F1, T3F2, nan || nan, nan, nan, nan, nan  ]
+            # But we actually want is:
+            #   [T1F1, T1F2, T1F3, T1F4, T1F5 || T2F1, T2F2, nan, nan, nan   || T3F1, T3F2, nan, nan, nan]
+            constant_frames = len(set(train_pulse_ids.levshape)) == 1
+            if not constant_frames:
+                if fill_value is None:
+                    fill_value = np.nan if data.dtype.kind == 'f' else 0
+                fill_value = data.dtype.type(fill_value)
+
+                # Figure out the actual values for each dimension; e.g. for the
+                # trains dimension this will be an array of train IDs.
+                dims_frame = train_pulse_ids.to_frame()
+                dim_values = [list(np.unique(dims_frame[name].values))
+                              for name in train_pulse_ids.names]
+                # Calculate the stride in number of elements for each dimension
+                dim_strides = [np.prod([len(dim_values[i]) for i in range(dim_idx + 1, len(dim_values))])
+                                     for dim_idx in range(len(dim_values))]
+
+                for current_flat_idx, multi_idx in enumerate(train_pulse_ids):
+                    # This comprehension looks up the index of the dimension
+                    # values to get a multidimensional index (list of indices).
+                    target_idx = [dim_values[dim_idx].index(multi_idx[dim_idx])
+                                  for dim_idx in range(len(multi_idx))]
+                    # Convert the multidimensional index into a flat index
+                    target_flat_idx = int(np.dot(target_idx, dim_strides))
+
+                    # Only copy if necessary
+                    if current_flat_idx != target_flat_idx:
+                        # Copy the data into the correct location
+                        data[(np.s_[:], *target_idx)][...] = old_data[:, current_flat_idx]
+                        # Overwrite the old location with the fill value
+                        old_data[:, current_flat_idx].fill(fill_value)
+        else:
+            # Add a 'train_pulse' dimension
+            dims = ['train_pulse'] + dims
+            coords['train_pulse'] = train_pulse_ids
+
         if modnos is not None:
             dims = ['module'] + dims
             coords['module'] = modnos
 
-        arr = xarray.DataArray(data, coords=coords, dims=dims)
-
-        if unstack_pulses:
-            # Separate train & pulse dimensions, and arrange dimensions
-            # so that the data is contiguous in memory.
-            if modnos is None:
-                dim_order = train_pulse_ids.names + dims[1:]
-            else:
-                dim_order = ['module'] + train_pulse_ids.names + dims[2:]
-            return arr.unstack('train_pulse').transpose(*dim_order)
-        else:
-            return arr
+        return xarray.DataArray(data, coords=coords, dims=dims)
 
     def _read_inner_ids(self, field='pulseId'):
         """Read pulse/cell IDs into a 2D array (frames, modules)
@@ -924,7 +992,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
             self.train_ids_perframe, inner_ids, subtrain_index[:-2]
         )[sel_frames]
         
-        return self._guess_axes(out, index, unstack_pulses, modnos=modnos)
+        return self._guess_axes(out, index, unstack_pulses, fill_value, modnos=modnos)
 
     def get_array(self, key, pulses=np.s_[:], unstack_pulses=True, *,
                   fill_value=None, subtrain_index='pulseId', roi=(),
