@@ -5,7 +5,8 @@ import numpy as np
 from .exceptions import TrainIDError, NoDataError
 from .file_access import FileAccess
 from .read_machinery import (
-    contiguous_regions, DataChunk, select_train_ids, split_trains, roi_shape
+    contiguous_regions, DataChunk, select_train_ids, split_trains, roi_shape,
+    zeros_shared
 )
 from .utils import available_cpu_cores
 
@@ -239,7 +240,10 @@ class KeyData:
         req_shape = self.shape[:1] + roi_shape(self.entry_shape, roi)
 
         if out is None:
-            out = np.empty(req_shape, dtype=self.dtype)
+            if read_procs == 1:
+                out = np.empty(req_shape, dtype=self.dtype)
+            else:
+                out = zeros_shared(req_shape, self.dtype)
         elif out is not None and out.shape != req_shape:
             raise ValueError(f'requires output array of shape {req_shape}')
 
