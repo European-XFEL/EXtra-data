@@ -7,6 +7,7 @@ from .file_access import FileAccess
 from .read_machinery import (
     contiguous_regions, DataChunk, select_train_ids, split_trains, roi_shape
 )
+from .utils import available_cpu_cores
 
 class KeyData:
     """Data for one key in one source
@@ -216,7 +217,16 @@ class KeyData:
 
     # Getting data as different kinds of array: -------------------------------
 
-    def ndarray(self, roi=(), out=None):
+    def _read_tasks(self, parts=1):
+        """Produce file chunks with corresponding slices of the output array"""
+        dest_cursor = 0
+        for part in self.split_trains(parts=parts):
+            for chunk in part._data_chunks_nonempty:
+                dest_chunk_end = dest_cursor + chunk.total_count
+                yield chunk, np.s_[dest_cursor:dest_chunk_end]
+                dest_cursor = dest_chunk_end
+
+    def ndarray(self, roi=(), out=None, read_procs=1):
         """Load this data as a numpy array
 
         *roi* may be a ``numpy.s_[]`` expression to load e.g. only part of each
@@ -234,15 +244,23 @@ class KeyData:
             raise ValueError(f'requires output array of shape {req_shape}')
 
         # Read the data from each chunk into the result array
-        dest_cursor = 0
-        for chunk in self._data_chunks_nonempty:
-            dest_chunk_end = dest_cursor + chunk.total_count
+        if read_procs == 1:
+            for chunk, dest_slice in self._read_tasks():
+                chunk.dataset.read_direct(
+                    out[dest_slice], source_sel=(chunk.slice,) + roi
+                )
+        else:
+            from multiprocessing import Pool
+            if read_procs < 0:
+                read_procs = available_cpu_cores()
 
-            slices = (chunk.slice,) + roi
-            chunk.dataset.read_direct(
-                out[dest_cursor:dest_chunk_end], source_sel=slices
-            )
-            dest_cursor = dest_chunk_end
+            def read_chunk(chunk, dest_slice):
+                chunk.dataset.read_direct(
+                    out[dest_slice], source_sel=(chunk.slice,) + roi
+                )
+
+            with Pool(processes=read_procs) as pool:
+                pool.starmap(read_chunk, self._read_tasks(parts=read_procs))
 
         return out
 
