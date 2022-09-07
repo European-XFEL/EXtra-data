@@ -260,12 +260,17 @@ class KeyData:
         if decomp_threads < 0:
             decomp_threads = available_cpu_cores()
 
-        chunks = sum([
-            p._data_chunks_nonempty for p in self.split_trains(parts=read_procs)
-        ], [])
-        with Pool(processes=read_procs) as ppool:
-            chks_compressed = ppool.map(self._read_direct_frames, chunks)
-            all_compressed_frames = sum(chks_compressed, [])
+        if read_procs == 1:
+            all_compressed_frames = sum([
+                self._read_direct_frames(chk) for chk in self._data_chunks_nonempty
+            ], [])
+        else:
+            chunks = sum([
+                p._data_chunks_nonempty for p in self.split_trains(parts=read_procs)
+            ], [])
+            with Pool(processes=read_procs) as ppool:
+                chks_compressed = ppool.map(self._read_direct_frames, chunks)
+                all_compressed_frames = sum(chks_compressed, [])
 
         def decompress_frame(target_ix, compressed):
             shuffled = zlib.decompress(compressed)
