@@ -227,6 +227,21 @@ class KeyData:
                 yield chunk, np.s_[dest_cursor:dest_chunk_end]
                 dest_cursor = dest_chunk_end
 
+    # In worker processes, we need the shared output array accessible as global
+    # without copying it. Each object launches its own worker processes to
+    # read data, so global variables in the workers are safe.
+    _out_arr = None
+    @classmethod
+    def _set_out_arr(cls, out):
+        cls._out_arr = out
+
+    @classmethod
+    def _read_chunk(cls, chunk, dest_slice, roi):
+        out = cls._out_arr
+        chunk.dataset.read_direct(
+            out[dest_slice], source_sel=(chunk.slice,) + roi
+        )
+
     def ndarray(self, roi=(), out=None, read_procs=1):
         """Load this data as a numpy array
 
@@ -254,17 +269,16 @@ class KeyData:
                     out[dest_slice], source_sel=(chunk.slice,) + roi
                 )
         else:
+            from functools import partial
             from multiprocessing import Pool
             if read_procs < 0:
                 read_procs = available_cpu_cores()
 
-            def read_chunk(chunk, dest_slice):
-                chunk.dataset.read_direct(
-                    out[dest_slice], source_sel=(chunk.slice,) + roi
+            with Pool(processes=read_procs, initializer=self._set_out_arr, initargs=(out,)) as pool:
+                pool.starmap(
+                    partial(self._read_chunk, roi=roi),
+                    self._read_tasks(parts=read_procs)
                 )
-
-            with Pool(processes=read_procs) as pool:
-                pool.starmap(read_chunk, self._read_tasks(parts=read_procs))
 
         return out
 
