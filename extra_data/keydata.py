@@ -242,7 +242,45 @@ class KeyData:
             out[dest_slice], source_sel=(chunk.slice,) + roi
         )
 
-    def ndarray(self, roi=(), out=None, read_procs=1):
+    @staticmethod
+    def _read_direct_frames(chunk):
+        return [
+            chunk.dataset.id.read_direct_chunk((i, 0, 0, 0))[1]
+            for i in range(chunk.first, int(chunk.first) + chunk.total_count)
+        ]
+
+    def _read_compressed_frames(self, out, roi=(), read_procs=1, decomp_threads=1):
+        """Read frame-wise compressed data (mask/gain) for 2D detectors,
+        decompressing data in parallel"""
+        from multiprocessing.pool import Pool, ThreadPool
+        import zlib
+
+        if read_procs < 0:
+            read_procs = available_cpu_cores()
+        if decomp_threads < 0:
+            decomp_threads = available_cpu_cores()
+
+        chunks = sum([
+            p._data_chunks_nonempty for p in self.split_trains(parts=read_procs)
+        ], [])
+        with Pool(processes=read_procs) as ppool:
+            chks_compressed = ppool.map(self._read_direct_frames, chunks)
+            all_compressed_frames = sum(chks_compressed, [])
+
+        def decompress_frame(target_ix, compressed):
+            shuffled = zlib.decompress(compressed)
+            # Equivalent to the HDF5 'shuffle' filter: transpose bytes
+            data = np.ascontiguousarray(
+                np.frombuffer(shuffled, dtype=np.uint8).reshape((out.itemsize, -1)).transpose()
+            ).view(out.dtype).reshape(1, 512, 1024)
+            out[target_ix] = data[roi]
+
+        with ThreadPool(decomp_threads) as tpool:
+            tpool.starmap(decompress_frame, enumerate(all_compressed_frames))
+
+        return out
+
+    def ndarray(self, roi=(), out=None, read_procs=1, decomp_threads=1):
         """Load this data as a numpy array
 
         *roi* may be a ``numpy.s_[]`` expression to load e.g. only part of each
@@ -261,6 +299,17 @@ class KeyData:
                 out = zeros_shared(req_shape, self.dtype)
         elif out is not None and out.shape != req_shape:
             raise ValueError(f'requires output array of shape {req_shape}')
+
+        if decomp_threads != 1 and self.ndim >= 3:
+            dset = self.files[0].file[self.hdf5_data_path]
+            if (dset.chunks == (1,) + self.entry_shape
+                and dset.compression == 'gzip'
+                and dset.shuffle
+                and not dset.fletcher32
+                and not dset.scaleoffset
+            ):
+                return self._read_compressed_frames(out, roi, read_procs, decomp_threads)
+
 
         # Read the data from each chunk into the result array
         if read_procs == 1:
