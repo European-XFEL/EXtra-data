@@ -365,7 +365,7 @@ class KeyData:
         ]
         return np.concatenate(chunks_trainids)
 
-    def xarray(self, extra_dims=None, roi=(), name=None):
+    def xarray(self, extra_dims=None, roi=(), name=None, read_procs=1, decomp_threads=1):
         """Load this data as a labelled xarray array or dataset.
 
         The first dimension is labelled with train IDs. Other dimensions
@@ -395,10 +395,20 @@ class KeyData:
         name: str
             Name the array itself. The default is the source and key joined
             by a dot. Ignored for structured data when a dataset is returned.
+        read_procs: int
+            Use this many processes to read data. Using up to 8-10 processes
+            seems to accelerate data access.
+        decomp_threads: int
+            Use this many threads to decompress certain data, or -1 for one
+            thread per CPU core. This only applies to compressed gain/mask
+            data from corrected 2D detectors, and will be ignored for other
+            keys.
         """
         import xarray
 
-        ndarr = self.ndarray(roi=roi)
+        ndarr = self.ndarray(
+            roi=roi, read_procs=read_procs, decomp_threads=decomp_threads
+        )
 
         # Dimension labels
         if extra_dims is None:
