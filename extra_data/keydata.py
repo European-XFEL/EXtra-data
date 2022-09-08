@@ -256,7 +256,7 @@ class KeyData:
         import zlib
 
         if read_procs < 0:
-            read_procs = available_cpu_cores()
+            read_procs = 10  # Seems to be a decent guess on GPFS
         if decomp_threads < 0:
             decomp_threads = available_cpu_cores()
 
@@ -333,7 +333,7 @@ class KeyData:
             from functools import partial
             from multiprocessing import Pool
             if read_procs < 0:
-                read_procs = available_cpu_cores()
+                read_procs = 10  # Seems to be a decent guess on GPFS
 
             with Pool(processes=read_procs, initializer=self._set_out_arr, initargs=(out,)) as pool:
                 pool.starmap(
