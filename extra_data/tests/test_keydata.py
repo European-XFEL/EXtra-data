@@ -298,6 +298,15 @@ def test_ndarray_out(mock_spb_raw_run):
     assert buf_in is buf_out
 
 
+def test_ndarray_read_multiproc(mock_spb_raw_run):
+    f = RunDirectory(mock_spb_raw_run)
+    cam = f['SPB_IRU_CAM/CAM/SIDEMIC:daqOutput', 'data.image.dims']
+
+    arr = cam.ndarray()
+    arr_p = cam.ndarray(read_procs=4)
+    np.testing.assert_array_equal(arr_p, arr)
+
+
 def test_xarray_structured_data(mock_remi_run):
     run = RunDirectory(mock_remi_run)
     dset = run['SQS_REMI_DLD6/DET/TOP:output', 'rec.hits'].xarray()
