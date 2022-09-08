@@ -291,6 +291,13 @@ class KeyData:
         *roi* may be a ``numpy.s_[]`` expression to load e.g. only part of each
         image from a camera. If *out* is not given, a suitable array will be
         allocated.
+
+        Passing *read_procs* will use multiple processes to read the data in
+        parallel; using up to 8-10 processes seems to speed up reading larger
+        data, if your code is not parallelised at another level. For certain
+        compressed data (gain & mask information from corrected 2D detectors),
+        you can decompress it in parallel by passing *decomp_threads*. A value
+        of -1 will use one thread per CPU core.
         """
         if not isinstance(roi, tuple):
             roi = (roi,)
