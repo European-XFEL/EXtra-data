@@ -9,6 +9,7 @@ import os
 import pandas as pd
 import pytest
 import stat
+import shutil
 from tempfile import mkdtemp
 from testpath import assert_isfile
 from unittest import mock
@@ -768,18 +769,10 @@ def test_run_immutable_sources(mock_fxe_raw_run):
     assert len(test_run.all_sources) == before
 
 
-def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
-    prop_dir = os.path.join(str(tmpdir), 'SPB', '201830', 'p002012')
-    # Set up raw
-    os.makedirs(os.path.join(prop_dir, 'raw'))
-    os.symlink(mock_spb_raw_run, os.path.join(prop_dir, 'raw', 'r0238'))
+def test_open_run(mock_spb_raw_and_proc_run):
+    mock_data_root, raw_run_dir, proc_run_dir = mock_spb_raw_and_proc_run
 
-    # Set up proc
-    proc_run_dir = os.path.join(prop_dir, 'proc', 'r0238')
-    os.makedirs(os.path.join(prop_dir, 'proc'))
-    os.symlink(mock_spb_proc_run, proc_run_dir)
-
-    with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', str(tmpdir)):
+    with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', mock_data_root):
         # With integers
         run = open_run(proposal=2012, run=238)
         paths = {f.filename for f in run.files}
@@ -824,7 +817,7 @@ def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
                     assert '/proc/' not in file.filename
 
         # Delete the proc data
-        os.unlink(proc_run_dir)
+        shutil.rmtree(proc_run_dir)
         assert not os.path.isdir(proc_run_dir)
 
         with catch_warnings(record=True) as w:
@@ -842,7 +835,7 @@ def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
             open_run(proposal=2012, run=999)
 
         # run directory exists but contains no data
-        os.makedirs(os.path.join(prop_dir, 'proc', 'r0238'))
+        os.makedirs(proc_run_dir)
         with catch_warnings(record=True) as w:
             open_run(proposal=2012, run=238, data='all')
             assert len(w) == 1
@@ -858,12 +851,15 @@ def test_open_file(mock_sa3_control_data):
         assert 'METADATA/dataSources/dataSourceId' in file_access.file
 
 
-def open_run_daemonized_helper(path):
-    RunDirectory(path, parallelize=False)
+def open_run_daemonized_helper(mock_data_root):
+    with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', mock_data_root):
+        open_run(2012, 238, data="all", parallelize=False)
 
-def test_open_run_daemonized(mock_fxe_raw_run):
+def test_open_run_daemonized(mock_spb_raw_and_proc_run):
+    mock_data_root, raw_run_dir, proc_run_dir = mock_spb_raw_and_proc_run
+
     # Daemon processes can't start their own children, check that opening a run is still possible.
-    p = Process(target=open_run_daemonized_helper, args=(mock_fxe_raw_run,), daemon=True)
+    p = Process(target=open_run_daemonized_helper, args=(mock_data_root,), daemon=True)
     p.start()
     p.join()
 

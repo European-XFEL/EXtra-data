@@ -1,3 +1,4 @@
+import os
 import os.path as osp
 
 import h5py
@@ -106,6 +107,24 @@ def mock_spb_raw_run(format_version):
     with TemporaryDirectory() as td:
         make_examples.make_spb_run(td, format_version=format_version)
         yield td
+
+
+@pytest.fixture(scope='session')
+def mock_spb_raw_and_proc_run():
+    with TemporaryDirectory() as td:
+        prop_dir = osp.join(str(td), 'SPB', '201830', 'p002012')
+
+        # Set up raw
+        raw_run_dir = osp.join(prop_dir, 'raw', 'r0238')
+        os.makedirs(raw_run_dir)
+        make_examples.make_spb_run(raw_run_dir)
+
+        # Set up proc
+        proc_run_dir = osp.join(prop_dir, 'proc', 'r0238')
+        os.makedirs(proc_run_dir)
+        make_examples.make_spb_run(proc_run_dir, raw=False)
+
+        yield td, raw_run_dir, proc_run_dir
 
 
 @pytest.fixture(scope='session')
