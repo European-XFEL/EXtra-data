@@ -1,4 +1,4 @@
-cloudpickle==2.1.0
+cloudpickle==2.2.0
 coverage==6.2
 h5py<3.8.0
 karabo-bridge==0.6.2
