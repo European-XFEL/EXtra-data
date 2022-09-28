@@ -57,7 +57,7 @@ setup(name="EXtra-data",
               'psutil',
           ],
           'calibration': [
-              'calibration-client>=9.1.1'
+              'calibration-client>=11.0.0'
           ],
           'docs': [
               'sphinx',
@@ -76,7 +76,7 @@ setup(name="EXtra-data",
               'testpath',
           ]
       },
-      python_requires='>=3.6',
+      python_requires='>=3.7',
       classifiers=[
           'Development Status :: 5 - Production/Stable',
           'Environment :: Console',

@@ -352,18 +352,19 @@ class CalibrationData:
         self.snapshot_at = snapshot_at
 
         if client is None:
-            if self.__class__.default_client is None:
-                raise ValueError(f'need client passed by argument or prior '
-                                 f'client set-up via {self.__class__.__name__}'
-                                 f'.new_client')
-
-            client = self.__class__.default_client
+            client = self.__class__.default_client or \
+                self.__class__.new_anonymous_client()
 
         self._api = CalCatApi(client)
 
     @staticmethod
+    def new_anonymous_client():
+        return CalibrationData.new_client(None, None, None, use_oauth2=False,
+                                          base_url='http://max-exfl017:9876')
+
+    @staticmethod
     def new_client(client_id, client_secret, user_email, installation='',
-                   base_url='https://in.xfel.eu/{}calibration'):
+                   base_url='https://in.xfel.eu/{}calibration', **kwargs):
         """Create a new calibration-client object.
 
         The client object is saved as a class property and is
@@ -378,6 +379,8 @@ class CalibrationData:
                 installation, production system by default.
             base_url (str, optional): URL template for CalCat
                 installation, public European XFEL by default.
+            Any further keyword arguments are passed on to
+            CalibrationClient.__init__().
 
         Returns:
             (CalibrationClient) CalCat client.
@@ -397,6 +400,7 @@ class CalibrationData:
             refresh_url=f'{base_url}/oauth/token',
             auth_url=f'{base_url}/oauth/authorize',
             scope='',
+            **kwargs
         )
         return CalibrationData.default_client
 
