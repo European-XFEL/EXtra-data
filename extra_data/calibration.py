@@ -609,8 +609,8 @@ class CalibrationData:
             return creation_date
 
 
-class IlluminationDependentCalData(CalibrationData):
-    """Calibration data with dark and illuminated distinction.
+class SplitConditionCalibrationData(CalibrationData):
+    """Calibration data with dark and illuminated conditions.
 
     Some detectors of this kind distinguish between two different
     operating conditions depending on whether photons illuminate the
@@ -700,7 +700,7 @@ class IlluminationDependentCalData(CalibrationData):
         return metadata
 
 
-class AGIPD_CalibrationData(IlluminationDependentCalData):
+class AGIPD_CalibrationData(SplitConditionCalibrationData):
     """Calibration data for the AGIPD detector."""
 
     dark_calibrations = {'Offset', 'Noise', 'ThresholdsDark', 'BadPixelsDark',
@@ -776,7 +776,7 @@ class AGIPD_CalibrationData(IlluminationDependentCalData):
         return self
 
 
-class LPD_CalibrationData(IlluminationDependentCalData):
+class LPD_CalibrationData(SplitConditionCalibrationData):
     """Calibration data for the LPD detector."""
 
     dark_calibrations = {'Offset', 'Noise', 'BadPixelsDark'}
