@@ -723,6 +723,7 @@ class AGIPD_CalibrationData(SplitConditionCalibrationData):
         self.memory_cells = memory_cells
         self.pixels_x = pixels_x
         self.pixels_y = pixels_y
+        self.acquisition_rate = acquisition_rate
         self.gain_setting = gain_setting
         self.gain_mode = gain_mode
         self.integration_time = integration_time
@@ -775,6 +776,18 @@ class AGIPD_CalibrationData(SplitConditionCalibrationData):
 
         return self
 
+    def _build_condition(self, parameters):
+        cond = super()._build_condition(parameters)
+
+        # Fix-up some database quirks.
+        if int(cond.get('Gain mode', -1)) == 0:
+            del cond['Gain mode']
+
+
+        if int(cond.get('Integration time', -1)) == 12:
+            del cond['Integration time']
+
+        return cond
 
 class LPD_CalibrationData(SplitConditionCalibrationData):
     """Calibration data for the LPD detector."""
