@@ -22,19 +22,19 @@ try:
 except ImportError as e:
     raise RuntimeError(
         f'`calibration_client` not available, please install to enable '
-        f'CorrectionData interface: {e}')
+        f'CalibrationData interface: {e}')
 
 
 __all__ = [
     'BadPixels',
     'CalCatError',
-    'CorrectionData',
-    'AGIPD_CorrectionData',
-    'LPD_CorrectionData',
-    'DSSC_CorrectionData',
-    'JUNGFRAU_CorrectionData',
-    'PNCCD_CorrectionData',
-    'EPIX100_CorrectionData',
+    'CalibrationData',
+    'AGIPD_CalibrationData',
+    'LPD_CalibrationData',
+    'DSSC_CalibrationData',
+    'JUNGFRAU_CalibrationData',
+    'PNCCD_CalibrationData',
+    'EPIX100_CalibrationData',
 ]
 
 
@@ -290,13 +290,13 @@ class CalCatApi(metaclass=ClientWrapper):
         return metadata
 
 
-class CorrectionData:
-    """Correction constants data for detectors.
+class CalibrationData:
+    """Calibration constants data for detectors.
 
     European XFEL uses a web app and database to store records about the
     characterization of detectors and the data necessary to their
-    correction, collectively called CalCat. The default installation is
-    available at https://in.xfel.eu/calibration.
+    correction and analysis, collectively called CalCat. The default
+    installation is available at https://in.xfel.eu/calibration.
 
     A detector is identified by a name (e.g. SPB_DET_AGIPD1M-1) and
     consists of one or more detector modules. The modules are a virtual
@@ -330,7 +330,7 @@ class CorrectionData:
 
     def __init__(self, detector_name, modules=None, client=None, event_at=None,
                  snapshot_at=None):
-        """Initialize a new CorrectionData object.
+        """Initialize a new CalibrationData object.
 
         Args:
             detector_name (str): Name of detector in CalCat.
@@ -367,7 +367,7 @@ class CorrectionData:
         """Create a new calibration-client object.
 
         The client object is saved as a class property and is
-        automatically to any future CorrectionData objects created, if
+        automatically to any future CalibrationData objects created, if
         no other client is passed explicitly.
 
         Arguments:
@@ -384,7 +384,11 @@ class CorrectionData:
         """
 
         base_url = base_url.format(f'{installation}_' if installation else '')
-        CorrectionData.default_client = CalibrationClient(
+
+        # Note this is not a classmethod and we're modifying
+        # CalibrationData directly to use the same object across all
+        # detector-specific implementations.
+        CalibrationData.default_client = CalibrationClient(
             client_id=client_id,
             client_secret=client_secret,
             user_email=user_email,
@@ -394,7 +398,7 @@ class CorrectionData:
             auth_url=f'{base_url}/oauth/authorize',
             scope='',
         )
-        return CorrectionData.default_client
+        return CalibrationData.default_client
 
     @property
     def caldb_root(self):
@@ -405,19 +409,19 @@ class CorrectionData:
                 None if not available.
         """
 
-        if not hasattr(CorrectionData, '_caldb_root'):
+        if not hasattr(CalibrationData, '_caldb_root'):
             if getenv('SASE'):
                 # ONC
-                CorrectionData._caldb_root = Path('/common/cal/caldb_store')
+                CalibrationData._caldb_root = Path('/common/cal/caldb_store')
             elif re.match(r'^max-(.+)\.desy\.de$', socket.getfqdn()):
                 # Maxwell
-                CorrectionData._caldb_root = Path(
+                CalibrationData._caldb_root = Path(
                     '/gpfs/exfel/d/cal/caldb_store')
             else:
                 # Probably unavailable
-                CorrectionData._caldb_root = None
+                CalibrationData._caldb_root = None
 
-        return CorrectionData._caldb_root
+        return CalibrationData._caldb_root
 
     @property
     def client(self):
@@ -437,7 +441,7 @@ class CorrectionData:
         return self._build_condition(self.parameters)
 
     def replace(self, **new_kwargs):
-        """Create a new CorrectionData object with altered values."""
+        """Create a new CalibrationData object with altered values."""
 
         keys = {
             'detector_name', 'modules', 'client', 'event_at', 'snapshot_at'
@@ -493,7 +497,7 @@ class CorrectionData:
             raise RuntimeError('calibration database store unavailable')
 
         if self.modules and module not in self.modules:
-            raise ValueError('module not part of this correction data')
+            raise ValueError('module not part of this calibration data')
 
         if metadata is None:
             metadata = self.metadata([calibration])
@@ -560,16 +564,16 @@ class CorrectionData:
 
         creation_date = cls._determine_data_creation_date(data)
 
-        # Create new CorrectionData object.
-        corrdata = cls(detector_name, modules, client,
+        # Create new CalibrationData object.
+        caldata = cls(detector_name, modules, client,
                        creation_date, creation_date)
 
-        corrdata.memory_cells = component_cls._get_memory_cell_count(
+        caldata.memory_cells = component_cls._get_memory_cell_count(
             detector_sources[0])
-        corrdata.pixels_x = component_cls.module_shape[1]
-        corrdata.pixels_y = component_cls.module_shape[0]
+        caldata.pixels_x = component_cls.module_shape[1]
+        caldata.pixels_y = component_cls.module_shape[0]
 
-        return corrdata, detector_sources
+        return caldata, detector_sources
 
     @staticmethod
     def _simplify_parameter_name(name):
@@ -601,8 +605,8 @@ class CorrectionData:
             return creation_date
 
 
-class IlluminationDependentCorrData(CorrectionData):
-    """Correction data with dark and illuminated distinction.
+class IlluminationDependentCalData(CalibrationData):
+    """Calibration data with dark and illuminated distinction.
 
     Some detectors of this kind distinguish between two different
     operating conditions depending on whether photons illuminate the
@@ -622,19 +626,19 @@ class IlluminationDependentCorrData(CorrectionData):
 
     @property
     def calibrations(self):
-        """Compatibility with CorrectionData."""
+        """Compatibility with CalibrationData."""
 
         return self.dark_calibrations | self.illuminated_calibrations
 
     @property
     def parameters(self):
-        """Compatibility with CorrectionData."""
+        """Compatibility with CalibrationData."""
 
         return self.dark_parameters + self.illuminated_parameters
 
     @property
     def condition(self):
-        """Compatibility with CorrectionData."""
+        """Compatibility with CalibrationData."""
 
         cond = dict()
         cond.update(self.dark_condition)
@@ -692,8 +696,8 @@ class IlluminationDependentCorrData(CorrectionData):
         return metadata
 
 
-class AGIPD_CorrectionData(IlluminationDependentCorrData):
-    """Correction data for the AGIPD detector."""
+class AGIPD_CalibrationData(IlluminationDependentCalData):
+    """Calibration data for the AGIPD detector."""
 
     dark_calibrations = {'Offset', 'Noise', 'ThresholdsDark', 'BadPixelsDark',
                          'BadPixelsPC', 'SlopesPC'}
@@ -723,15 +727,15 @@ class AGIPD_CorrectionData(IlluminationDependentCorrData):
     @classmethod
     def from_data(cls, data, detector=None, modules=None, client=None,
                   control_source=None):
-        """Initialize a new AGIPD_CorrectionData object based on data.
+        """Initialize a new AGIPD_CalibrationData object based on data.
 
-        The correction constants validity time `event_at` is chosen
+        The calibration constants validity time `event_at` is chosen
         based on the run creation date, while the database time
         `snapshot_at` is chosen to be now.
 
         Args:
             data (extra_data.DataCollection): Data to create
-                AGIPD_CorrectionData object for.
+                AGIPD_CalibrationData object for.
             detector (extra_data.components.AGIPD1M or str, optional):
                 Detector component object or name, may be omitted if
                 only a single detector instance is present.
@@ -744,7 +748,7 @@ class AGIPD_CorrectionData(IlluminationDependentCorrData):
                 data, may be omitted to query from CalCat.
 
         Returns:
-            (AGIPD_CorrectionData) Initialized object.
+            (AGIPD_CalibrationData) Initialized object.
         """
 
         from .components import AGIPD1M
@@ -768,8 +772,8 @@ class AGIPD_CorrectionData(IlluminationDependentCorrData):
         return self
 
 
-class LPD_CorrectionData(IlluminationDependentCorrData):
-    """Correction data for the LPD detector."""
+class LPD_CalibrationData(IlluminationDependentCalData):
+    """Calibration data for the LPD detector."""
 
     dark_calibrations = {'Offset', 'Noise', 'BadPixelsDark'}
     illuminated_calibrations = {'RelativeGain', 'GainAmpMap', 'FFMap',
@@ -797,15 +801,15 @@ class LPD_CorrectionData(IlluminationDependentCorrData):
     @classmethod
     def from_data(cls, data, detector=None, modules=None, client=None,
                   control_source=None):
-        """Initialize a new LPD_CorrectionData object based on data.
+        """Initialize a new LPD_CalibrationData object based on data.
 
-        The correction constants validity time `event_at` is chosen
+        The calibration constants validity time `event_at` is chosen
         based on the run creation date, while the database time
         `snapshot_at` is chosen to be now.
 
         Args:
             data (extra_data.DataCollection): Data to create
-                LPD_CorrectionData object for.
+                LPD_CalibrationData object for.
             detector (extra_data.components.LPD1M or str, optional):
                 Detector component object or name, may be omitted if
                 only a single detector instance is present.
@@ -818,7 +822,7 @@ class LPD_CorrectionData(IlluminationDependentCorrData):
                 on an instance level.
 
         Returns:
-            (LPD_CorrectionData) Initialized object.
+            (LPD_CalibrationData) Initialized object.
         """
 
         from .components import LPD1M
@@ -830,8 +834,8 @@ class LPD_CorrectionData(IlluminationDependentCorrData):
         return self
 
 
-class DSSC_CorrectionData(CorrectionData):
-    """Correction data for the DSSC detetor."""
+class DSSC_CalibrationData(CalibrationData):
+    """Calibration data for the DSSC detetor."""
 
     calibrations = {'Offset', 'Noise'}
     parameters = ['Sensor Bias Voltage', 'Memory cells', 'Pixels X',
@@ -857,15 +861,15 @@ class DSSC_CorrectionData(CorrectionData):
     @classmethod
     def from_data(cls, data, detector=None, modules=None, client=None,
                   control_source=None):
-        """Initialize a new DSSC_CorrectionData object based on data.
+        """Initialize a new DSSC_CalibrationData object based on data.
 
-        The correction constants validity time `event_at` is chosen
+        The calibration constants validity time `event_at` is chosen
         based on the run creation date, while the database time
         `snapshot_at` is chosen to be now.
 
         Args:
             data (extra_data.DataCollection): Data to create
-                DSSC_CorrectionData object for.
+                DSSC_CalibrationData object for.
             detector (extra_data.components.DSSC1M or str, optional):
                 Detector component object or name, may be omitted if
                 only a single detector instance is present.
@@ -879,7 +883,7 @@ class DSSC_CorrectionData(CorrectionData):
                 contain a format field for the quadrant number.
 
         Returns:
-            (DSSC_CorrectionData) Initialized object.
+            (DSSC_CalibrationData) Initialized object.
         """
 
         from .components import DSSC1M
@@ -954,8 +958,8 @@ class DSSC_CorrectionData(CorrectionData):
             + (trimmed << 32)
 
 
-class JUNGFRAU_CorrectionData(CorrectionData):
-    """Correction data for the JUNGFRAU detector."""
+class JUNGFRAU_CalibrationData(CalibrationData):
+    """Calibration data for the JUNGFRAU detector."""
 
     calibrations = {'Offset10Hz', 'Noise10Hz', 'BadPixelsDark10Hz',
                     'RelativeGain10Hz', 'BadPixelsFF10Hz'}
@@ -1015,7 +1019,7 @@ class JUNGFRAU_CorrectionData(CorrectionData):
         return self
 
 
-class PNCCD_CorrectionData(CorrectionData):
+class PNCCD_CalibrationData(CalibrationData):
     calibrations = {'OffsetCCD', 'BadPixelsDarkCCD', 'NoiseCCD',
                     'RelativeGainCCD', 'CTECCD'}
     parameters = ['Sensor Bias Voltage', 'Memory cells', 'Pixels X',
@@ -1086,5 +1090,5 @@ class PNCCD_CorrectionData(CorrectionData):
                    sensor_temperature=sensor_temperature)
 
 
-class EPIX100_CorrectionData(CorrectionData):
+class EPIX100_CalibrationData(CalibrationData):
     pass
