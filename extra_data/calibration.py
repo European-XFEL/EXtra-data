@@ -639,7 +639,9 @@ class SplitConditionCalibrationData(CalibrationData):
     def parameters(self):
         """Compatibility with CalibrationData."""
 
-        return self.dark_parameters + self.illuminated_parameters
+        # Removes likely duplicates while preserving order.
+        return list(dict.fromkeys(
+            self.dark_parameters + self.illuminated_parameters))
 
     @property
     def condition(self):
@@ -783,7 +785,6 @@ class AGIPD_CalibrationData(SplitConditionCalibrationData):
         # Fix-up some database quirks.
         if int(cond.get('Gain mode', -1)) == 0:
             del cond['Gain mode']
-
 
         if int(cond.get('Integration time', -1)) == 12:
             del cond['Integration time']
