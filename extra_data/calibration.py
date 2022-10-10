@@ -373,6 +373,9 @@ class CalibrationData:
         on the European XFEL computing infrastructure.
         """
 
+        print('Access to CalCat via the XFEL OAuth proxy is currently '
+              'considered in testing, please report any issues to '
+              'da-support@xfel.eu')
         return CalibrationData.new_client(None, None, None, use_oauth2=False,
                                           base_url='http://exflcalproxy:8080/')
 
