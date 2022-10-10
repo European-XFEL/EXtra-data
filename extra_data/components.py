@@ -442,7 +442,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
           Number of used memory cells.
         """
 
-        return detector_source['image.cellId'][0].shape[0]
+        return detector_source['image.cellId'].drop_empty_trains()[0].shape[0]
 
     def _make_image_index(self, tids, inner_ids, inner_name='pulse'):
         """
