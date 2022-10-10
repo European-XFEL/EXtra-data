@@ -321,9 +321,11 @@ class CalibrationData:
     called a calibration constant version (CCV). There may be many CCVs
     for any given CC.
 
-    Note that while a connection to CalCat is possible from anywhere,
-    the actual calibration data referred to is only available on the
-    European XFEL infrastructure.
+    Note that while an authenticated connection to CalCat is possible
+    from anywhere, the actual calibration data referred to is only
+    available on the European XFEL computing infrastructure. If no
+    explicit credentials are supplied, an anonymous read-only connection
+    is established that is also only available from there.
     """
 
     calibrations = set()
@@ -332,6 +334,10 @@ class CalibrationData:
     def __init__(self, detector_name, modules=None, client=None, event_at=None,
                  snapshot_at=None):
         """Initialize a new CalibrationData object.
+
+        If no calibration-client object is passed or has been created
+        using Calibration.new_client, an anonymous read-only connection
+        is established automatically.
 
         Args:
             detector_name (str): Name of detector in CalCat.
@@ -360,8 +366,15 @@ class CalibrationData:
 
     @staticmethod
     def new_anonymous_client():
+        """Create an anonymous calibration-client object.
+
+        This connection allows read-only access to CalCat using a
+        facility-proveded OAuth reverse proxy. This is only accessible
+        on the European XFEL computing infrastructure.
+        """
+
         return CalibrationData.new_client(None, None, None, use_oauth2=False,
-                                          base_url='http://max-exfl017:9876')
+                                          base_url='http://exflcalproxy:8080/')
 
     @staticmethod
     def new_client(client_id, client_secret, user_email, installation='',
