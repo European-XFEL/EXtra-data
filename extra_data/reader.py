@@ -61,6 +61,10 @@ RUN_DATA = 'RUN'
 INDEX_DATA = 'INDEX'
 METADATA = 'METADATA'
 
+def initializer():
+    # prevent child processes from receiving KeyboardInterrupt
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
 
 class DataCollection:
     """An assemblage of data generated at European XFEL
@@ -153,10 +157,6 @@ class DataCollection:
                 uncached.append(path)
 
         if uncached:
-            def initializer():
-                # prevent child processes from receiving KeyboardInterrupt
-                signal.signal(signal.SIGINT, signal.SIG_IGN)
-
             # Open the files either in parallel or serially
             if parallelize:
                 nproc = min(available_cpu_cores(), len(uncached))
