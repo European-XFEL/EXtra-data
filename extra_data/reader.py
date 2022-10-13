@@ -61,6 +61,10 @@ RUN_DATA = 'RUN'
 INDEX_DATA = 'INDEX'
 METADATA = 'METADATA'
 
+def ignore_sigint():
+    # Used in child processes to prevent them from receiving KeyboardInterrupt
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
 
 class DataCollection:
     """An assemblage of data generated at European XFEL
@@ -153,14 +157,10 @@ class DataCollection:
                 uncached.append(path)
 
         if uncached:
-            def initializer():
-                # prevent child processes from receiving KeyboardInterrupt
-                signal.signal(signal.SIGINT, signal.SIG_IGN)
-
             # Open the files either in parallel or serially
             if parallelize:
                 nproc = min(available_cpu_cores(), len(uncached))
-                with Pool(processes=nproc, initializer=initializer) as pool:
+                with Pool(processes=nproc, initializer=ignore_sigint) as pool:
                     for fname, fa in pool.imap_unordered(cls._open_file, uncached):
                         handle_open_file_attempt(fname, fa)
             else:
