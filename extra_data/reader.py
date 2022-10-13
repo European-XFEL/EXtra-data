@@ -61,8 +61,8 @@ RUN_DATA = 'RUN'
 INDEX_DATA = 'INDEX'
 METADATA = 'METADATA'
 
-def initializer():
-    # prevent child processes from receiving KeyboardInterrupt
+def ignore_sigint():
+    # Used in child processes to prevent them from receiving KeyboardInterrupt
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
