@@ -160,7 +160,7 @@ class DataCollection:
             # Open the files either in parallel or serially
             if parallelize:
                 nproc = min(available_cpu_cores(), len(uncached))
-                with Pool(processes=nproc, initializer=initializer) as pool:
+                with Pool(processes=nproc, initializer=ignore_sigint) as pool:
                     for fname, fa in pool.imap_unordered(cls._open_file, uncached):
                         handle_open_file_attempt(fname, fa)
             else:
