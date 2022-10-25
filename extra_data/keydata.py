@@ -108,7 +108,9 @@ class KeyData:
                         paths.add(filename)
             else:
                 paths.add(chunk.file.filename)
-        return paths
+
+        from pathlib import Path
+        return {Path(p) for p in paths}
 
     def select_trains(self, trains):
         """Select a subset of trains in this data as a new :class:`KeyData` object.
