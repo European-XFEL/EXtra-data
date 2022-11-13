@@ -1,5 +1,8 @@
 import numpy as np
 
+from .base import DeviceBase
+
+
 class DetectorModule:
     # Overridden in subclasses:
     image_dims = ()
@@ -165,3 +168,35 @@ class LPDModule(DetectorModule):
 class DSSCModule(DetectorModule):
     image_dims = (1, 128, 512)
     detector_data_size = 416
+
+class PNCCD(DeviceBase):
+    output_channels = ('output/data',)
+
+    instrument_keys = [
+        ('image', 'u2', (1024, 1024)),
+    ]
+
+class Epix100(DeviceBase):
+    output_channels = ('daqOutput/data',)
+
+    instrument_keys = [
+        ('ambTemp', 'i4', ()),
+        ('analogCurr', 'u4', ()),
+        ('analogInputVolt', 'u4', ()),
+        ('backTemp', 'i4', ()),
+        ('digitalCurr', 'u4', ()),
+        ('digitalInputVolt', 'u4', ()),
+        ('guardCurr', 'u4', ()),
+        ('image.binning', 'u8', (2,)),
+        ('image.bitsPerPixel', 'i4', ()),
+        ('image.dimTypes', 'i4', (2,)),
+        ('image.dims', 'u8', (2,)),
+        ('image.encoding', 'i4', ()),
+        ('image.flipX', 'u1', ()),
+        ('image.flipY', 'u1', ()),
+        ('image.pixels', 'i2', (708, 768)),
+        ('image.roiOffsets', 'u8', (2,)),
+        ('image.rotation', 'i4', ()),
+        ('pulseId', 'u8', ()),
+        ('relHumidity', 'i4', ()),
+    ]

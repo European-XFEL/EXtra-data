@@ -7,8 +7,10 @@ from testpath import assert_isfile
 
 from extra_data.reader import RunDirectory, H5File, by_id, by_index
 from extra_data.components import (
-    AGIPD1M, DSSC1M, LPD1M, JUNGFRAU, identify_multimod_detectors,
+    AGIPD1M, DSSC1M, LPD1M, JUNGFRAU, Epix100, PNCCD, identify_multimod_detectors,
 )
+from extra_geom import AGIPD_1MGeometry, LPD_1MGeometry, DSSC_1MGeometry
+from extra_geom.tests.test_jungfrau_geometry import jf4m_geometry
 
 
 def test_get_array(mock_fxe_raw_run):
@@ -581,3 +583,39 @@ def test_identify_multimod_detectors_multi(mock_fxe_raw_run, mock_spb_raw_run):
     name, cls = identify_multimod_detectors(combined, single=True, clses=[AGIPD1M])
     assert name == 'SPB_DET_AGIPD1M-1'
     assert cls is AGIPD1M
+
+
+def test_get_data(mock_fxe_raw_run, mock_jungfrau_run, mock_epix100_run, mock_pnccd_run):
+    # LPD
+    fxe = RunDirectory(mock_fxe_raw_run).select_trains(np.s_[:5])
+    lpd = LPD1M(fxe)
+    with pytest.raises(Exception):
+        lpd.get_data()
+    lpd_data, _ = lpd.get_data(geometry=LPD_1MGeometry.from_quad_positions([(11.4, 299), (-11.5, 8), (254.5, -16), (278.5, 275)]))
+    assert lpd_data.shape == (5, 128, 1202, 1104)
+
+    # JUNGFRAU 4M
+    jf_run = RunDirectory(mock_jungfrau_run).select_trains(np.s_[:5])
+    jf = JUNGFRAU(jf_run)
+    with pytest.raises(Exception):
+        jf_data, _ = jf.get_data()
+    jf_data, _ = jf.get_data(geometry=jf4m_geometry())
+    assert jf_data.shape == (5, 16, 2156, 2250), jf_data.shape
+
+    # JUNGFRAU single module
+    jf_run = jf_run.select('SPB_IRDA_JF4M/DET/JNGFR01:daqOutput', '*')
+    jf = JUNGFRAU(jf_run, n_modules=1)
+    jf_data, _ = jf.get_data()
+    assert jf_data.shape == (5, 16, 514, 1030), jf_data.shape
+
+    # Epix100
+    epix_run = RunDirectory(mock_epix100_run).select_trains(np.s_[:5])
+    epix100 = Epix100(epix_run)
+    epix_data, _ = epix100.get_data()
+    assert epix_data.shape == (5, 709, 773), epix_data.shape
+
+    # PNCCD
+    pnccd_run = RunDirectory(mock_pnccd_run).select_trains(np.s_[:10])
+    pnccd = PNCCD(pnccd_run)
+    pnccd_data, _ = pnccd.get_data()
+    assert pnccd_data.shape == (10, 1, 1078, 1024)

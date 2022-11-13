@@ -3,6 +3,7 @@ import os.path as osp
 
 import h5py
 import numpy as np
+from extra_data.components import PNCCD
 
 from .mockdata import write_file
 from .mockdata.adc import ADC
@@ -10,13 +11,13 @@ from .mockdata.agipd import AGIPD1MFPGA, AGIPD1MPSC, AGIPD500KFPGA, AGIPDMDL
 from .mockdata.base import write_base_index
 from .mockdata.basler_camera import BaslerCamera as BaslerCam
 from .mockdata.dctrl import DCtrl
-from .mockdata.detectors import AGIPDModule, DSSCModule, LPDModule
+from .mockdata.detectors import (PNCCD, AGIPDModule, DSSCModule, Epix100,
+                                 LPDModule)
 from .mockdata.gauge import Gauge
 from .mockdata.gec_camera import GECCamera
 from .mockdata.imgfel import IMGFELCamera, IMGFELMotor
-from .mockdata.jungfrau import (
-    JUNGFRAUControl, JUNGFRAUModule, JUNGFRAUMonitor, JUNGFRAUPower
-)
+from .mockdata.jungfrau import (JUNGFRAUControl, JUNGFRAUModule,
+                                JUNGFRAUMonitor, JUNGFRAUPower)
 from .mockdata.motor import Motor
 from .mockdata.mpod import MPOD
 from .mockdata.proc import ReconstructedDLD6
@@ -372,6 +373,19 @@ def make_jungfrau_run(dir_path):
         JUNGFRAUMonitor('SPB_IRDA_JF4M/MDL/MONITOR'),
         JUNGFRAUPower('SPB_IRDA_JF4M/MDL/POWER'),
     ], ntrains=100, chunksize=1, format_version='1.0')
+
+
+def make_epix100_run(dir_path):
+    # Naming based on /gpfs/exfel/exp/MID/202201/p002834/raw/r0199
+    path = osp.join(dir_path, 'RAW-R0199-EPIX01-S00000.h5')
+    write_file(path, [Epix100('MID_EXP_EPIX-1/DET/RECEIVER')], ntrains=100, chunksize=1, format_version='1.0')
+
+
+def make_pnccd_run(dir_path):
+    # Naming based on /gpfs/exfel/exp/SQS/202201/p002857/raw/r0259/
+    path = osp.join(dir_path, 'RAW-R0259-PNCCD01-S00000.h5')
+    write_file(path, [PNCCD('SQS_NQS_PNCCD1MP/CAL/PNCCD_FMT-0')], ntrains=100, chunksize=1, format_version='1.0')
+
 
 def make_remi_run(dir_path):
     write_file(osp.join(dir_path, f'CORR-R0210-REMI01-S00000.h5'), [

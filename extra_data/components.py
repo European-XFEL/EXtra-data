@@ -8,12 +8,14 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 import xarray
+from extra_geom import (AGIPD_500K2GGeometry, Epix100Geometry,
+                        JUNGFRAUGeometry, PNCCDGeometry)
 
-from .exceptions import SourceNameError
-from .reader import DataCollection, by_id, by_index
+from .exceptions import PropertyNameError, SourceNameError
 from .read_machinery import DataChunk, roi_shape, split_trains
+from .reader import DataCollection, by_id, by_index
+from .write_cxi import JUNGFRAUCXIWriter, XtdfCXIWriter
 from .writer import FileWriter
-from .write_cxi import XtdfCXIWriter, JUNGFRAUCXIWriter
 
 __all__ = [
     'AGIPD1M',
@@ -21,6 +23,8 @@ __all__ = [
     'DSSC1M',
     'LPD1M',
     'JUNGFRAU',
+    'PNCCD',
+    'Epix100',
     'identify_multimod_detectors',
 ]
 
@@ -442,6 +446,57 @@ class MultimodDetectorBase:
 
         return xarray.DataArray(out, dims=dims, coords=coords)
 
+    def _default_geometry(self):
+        """Return a default geometry for the data"""
+        raise Exception(
+            f'Component {self.__class__.__name__} with {self.n_modules} modules'
+            ' does not provide a default geometry')
+
+    def get_data(self, geometry=None, *, fill_value=None, roi=(), astype=None,
+                 mask=False, asic_seams=False):
+        """Get assembled data with geometry and mask applied.
+
+        geometry:
+            An extra_geom geometry object.
+        fill_value: int or float, optional
+            Value to use for missing values. If None (default) the fill value
+            is 0 for integers and np.nan for floats.
+        roi: tuple
+          Specify e.g. ``np.s_[10:60, 100:200]`` to select pixels within each
+          module when reading data. The selection is applied to each individual
+          module, so it may only be useful when working with a single module.
+        astype: Type
+          Data type of the output array. If None (default) the dtype matches the
+          input array dtype
+        mask: (int, bool)
+            if True, use the mask present in the data (if in use with CORR data). If an
+            int is provided, it will only mask the selected bits.
+        asic_seams: bool
+            mask asic edges if the geometry implements it.
+        """
+        geometry = geometry or self._default_geometry()
+        data = self.get_array(self._main_data_key, fill_value=fill_value, roi=roi, astype=astype)
+        data = data.transpose(..., 'module', *data.dims[-2:]).data
+
+        if hasattr(geometry, '_ensure_shape'):
+            data = geometry._ensure_shape(data)
+        if asic_seams and hasattr(geometry, 'asic_seams'):
+            data = data * ~geometry.asic_seams()
+
+        if mask:
+            try:
+                if isinstance(mask, int) and not isinstance(mask, bool):
+                    # mask only the selected bits if an int is passed to the mask arg
+                    mask = (self.get_array('image.mask', roi=roi) & mask).astype(np.bool_)
+                else:
+                    mask = self.get_array('image.mask', fill_value=False, roi=roi, astype=np.bool_)
+            except PropertyNameError:
+                pass  # no mask available in this data
+            else:
+                data = data * ~mask
+
+        assembled, centre = geometry.position_modules(data)
+        return assembled, centre
 
     def get_dask_array(self, key, fill_value=None, astype=None):
         """Get a labelled Dask array of detector data
@@ -1265,6 +1320,9 @@ class AGIPD500K(XtdfDetectorBase):
     module_shape = (512, 128)
     n_modules = 8
 
+    def _default_geometry(self):
+        return AGIPD_500K2GGeometry.from_origin()
+
 
 @multimod_detectors
 class DSSC1M(XtdfDetectorBase):
@@ -1447,6 +1505,11 @@ class JUNGFRAU(MultimodDetectorBase):
         src = next(iter(self.source_to_modno))
         self._frames_per_entry = self.data[src, self._main_data_key].entry_shape[0]
 
+    def _default_geometry(self):
+        if self.n_modules == 1:
+            return JUNGFRAUGeometry.from_module_positions()
+        super()._default_geometry()
+
     @staticmethod
     def _label_dims(arr):
         # Label dimensions to match the AGIPD/DSSC/LPD data access
@@ -1542,6 +1605,41 @@ class JUNGFRAU(MultimodDetectorBase):
             zero for integer arrays)
         """
         JUNGFRAUCXIWriter(self).write(filename, fillvalues=fillvalues)
+
+
+@multimod_detectors
+class PNCCD(MultimodDetectorBase):
+    """An interface to PNCCD data
+
+    Detector names are like ''
+    """
+    _source_re = re.compile(r'(?P<detname>.+_PNCCD1MP)/CAL/PNCCD_FMT-(?P<modno>\d+)')
+    _main_data_key = 'data.image'
+    module_shape = PNCCDGeometry.expected_data_shape[-2:]
+    n_modules = 2
+
+    def _default_geometry(self):
+        return PNCCDGeometry.from_relative_positions()
+
+
+@multimod_detectors
+class Epix100(MultimodDetectorBase):
+    """An interface to Epix100 data
+
+    Detector names are like ''
+    """
+    _source_re = re.compile(r'(?P<detname>.+_(EPX100|EPIX)-(?P<modno>\d+))/DET/RECEIVER')
+    _main_data_key = 'data.image.pixels'
+    module_shape = Epix100Geometry.expected_data_shape[-2:]
+    n_modules = 1
+
+    def _default_geometry(self):
+        if self.detector_name == 'HED_IA1_EPX100-2':
+            # module 2  at HED has a different geometry, for more details, see:
+            # https://extra-geom.readthedocs.io/en/latest/geometry.html#extra_geom.Epix100Geometry.from_origin
+            return Epix100Geometry.from_relative_positions(top=[386.5, 364.5, 0.], bottom=[386.5, -12.5, 0.])
+        return Epix100Geometry.from_origin()
+
 
 def identify_multimod_detectors(
         data, detector_name=None, *, single=False, clses=None
