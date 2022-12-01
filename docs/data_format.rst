@@ -21,7 +21,7 @@ A continuous DAQ recording over a period of time is a *run* and includes all the
 structured HDF5 in a single directory. Here these files follow a naming pattern::
 
     RAW-R0348-AGIPD04-S00002.h5
-    
+
 which denotes the HDF5 file with ``raw`` data for sequence ``2`` of the aggregator
 ``AGIPD04`` in run ``348``. Within a run the grouping of sources into aggregators
 does not change. Each *proposal* can collect any number of runs during their granted
@@ -54,7 +54,7 @@ device naming convention [2]_ for source names.
   naming convention, control sources should follow the pattern ``DOMAIN/TYPE/MEMBER``.
   Their data is saved in the ``CONTROL`` and ``RUN`` top-level groups described
   further below.
- 
+
 * Instrument sources represent momentary data that is only valid for a single train
   or pulse. This covers most scientific detectors such as digitizers, cameras and
   more. These sources are never guaranteed to have data for every train, but may
@@ -67,8 +67,6 @@ device naming convention [2]_ for source names.
   In files however, a Karabo pipeline source may have different entries based on
   this ``ROOT``.
 
-[insert reference for train structure somewhere?]
-
 
 HDF5 file structure
 -------------------
@@ -77,8 +75,6 @@ Every HDF5 file must contain the top-level groups ``METADATA`` and ``INDEX``.
 Depending on the included sources, there may additionally be the groups
 ``CONTROL``, ``RUN`` and ``INSTRUMENT``.
 [note 1: is this clear enough it may be a combination of those?]
-[note 2: based on actual files, ``RUN`` seems to always be there even without 
-``CONTROL`` albeit empty, move it to the first list?]
 
 
 METADATA
@@ -87,7 +83,7 @@ METADATA
 The ``METADATA`` group in an HDF5 file contains auxiliary information as
 individual datasets, most of which are constant across a run and or even
 proposal. Some of these datasets may not be present in any given file depending
-on how it was created. 
+on how it was created.
 
 This list contains all the datasets to be expected for data recorded with the
 EuXFEL DAQ software. Even when only containing a single entry, all these datasets
