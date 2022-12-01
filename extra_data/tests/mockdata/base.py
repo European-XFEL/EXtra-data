@@ -35,7 +35,7 @@ class DeviceBase:
 
     def write_control(self, f):
         """Write the CONTROL and RUN data, and the relevant parts of INDEX"""
-        N = self.ntrains 
+        N = self.ntrains
 
         # INDEX
         i_first = f.create_dataset('INDEX/%s/first' % self.device_id,
