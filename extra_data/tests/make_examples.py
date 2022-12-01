@@ -185,6 +185,7 @@ def make_sa3_da_file(path, ntrains=500, format_version='0.5'):
         Gauge('SA3_XTD10_VAC/GAUGE/G30490D_IN'),
         Gauge('SA3_XTD10_VAC/GAUGE/G30500P'),
         Gauge('SA3_XTD10_VAC/GAUGE/G30510C'),
+        Gauge('SA3_XTD10_VAC/GAUGE/G30520C', no_ctrl_data=True),
         DCtrl('SA3_XTD10_VAC/DCTRL/D6_APERT_IN_OK'),
         DCtrl('SA3_XTD10_VAC/DCTRL/D12_APERT_IN_OK'),
         XGM('SA3_XTD10_XGM/XGM/DOOCS'),
