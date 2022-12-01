@@ -21,7 +21,7 @@ from extra_data import (
     MultiRunError
 )
 
-def test_iterate_trains(mock_agipd_data, mock_sa3_control_data):
+def test_iterate_trains(mock_agipd_data, mock_control_data_with_empty_source):
     with H5File(mock_agipd_data) as f:
         for train_id, data in islice(f.trains(), 10):
             assert train_id in range(10000, 10250)
@@ -29,7 +29,7 @@ def test_iterate_trains(mock_agipd_data, mock_sa3_control_data):
             assert len(data) == 1
             assert 'image.data' in data['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf']
 
-    with H5File(mock_sa3_control_data) as f:
+    with H5File(mock_control_data_with_empty_source) as f:
         # smoke test
         tid, data = next(f.trains())
         assert list(data['SA3_XTD10_VAC/GAUGE/G30520C'].keys()) == ['metadata']
@@ -268,7 +268,7 @@ def test_iterate_run_glob_devices(mock_fxe_raw_run):
     assert 'FXE_XAD_GEC/CAM/CAMERA' not in data
 
 
-def test_train_by_id(mock_fxe_raw_run, mock_sa3_control_data):
+def test_train_by_id(mock_fxe_raw_run, mock_control_data_with_empty_source):
     # full run
     run = RunDirectory(mock_fxe_raw_run)
     _, data = run.train_from_id(10024)
@@ -285,7 +285,7 @@ def test_train_by_id(mock_fxe_raw_run, mock_sa3_control_data):
     assert 'FXE_XAD_GEC/CAM/CAMERA' not in data
 
     # missing control data
-    with H5File(mock_sa3_control_data) as f:
+    with H5File(mock_control_data_with_empty_source) as f:
         _, data = f.train_from_id(10000)
         assert 'SA3_XTD10_VAC/GAUGE/G30520C' in data
         assert ['metadata'] == list(data['SA3_XTD10_VAC/GAUGE/G30520C'].keys())
