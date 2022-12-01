@@ -4,7 +4,7 @@ Data files format
 
 Scientific data at European XFEL is saved as structured HDF5 files in format
 called EXDF. Each file contains data for one or more *sources* having multiple
-*keys* that carry values for certain *trains*. Most sources, in particular for
+*keys* that carry values for certain *trains* [1]_. Most sources, in particular for
 raw data, correspond to an entity in the Karabo control system called a *device*,
 which may manage physical hardware but also purely perform software functions.
 
@@ -44,7 +44,7 @@ Sources differ in the semantics of data generation and validity by either being
 (also called fast, pipeline or XTDF data). In terms of the Karabo control system,
 control sources represent device properties while instrument sources are the data
 sent by device output channels. As such, it is recommended to follow the Karabo
-device naming convention [1] for source names.
+device naming convention [2]_ for source names.
 
 * Control data represents a steady state that retains its value until changed again.
   Examples for this are motor positions or detector configuration like the frame rate.
@@ -196,5 +196,11 @@ Format versions
 1.2, 1.0, 0.5: TBD
 
 
-[1] Karabo device naming convention
-[2] Something for EuXFEL train structure
+
+
+References
+----------
+
+
+.. [1] Decking et al: *A MHz-repetition-rate hard X-ray free-electron laser driven by a superconducting linear accelerator*, Nature Photonics 391-397, 2020
+.. [2] European XFEL DAQ and Control systems naming convention: https://docs.xfel.eu/share/s/dDHQtDIkRUiXPr9DM6WQ-Q
