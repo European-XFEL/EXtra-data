@@ -186,16 +186,43 @@ INSTRUMENT
 ~~~~~~~~~~
 
 For each *INSTRUMENT* entry in ``METADATA/dataSourceId``, there is a group with
-that name in the file. All these datasets have the same length in the first dimension:
-this represents the successive readings taken. The slices defined by the corresponding
-datasets in *INDEX* work on this dimension.
+that name in the file. All these datasets have the same length in the first dimension: this represents the successive readings taken. The slices defined by the corresponding datasets in *INDEX* work on this dimension.
 
 Format versions
 ---------------
 
-1.2, 1.0, 0.5: TBD
+1.1
+~~~
 
+* ``INDEX/flag`` dataset is similar to ``INDEX/origin`` in later versions, listing the index into ``METADATA/dataSources`` of the source that sent the first entry for a given train. Unlike ``INDEX/origin`` however, the time server itself is a virtual source with index ``0`` rather than ``-1``.
 
+  **Warning:** This flips the meaning compared to earlier versions with ``0`` indicating a *safe* train and a positive number for unreliable timing.
+* ``METADATA/dataSources`` contains a static virtual source ``Karabo_TimeServer`` with an empty entry in ``METADATA/dataSources/root``.
+
+1.0
+~~~
+
+* ``INDEX`` group contains only the top-level datasets ``trainId``, ``timestamp``, ``flag``.
+
+0.5
+~~~
+
+**Warning:** This file format version is lacking the ``METADATA/dataFormatVersion`` dataset and can thus only be inferred from its structure.
+
+* ``INDEX`` group contains only the top-level dataset ``trainId``.
+* ``METADATA`` group is identical to ``METADATA/dataSources`` in later versions,
+  i.e. directly contains the datasets ``root``, ``deviceId`` and ``dataSourceId``.
+
+0.1
+~~~
+
+**Warning:** This file format version is lacking the ``METADATA/dataFormatVersion`` dataset and can thus only be inferred from its structure.
+
+**Warning:** This file format version is **not** supported by EXtra-data.
+
+Same as 0.5 in addition to:
+
+* ``INDEX/{deviceId}`` group specifies the mapping from trains to data rows of each source via ``first``/``last`` datasets with ``last = first + count - 1`` denoting the last row index belonging to a particular train.
 
 
 References
