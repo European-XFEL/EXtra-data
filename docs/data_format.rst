@@ -195,10 +195,14 @@ Format versions
   **Warning:** This flips the meaning compared to earlier versions with ``0`` indicating a *safe* train and a positive number for unreliable timing.
 * ``METADATA/dataSources`` contains a static virtual source ``Karabo_TimeServer`` with an empty entry in ``METADATA/dataSources/root``.
 
+The EuXFEL DAQ software used this format version only briefly around July 2021.
+
 1.0
 ~~~
 
 * ``INDEX`` group contains only the top-level datasets ``trainId``, ``timestamp``, ``flag``.
+
+The EuXFEL DAQ software used this format version between February 2020 and September 2021.
 
 0.5
 ~~~
@@ -209,21 +213,22 @@ Format versions
 * ``METADATA`` group is identical to ``METADATA/dataSources`` in later versions,
   i.e. directly contains the datasets ``root``, ``deviceId`` and ``dataSourceId``.
 
+The EuXFEL DAQ software used this format version between February 2018 and April 2020.
+
 0.1
 ~~~
 
 **Warning:** This file format version is lacking the ``METADATA/dataFormatVersion`` dataset and can thus only be inferred from its structure.
 
-**Warning:** This file format version is **not** supported by EXtra-data.
-
 Same as 0.5 in addition to:
 
 * ``INDEX/{deviceId}`` group specifies the mapping from trains to data rows of each source via ``first``/``last`` datasets with ``last = first + count - 1`` denoting the last row index belonging to a particular train.
 
+The EuXFEL DAQ software used this format version until April 2018.
+
 
 References
 ----------
-
 
 .. [1] Decking et al: *A MHz-repetition-rate hard X-ray free-electron laser driven by a superconducting linear accelerator*, Nature Photonics 391-397, 2020
 .. [2] European XFEL DAQ and Control systems naming convention: https://docs.xfel.eu/share/s/dDHQtDIkRUiXPr9DM6WQ-Q
