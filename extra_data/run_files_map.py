@@ -69,14 +69,12 @@ class RunFilesMap:
             os.path.realpath(directory)
         )
 
-        if maxwell_match:
-            raw_proc, instr, cycle, prop, run_nr = maxwell_match.groups()
-        elif online_match:
-            instr, cycle, prop, raw_proc, run_nr = online_match.groups()
-        else:
-            run_nr = None
+        if maxwell_match or online_match:
+            if maxwell_match:
+                raw_proc, instr, cycle, prop, run_nr = maxwell_match.groups()
+            else:
+                instr, cycle, prop, raw_proc, run_nr = online_match.groups()
 
-        if run_nr is not None:
             fname = '%s_%s.json' % (raw_proc, run_nr)
             prop_scratch = osp.join(
                 SCRATCH_ROOT_DIR, instr, cycle, prop, 'scratch'
@@ -85,6 +83,7 @@ class RunFilesMap:
                 paths.append(
                     osp.join(prop_scratch, '.karabo_data_maps', fname)
                 )
+
         return paths
 
     def load(self):
