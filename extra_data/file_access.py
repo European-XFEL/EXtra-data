@@ -13,7 +13,7 @@ import resource
 from warnings import warn
 from weakref import WeakValueDictionary
 
-from .exceptions import SourceNameError
+from .exceptions import FileStructureError, SourceNameError
 
 # Track all FileAccess objects - {path: FileAccess}
 file_access_registry = WeakValueDictionary()
@@ -133,7 +133,11 @@ class FileAccess(metaclass=MetaFileAccess):
             self.instrument_sources = _cache_info['instrument_sources']
             self.validity_flag = _cache_info.get('flag', None)
         else:
-            tid_data = self.file['INDEX/trainId'][:]
+            try:
+                tid_data = self.file['INDEX/trainId'][:]
+            except KeyError:
+                raise FileStructureError('INDEX/trainId dataset not found')
+
             self.train_ids = tid_data[tid_data != 0]
 
             self.control_sources, self.instrument_sources = self._read_data_sources()
@@ -228,7 +232,12 @@ class FileAccess(metaclass=MetaFileAccess):
         else:
             data_sources_path = 'METADATA/dataSources/dataSourceId'
 
-        for source in self.file[data_sources_path][:]:
+        try:
+            data_sources_group = self.file[data_sources_path]
+        except KeyError:
+            raise FileStructureError(f'{data_sources_path} not found')
+
+        for source in data_sources_group[:]:
             if not source:
                 continue
             source = source.decode()

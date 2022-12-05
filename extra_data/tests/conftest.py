@@ -157,6 +157,17 @@ def empty_h5_file():
 
         yield path
 
+
+@pytest.fixture(scope='session')
+def mock_no_metadata_file():
+    with TemporaryDirectory() as td:
+        path = osp.join(td, 'no_metadata.h5')
+        with h5py.File(path, 'w') as f:
+            f.create_dataset('INDEX/trainId', data=[], dtype=np.uint64)
+
+        yield path
+
+
 @pytest.fixture(scope='session')
 def mock_empty_file():
     with TemporaryDirectory() as td:
