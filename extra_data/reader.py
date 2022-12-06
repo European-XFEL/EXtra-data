@@ -388,7 +388,7 @@ class DataCollection:
             if file is None:
                 continue
 
-            firsts, counts = file.get_index(source, group)
+            firsts, counts = file.get_index(source, '')
             first, count = firsts[pos], counts[pos]
             if not count:
                 continue
@@ -1298,7 +1298,7 @@ class TrainIterator:
                 if ds is None:
                     continue
 
-                firsts, counts = file.get_index(source, group)
+                firsts, counts = file.get_index(source, '')
                 first, count = firsts[pos], counts[pos]
                 if not count:
                     continue
