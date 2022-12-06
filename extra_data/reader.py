@@ -388,13 +388,14 @@ class DataCollection:
             if file is None:
                 continue
 
-            count = file.get_index(source, '')[1][pos]
+            firsts, counts = file.get_index(source, group)
+            first, count = firsts[pos], counts[pos]
             if not count:
                 continue
 
             for key in self.keys_for_source(source):
                 path = '/CONTROL/{}/{}'.format(source, key.replace('.', '/'))
-                source_data[key] = file.file[path][pos]
+                source_data[key] = file.file[path][first]
 
         for source in self.instrument_sources:
             source_data = res[source] = {
