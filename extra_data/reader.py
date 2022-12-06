@@ -1298,11 +1298,12 @@ class TrainIterator:
                 if ds is None:
                     continue
 
-                count = file.get_index(source, '')[1][pos]
+                firsts, counts = file.get_index(source, group)
+                first, count = firsts[pos], counts[pos]
                 if not count:
                     continue
 
-                self._set_result(res, source, key, ds[pos])
+                self._set_result(res, source, key, ds[first])
 
         for source in self.data.instrument_sources:
             self._set_result(res, source, 'metadata',
