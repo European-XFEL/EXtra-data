@@ -17,7 +17,7 @@ class DeviceBase:
     firsttrain = 10000
     chunksize = 200
 
-    def __init__(self, device_id, nsamples=None):
+    def __init__(self, device_id, nsamples=None, no_ctrl_data=False):
         """Create a dummy device
 
         :param str device_id: e.g. "SA1_XTD2_XGM/DOOCS/MAIN"
@@ -27,9 +27,11 @@ class DeviceBase:
             spread evenly across the trains.
         :param int chunksize: The sample dimension will be padded to a multiple
             of this.
+        :param bool no_ctrl_data: mock a device that did not save data if set to True.
         """
         self.device_id = device_id
         self.nsamples = nsamples
+        self.no_ctrl_data = no_ctrl_data
 
     def write_control(self, f):
         """Write the CONTROL and RUN data, and the relevant parts of INDEX"""
@@ -40,11 +42,15 @@ class DeviceBase:
                                    (N,), 'u8', maxshape=(None,))
         i_count = f.create_dataset('INDEX/%s/count' % self.device_id,
                                    (N,), 'u8', maxshape=(None,))
-        i_first[:] = np.arange(N)
-        i_count[:] = 1
+        i_first[:] = 0 if self.no_ctrl_data else np.arange(N)
+        i_count[:] = 0 if self.no_ctrl_data else 1
 
         # CONTROL & RUN
         # Creating empty datasets for now.
+
+        if self.no_ctrl_data:
+            N = 0
+
         for (topic, datatype, dims) in self.control_keys:
             f.create_dataset('CONTROL/%s/%s/timestamp' % (self.device_id, topic),
                              (N,), 'u8', maxshape=(None,))

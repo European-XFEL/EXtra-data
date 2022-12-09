@@ -195,6 +195,26 @@ def make_sa3_da_file(path, ntrains=500, format_version='0.5'):
         MPOD('SA3_XTD10_MCP/MCPS/MPOD'),
     ], ntrains=ntrains, chunksize=50, format_version=format_version)
 
+def make_da_file_with_empty_source(path, ntrains=500, format_version='0.5'):
+    write_file(path, [
+        ADC('SA3_XTD10_MCP/ADC/1', nsamples=0, channels=(
+            'channel_3.output/data',
+            'channel_5.output/data',
+            'channel_9.output/data',
+        )),
+        UVLamp('SA3_XTD10_MCP/DCTRL/UVLAMP'),
+        Motor('SA3_XTD10_MCP/MOTOR/X2'),
+        TemperatureSensor('SA3_XTD10_VAC/TSENS/S30100K'),
+        Gauge('SA3_XTD10_VAC/GAUGE/G30510C'),
+        Gauge('SA3_XTD10_VAC/GAUGE/G30520C', no_ctrl_data=True),
+        DCtrl('SA3_XTD10_VAC/DCTRL/D6_APERT_IN_OK'),
+        XGM('SA3_XTD10_XGM/XGM/DOOCS'),
+        IMGFELCamera('SA3_XTD10_IMGFEL/CAM/BEAMVIEW', nsamples=0),
+        IMGFELCamera('SA3_XTD10_IMGFEL/CAM/BEAMVIEW2', nsamples=250),
+        IMGFELMotor('SA3_XTD10_IMGFEL/MOTOR/FILTER'),
+        MPOD('SA3_XTD10_MCP/MCPS/MPOD'),
+    ], ntrains=ntrains, chunksize=50, format_version=format_version)
+
 def make_data_file_bad_device_name(path, format_version='0.5'):
     """Not all devices have the Karabo standard A/B/C naming convention"""
     write_file(path, [

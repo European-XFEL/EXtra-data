@@ -388,9 +388,14 @@ class DataCollection:
             if file is None:
                 continue
 
+            firsts, counts = file.get_index(source, '')
+            first, count = firsts[pos], counts[pos]
+            if not count:
+                continue
+
             for key in self.keys_for_source(source):
                 path = '/CONTROL/{}/{}'.format(source, key.replace('.', '/'))
-                source_data[key] = file.file[path][pos]
+                source_data[key] = file.file[path][first]
 
         for source in self.instrument_sources:
             source_data = res[source] = {
@@ -1288,12 +1293,17 @@ class TrainIterator:
             self._set_result(res, source, 'metadata',
                              {'source': source, 'timestamp.tid': tid})
 
-
             for key in self.data.keys_for_source(source):
-                _, pos, ds = self._find_data(source, key, tid)
+                file, pos, ds = self._find_data(source, key, tid)
                 if ds is None:
                     continue
-                self._set_result(res, source, key, ds[pos])
+
+                firsts, counts = file.get_index(source, '')
+                first, count = firsts[pos], counts[pos]
+                if not count:
+                    continue
+
+                self._set_result(res, source, key, ds[first])
 
         for source in self.data.instrument_sources:
             self._set_result(res, source, 'metadata',

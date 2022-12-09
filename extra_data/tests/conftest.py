@@ -57,6 +57,14 @@ def mock_sa3_control_data(format_version):
 
 
 @pytest.fixture(scope='module')
+def mock_control_data_with_empty_source(format_version):
+    with TemporaryDirectory() as td:
+        path = osp.join(td, 'RAW-R0451-DA01-S00001.h5')
+        make_examples.make_da_file_with_empty_source(path, format_version=format_version)
+        yield path
+
+
+@pytest.fixture(scope='module')
 def mock_spb_control_data_badname(format_version):
     with TemporaryDirectory() as td:
         path = osp.join(td, 'RAW-R0309-DA01-S00000.h5')
