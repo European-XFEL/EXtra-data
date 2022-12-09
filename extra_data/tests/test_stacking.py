@@ -148,7 +148,7 @@ def test_stack_detector_data_jungfrau(mock_jungfrau_run):
     assert comb.shape == (16, 8, 512, 1024)
 
 
-def test_stack_detector_data_jungfrau(mock_jungfrau_run):
+def test_stack_detector_data_jungfrau_keep_dims(mock_jungfrau_run):
     run = RunDirectory(mock_jungfrau_run)
     _, data = run.select('*JF4M/DET/*', 'data.adc').train_from_index(0, keep_dims=True)
 
