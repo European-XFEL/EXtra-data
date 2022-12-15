@@ -5,6 +5,7 @@ import cloudpickle
 import pytest
 
 from ..file_access import FileAccess
+from ..exceptions import FileStructureError
 
 
 def test_registry(mock_sa3_control_data):
@@ -57,3 +58,13 @@ def test_pickle(pickle_mod, mock_sa3_control_data):
     assert len(fa3._keys_cache) == 0
     assert 'SA3_XTD10_IMGFEL/CAM/BEAMVIEW2:daqOutput' in fa3.instrument_sources
     assert len(fa3.train_ids) == 500
+
+
+def test_no_index(empty_h5_file):
+    with pytest.raises(FileStructureError):
+        FileAccess(empty_h5_file)
+
+
+def test_no_metadata(mock_no_metadata_file):
+    with pytest.raises(FileStructureError):
+        FileAccess(mock_no_metadata_file)
