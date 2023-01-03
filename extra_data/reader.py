@@ -25,6 +25,7 @@ from collections.abc import Iterable, Mapping
 from itertools import groupby
 from multiprocessing import Pool
 from operator import index
+from pathlib import Path
 from typing import Tuple
 from warnings import warn
 
@@ -608,6 +609,55 @@ class DataCollection:
                                      '2-len tuples for sourcekeys')
 
                 aliases.update(alias_def)
+            elif isinstance(alias_def, (str, os.PathLike)):
+                # From a file.
+                aliases.update(self._load_aliases_from_file(Path(alias_def)))
+
+        return aliases
+
+    def _load_aliases_from_file(self, aliases_path):
+        """Load alias definitions from file."""
+
+        if aliases_path.suffix == '.json':
+            import json
+
+            with open(aliases_path, 'r') as f:
+                data = json.load(f)
+
+        elif aliases_path.suffix == '.yaml':
+            import yaml
+
+            with open(aliases_path, 'r') as f:
+                data = yaml.safe_load(f)
+
+        elif aliases_path.suffix == '.toml':
+            try:
+                from tomli import load as load_toml
+            except ImportError:
+                # Try the built-in tomllib for 3.11+.
+                from tomllib import load as load_toml
+
+            with open(aliases_path, 'rb') as f:
+                data = load_toml(f)
+
+        aliases = {}
+
+        def walk_dict_value(source, key_aliases):
+            for alias, key in key_aliases.items():
+                aliases[alias] = (source, key)
+
+        for key, value in data.items():
+            if isinstance(value, str):
+                # Source alias.
+                aliases[key] = value
+            elif isinstance(value, list) and len(value) == 2:
+                # Sourcekey alias by explicit list.
+                aliases[key] = tuple((str(x) for x in value))
+            elif isinstance(value, dict):
+                # Sourcekey alias by nested mapping.
+                walk_dict_value(key, value)
+            else:
+                raise ValueError(f"unsupported literal type for alias '{key}'")
 
         return aliases
 
@@ -618,6 +668,32 @@ class DataCollection:
         that may be used instead of their literal names to retrieve
         :class:`SourceData` and :class:`KeyData` objects via
         :property:`DataCollection.alias`.
+
+        Multiple alias definitions may be passed as positional arguments
+        in different formats:
+
+        1. Passing a dictionary mapping aliases to sources (passed as strings)
+           or source-key pairs (passed as a 2-len tuple of strings).
+
+        2. Passing a string or PathLike pointing to a JSON, YAML (requires
+           pyYAML installed) or TOML (requires Python 3.11 or with tomli
+           installed) file containing the aliases. For unsupported formats,
+           an ImportError is raised.
+
+           The file should contain mappings from alias to sources as strings
+           or source-key pairs as lists. In addition, source-key aliases may
+           be defined by nested key-value pairs according to the respective
+           format, shown here in YAML::
+
+             # Source alias.
+             sa1-xgm: SA1_XTD2_XGM/XGM/DOOCS
+
+             # Direct source key alias.
+             sa1-intensity: [SA1_XTD2_XGM/XGM/DOOCS:output, data.intensityTD]
+
+             # Nested source key alias.
+             SA3_XTD10_MONO/MDL/PHOTON_ENERGY:
+               mono-central-energy: actualEnergy
 
         Returns a new :class:`DataCollection` object with the aliases
         for sources and keys.
