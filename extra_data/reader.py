@@ -572,10 +572,12 @@ class DataCollection:
 
         This can be used to join multiple sources for the same trains,
         or to extend the same sources with data for further trains.
-        The order of the datasets doesn't matter.
+        The order of the datasets doesn't matter. Any aliases defined on
+        the collections are combined as well unless their values conflict.
 
         Returns a new :class:`DataCollection` object.
         """
+
         sources_data_multi = defaultdict(list)
         for dc in (self,) + others:
             for source, srcdata in dc._sources_data.items():
@@ -584,12 +586,29 @@ class DataCollection:
         sources_data = {src: src_datas[0].union(*src_datas[1:])
                         for src, src_datas in sources_data_multi.items()}
 
+        # Check for alias conflicts across all data collections.
+        duplicate_aliases = set(self._aliases.keys()).intersection(
+            *[dc._aliases for dc in others])
+
+        for alias in duplicate_aliases:
+            # Find all values occuring for duplicate aliases.
+            duplicate_alias_values = set([self._aliases[alias]]).union(
+                [dc._aliases[alias] for dc in others])
+
+            if len(duplicate_alias_values) > 1:
+                raise ValueError('conflicting aliases across data collections '
+                                 'to be merged')
+
+        aliases = self._aliases.copy()
+        for dc in others:
+            aliases.update(dc._aliases)
+
         train_ids = sorted(set().union(*[sd.train_ids for sd in sources_data.values()]))
         files = set().union(*[sd.files for sd in sources_data.values()])
 
         return DataCollection(
             files, sources_data=sources_data, train_ids=train_ids,
-            inc_suspect_trains=self.inc_suspect_trains,
+            aliases=aliases, inc_suspect_trains=self.inc_suspect_trains,
             is_single_run=same_run(self, *others),
         )
 
@@ -901,7 +920,7 @@ class DataCollection:
         files = set().union(*[sd.files for sd in sources_data.values()])
 
         return DataCollection(
-            files, sources_data, train_ids=train_ids,
+            files, sources_data, train_ids=train_ids, aliases=self._aliases,
             inc_suspect_trains=self.inc_suspect_trains,
             is_single_run=self.is_single_run
         )
@@ -939,7 +958,7 @@ class DataCollection:
 
         return DataCollection(
             files, sources_data=sources_data, train_ids=self.train_ids,
-            inc_suspect_trains=self.inc_suspect_trains,
+            aliases=self._aliases, inc_suspect_trains=self.inc_suspect_trains,
             is_single_run=self.is_single_run,
         )
 
@@ -974,7 +993,7 @@ class DataCollection:
 
         return DataCollection(
             files, sources_data=sources_data, train_ids=new_train_ids,
-            inc_suspect_trains=self.inc_suspect_trains,
+            aliases=self._aliases, inc_suspect_trains=self.inc_suspect_trains,
             is_single_run=self.is_single_run,
         )
 
