@@ -21,7 +21,7 @@ import sys
 import tempfile
 import time
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from itertools import groupby
 from multiprocessing import Pool
 from operator import index
@@ -33,7 +33,7 @@ import numpy as np
 
 from . import locality, voview
 from .exceptions import (MultiRunError, PropertyNameError, SourceNameError,
-                         TrainIDError)
+                         AliasError, TrainIDError)
 from .file_access import FileAccess
 from .keydata import KeyData
 from .read_machinery import (DETECTOR_SOURCE_RE, FilenameInfo, by_id, by_index,
@@ -76,8 +76,8 @@ class DataCollection:
     for a single file or :func:`RunDirectory` for a directory.
     """
     def __init__(
-            self, files, sources_data=None, train_ids=None, ctx_closes=False, *,
-            inc_suspect_trains=True, is_single_run=False,
+            self, files, sources_data=None, train_ids=None, aliases=None,
+            ctx_closes=False, *, inc_suspect_trains=True, is_single_run=False,
     ):
         self.files = list(files)
         self.ctx_closes = ctx_closes
@@ -111,6 +111,8 @@ class DataCollection:
                 for ((src, section), files) in files_by_sources.items()
             }
         self._sources_data = sources_data
+
+        self._aliases = aliases or {}
 
         # Throw an error if we have conflicting data for the same source
         self._check_source_conflicts()
@@ -259,7 +261,7 @@ class DataCollection:
         elif isinstance(item, str):
             return self._get_source_data(item)
 
-        raise TypeError("Expected data[source, key]")
+        raise TypeError("Expected data[source] or data[source, key]")
 
     def get_entry_shape(self, source, key):
         """Get the shape of a single data entry for the given source & key"""
@@ -590,8 +592,51 @@ class DataCollection:
             is_single_run=same_run(self, *others),
         )
 
-    def _expand_selection(self, selection):
+    def _parse_aliases(self, alias_defs):
+        aliases = {}
 
+        def is_valid_alias(k, v):
+            return (isinstance(k, str) and (
+                isinstance(v, str) or (isinstance(v, tuple) and len(v) == 2)
+            ))
+
+        for alias_def in alias_defs:
+            if isinstance(alias_def, Mapping):
+                if any([not is_valid_alias(k, v) for k, v in alias_def.items()]):
+                    raise ValueError('alias definition by dict must be all '
+                                     'str keys to str values for sources or '
+                                     '2-len tuples for sourcekeys')
+
+                aliases.update(alias_def)
+
+        return aliases
+
+    def with_aliases(self, *alias_defs):
+        """Apply aliases for convenient source and key access.
+
+        Allows to define aliases for sources or source-key combinations
+        that may be used instead of their literal names to retrieve
+        :class:`SourceData` and :class:`KeyData` objects via
+        :property:`DataCollection.alias`.
+
+        Returns a new :class:`DataCollection` object with the aliases
+        for sources and keys.
+        """
+
+        return DataCollection(
+            self.files, sources_data=self._sources_data,
+            train_ids=self.train_ids, aliases=self._parse_aliases(alias_defs),
+            inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=self.is_single_run
+        )
+
+
+    @property
+    def alias(self):
+        """Enables item access via source and key aliases."""
+        return AliasIndexer(self)
+
+    def _expand_selection(self, selection):
         if isinstance(selection, dict):
             # {source: {key1, key2}}
             # {source: set()} or {source: None} -> all keys for this source
@@ -1329,6 +1374,37 @@ class TrainIterator:
             if self.require_all and self.data._check_data_missing(tid):
                 continue
             yield tid, self._assemble_data(tid)
+
+
+class AliasIndexer:
+    __slots__ = ('data',)
+
+    def __init__(self, data):
+        self.data = data
+
+    def __getitem__(self, aliased_item):
+        if isinstance(aliased_item, tuple) and len(aliased_item) == 2:
+            try:
+                source = self.data._aliases[aliased_item[0]]
+            except KeyError:
+                raise AliasError(aliased_item[0]) from None
+
+            if isinstance(source, tuple):
+                raise ValueError(f'{aliased_item[0]} not only aliasing a '
+                                    f'source for this data')
+
+            # Source alias with key literal.
+            return self.data[source, aliased_item[1]]
+        else:
+            try:
+                literal_item = self.data._aliases[aliased_item]
+            except KeyError:
+                raise AliasError(aliased_item) from None
+
+            # Source or key alias.
+            return self.data[literal_item]
+
+        raise TypeError('expected source or sourcekey identifier')
 
 
 def H5File(path, *, inc_suspect_trains=True):
