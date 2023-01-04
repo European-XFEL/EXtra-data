@@ -725,6 +725,76 @@ class DataCollection:
             is_single_run=self.is_single_run
         )
 
+    def only_aliases(self, *alias_defs, strict=False, require_all=False):
+        """Apply aliases and select only the aliased sources and keys.
+
+        A convenient function around :method:`DataCollection.with_aliases`
+        and :method:`DataCollection.select` applying both the aliases passed
+        as `alias_defs` to the former and then selecting down the
+        :class:`DataCollection` to any sources and/or their keys for which
+        aliases exist.
+
+        By default and unlike :method:`DataCollection.select`, any sources
+        or keys present in the alias definitions but not the data itself are
+        ignored. This can be changed via the optional argument `strict`.
+
+        The optional `require_all` argument restricts the trains to those for
+        which all selected sources and keys have at least one data entry. By
+        default, all trains remain selected.
+
+        Returns a new :class:`DataCollection` object with only the aliased
+        sources and keys.
+        """
+
+        # New data with aliases applied.
+        aliases = self._parse_aliases(alias_defs)
+
+        # Set of sources aliased.
+        aliased_sources = {literal for literal in aliases.values()
+                           if isinstance(literal, str)}
+
+        # In the current implementation of DataCollection.select(), any
+        # occurence of a wildcard glob will include all keys for a given
+        # source, even if specific keys are listed as well. To be safe,
+        # the source aliases are picked first and no specific sourcekey
+        # aliases for the same source are included in the selection.
+
+        # Entire source selections.
+        selection = [(source, '*') for source in aliased_sources]
+
+        # Specific key selections.
+        selection += [
+            literal for literal in aliases.values()
+            if isinstance(literal, tuple) \
+                and literal[0] not in aliased_sources
+        ]
+
+        if not strict:
+            # If strict mode is disabled, any non-existing sources or
+            # keys are stripped out.
+
+            existing_sel_idx = []
+
+            for sel_idx, (source, key) in enumerate(selection):
+                try:
+                    sd = self[source]
+                except SourceNameError:
+                    # Source not present.
+                    continue
+                else:
+                    if key != '*' and key not in sd:
+                        # Source present, but not key.
+                        continue
+
+                existing_sel_idx.append(sel_idx)
+
+            selection = [selection[sel_idx] for sel_idx in existing_sel_idx]
+
+        # Create a new DataCollection from selecting and add the aliases.
+        new_data = self.select(selection, require_all=require_all)
+        new_data._aliases.update(aliases)
+
+        return new_data
 
     @property
     def alias(self):
