@@ -1193,6 +1193,22 @@ class DataCollection:
             ))
         print()
 
+        # Invert aliases for faster lookup.
+        src_aliases = defaultdict(set)
+        srckey_aliases = defaultdict(lambda: defaultdict(set))
+
+        for alias, literal in self._aliases.items():
+            if isinstance(literal, str):
+                src_aliases[literal].add(alias)
+            else:
+                srckey_aliases[literal[0]][literal[1]].add(alias)
+
+        def src_alias_list(s):
+            if src_aliases[s]:
+                alias_str = ', '.join(src_aliases[s])
+                return f'<{alias_str}>'
+            return ''
+
         def src_data_detail(s, keys, prefix=''):
             """Detail for how much data is present for an instrument group"""
             if not keys:
@@ -1214,12 +1230,18 @@ class DataCollection:
                 else:
                     entry_info = ""
                 dt = self.get_dtype(s, k)
-                print(f"{prefix}{k}\t[{dt}{entry_info}]")
+
+                if k in srckey_aliases[s]:
+                    alias_str = ' <' + ', '.join(srckey_aliases[s][k]) + '>'
+                else:
+                    alias_str = ''
+
+                print(f"{prefix}{k}{alias_str}\t[{dt}{entry_info}]")
 
         non_detector_inst_srcs = self.instrument_sources - self.detector_sources
         print(len(non_detector_inst_srcs), 'instrument sources (excluding detectors):')
         for s in sorted(non_detector_inst_srcs):
-            print('  -', s)
+            print('  -', s, src_alias_list(s))
             if not any(p.match(s) for p in details_sources_re):
                 continue
 
@@ -1231,11 +1253,10 @@ class DataCollection:
                 src_data_detail(s, keys, prefix='      ')
                 keys_detail(s, keys, prefix='      - ')
 
-
         print()
         print(len(self.control_sources), 'control sources:')
         for s in sorted(self.control_sources):
-            print('  -', s)
+            print('  -', s, src_alias_list(s))
             if any(p.match(s) for p in details_sources_re):
                 # Detail for control sources: list keys
                 ctrl_keys = self[s].keys(inc_timestamps=False)
@@ -1248,6 +1269,11 @@ class DataCollection:
                 if run_only_keys:
                     print('    - Additional run keys (1 entry per run):')
                     for k in sorted(run_only_keys):
+                        if k in srckey_aliases[s]:
+                            alias_str = ' <' + ', '.join(srckey_aliases[s][k]) + '>'
+                        else:
+                            alias_str = ''
+
                         ds = self._sources_data[s].files[0].file[
                             f"/RUN/{s}/{k.replace('.', '/')}/value"
                         ]
@@ -1259,7 +1285,7 @@ class DataCollection:
                         dt = ds.dtype
                         if h5py.check_string_dtype(dt):
                             dt = 'string'
-                        print(f"      - {k}\t[{dt}{entry_info}]")
+                        print(f"      - {k}{alias_str}\t[{dt}{entry_info}]")
 
         print()
 
