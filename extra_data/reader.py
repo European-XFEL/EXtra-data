@@ -1547,29 +1547,113 @@ class AliasIndexer:
     def __init__(self, data):
         self.data = data
 
+    def _resolve_any_alias(self, alias):
+        try:
+            literal = self.data._aliases[alias]
+        except KeyError:
+            raise AliasError(alias) from None
+
+        return literal
+
+    def _resolve_source_alias(self, alias):
+        source = self._resolve_any_alias(alias)
+
+        if isinstance(source, tuple):
+            raise ValueError(f'{alias} not aliasing a source for this data')
+
+        return source
+
     def __getitem__(self, aliased_item):
         if isinstance(aliased_item, tuple) and len(aliased_item) == 2:
-            try:
-                source = self.data._aliases[aliased_item[0]]
-            except KeyError:
-                raise AliasError(aliased_item[0]) from None
-
-            if isinstance(source, tuple):
-                raise ValueError(f'{aliased_item[0]} not only aliasing a '
-                                    f'source for this data')
-
             # Source alias with key literal.
-            return self.data[source, aliased_item[1]]
-        else:
-            try:
-                literal_item = self.data._aliases[aliased_item]
-            except KeyError:
-                raise AliasError(aliased_item) from None
-
+            return self.data[self._resolve_source_alias(aliased_item[0]),
+                                aliased_item[1]]
+        elif isinstance(aliased_item, str):
             # Source or key alias.
-            return self.data[literal_item]
+            return self.data[self._resolve_any_alias(aliased_item)]
 
-        raise TypeError('expected source or sourcekey identifier')
+        raise TypeError('expected alias or (source alias, key) tuple')
+
+    def _resolve_aliased_selection(self, selection):
+        if isinstance(selection, dict):
+            res = {self._resolve_source_alias(alias): keys
+                    for alias, keys in selection.items()}
+
+        elif isinstance(selection, Iterable):
+            res = []
+
+            for item in selection:
+                if isinstance(item, tuple) and len(item) == 2:
+                    # Source alias and literal key.
+                    item = (self._resolve_source_alias(item[0]), item[1])
+                elif isinstance(item, str):
+                    item = self._resolve_any_alias(item)
+
+                    if isinstance(item, str):
+                        # Source alias.
+                        item = (item, '*')
+
+                res.append(item)
+
+        return res
+
+    def select(self, seln_or_alias, key_glob='*', require_all=False):
+        """Select a subset of sources and keys from this using aliases.
+
+        In contrast to :method:`DataCollection.select`, only a subset of
+        ways to select data via aliases is supported:
+
+        1. With a source alias and literal key glob pattern::
+
+            # Select all pulse energy keys for an aliased XGM fast data.
+            sel = run.alias.select('sa1-xgm', 'data.intensity*')
+
+        2. With an iterable of aliases and/or (source alias, key pattern) tuples::
+
+            # Select specific keys for an aliased XGM fast data.
+            sel = run.alias.select([('sa1-xgm', 'data.intensitySa1TD'),
+                                    ('sa1-xgm', 'data.intensitySa3TD')]
+
+            # Select several aliases, may be both source and key aliases.
+            sel = run.alias.select(['sa1-xgm', 'mono-hv'])
+
+            Data is included if it matches any of the aliases. Note that
+            this method does not support glob patterns for the source alias.
+
+        3. With a dict of source aliases mapped to sets of key names
+            (or empty sets to get all keys)::
+
+                # Select image.data from an aliased AGIPD and all data
+                # from an aliased XGM.
+                sel = run.select({'agipd': {'image.data'}, 'sa1-xgm': set()})
+
+        The optional `require_all` argument restricts the trains to those for
+        which all selected sources and keys have at least one data entry. By
+        default, all trains remain selected.
+
+        Returns a new :class:`DataCollection` object for the selected data.
+        """
+
+        if isinstance(seln_or_alias, str):
+            seln_or_alias = [(seln_or_alias, key_glob)]
+
+        return self.data.select(self._resolve_aliased_selection(
+            seln_or_alias))
+
+    def deselect(self, seln_or_alias, key_glob='*'):
+        """Select everything except the specified sources and keys using aliases.
+
+        This takes the same arguments as :meth:`select`, but the sources
+        and keys you specify are dropped from the selection.
+
+        Returns a new :class:`DataCollection` object for the remaining data.
+        """
+
+        if isinstance(seln_or_alias, str):
+            seln_or_alias = [(seln_or_alias, key_glob)]
+
+        return self.data.deselect(self._resolve_aliased_selection(
+            seln_or_alias))
 
 
 def H5File(path, *, inc_suspect_trains=True):
