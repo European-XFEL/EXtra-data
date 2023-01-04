@@ -985,6 +985,7 @@ def test_run_metadata(mock_spb_raw_run):
         }
         assert isinstance(md['creationDate'], str)
 
+
 def test_run_metadata_no_trains(mock_scs_run):
     run = RunDirectory(mock_scs_run)
     sel = run.select_trains(np.s_[:0])
