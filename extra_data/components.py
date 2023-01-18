@@ -1290,7 +1290,6 @@ class DSSC1M(XtdfDetectorBase):
 
 class LPDBase:
     """Base LPD class supporting parallel gain mode."""
-    module_shape = (256, 256)
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
                  *, min_modules=1, parallel_gain=False):
@@ -1397,6 +1396,7 @@ class LPD1M(LPDBase, XtdfDetectorBase):
       stage labels from 0 (high-gain) to 2 (low-gain).
     """
     _source_re = re.compile(r'(?P<detname>.+_LPD1M.*)/DET/(?P<modno>\d+)CH')
+    module_shape = (256, 256)
 
 
 @multimod_detectors
@@ -1420,6 +1420,7 @@ class LPDMINI(LPDBase, XtdfDetectorBase):
       stage labels from 0 (high-gain) to 2 (low-gain).
     """
     _source_re = re.compile(r'(?P<detname>.+_LPD_MINI.*)/DET/(?P<modno>\d+)CH')
+    module_shape = (256, 256)
 
 
 @multimod_detectors
