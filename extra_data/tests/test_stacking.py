@@ -6,7 +6,7 @@ from extra_data.stacking import StackView
 
 def test_stack_data(mock_fxe_raw_run):
     test_run = RunDirectory(mock_fxe_raw_run)
-    tid, data = test_run.train_from_id(10000, devices=[('*/DET/*', 'image.data')])
+    tid, data = test_run.train_from_id(10000, devices=[('FXE_DET_LPD1M-1/DET/*', 'image.data')])
 
     comb = stack_data(data, 'image.data')
     assert comb.shape == (128, 1, 16, 256, 256)
@@ -14,7 +14,7 @@ def test_stack_data(mock_fxe_raw_run):
 
 def test_stack_detector_data(mock_fxe_raw_run):
     test_run = RunDirectory(mock_fxe_raw_run)
-    tid, data = test_run.train_from_id(10000, devices=[('*/DET/*', 'image.data')])
+    tid, data = test_run.train_from_id(10000, devices=[('*1M*/DET/*', 'image.data')])
 
     comb = stack_detector_data(data, 'image.data')
     assert comb.shape == (128, 1, 16, 256, 256)

@@ -156,7 +156,7 @@ def test_iterate_trains_require_all(mock_sa3_control_data):
 
 def test_read_fxe_raw_run(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
-    assert len(run.files) == 18  # 16 detector modules + 2 control data files
+    assert len(run.files) == 19  # 16 LPD 1M, 1 LPD Minimodules + 2 control data files
     assert run.train_ids == list(range(10000, 10480))
     run.info()  # Smoke test
 
