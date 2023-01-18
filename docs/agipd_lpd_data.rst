@@ -27,6 +27,10 @@ DSSC and JUNGFRAU, pulling together the separate modules into a single array.
 
    The methods of this class are identical to those of :class:`LPD1M`, below.
 
+.. autoclass:: LPDMINI
+
+   The methods of this class are identical to those of :class:`LPD1M:, below.
+
 .. autoclass:: LPD1M
 
    .. automethod:: get_array
