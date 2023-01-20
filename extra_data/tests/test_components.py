@@ -7,7 +7,7 @@ from testpath import assert_isfile
 
 from extra_data.reader import RunDirectory, H5File, by_id, by_index
 from extra_data.components import (
-    AGIPD1M, DSSC1M, LPD1M, LPDMINI, JUNGFRAU, identify_multimod_detectors,
+    AGIPD1M, DSSC1M, LPD1M, LPDMini, JUNGFRAU, identify_multimod_detectors,
 )
 
 
@@ -180,7 +180,7 @@ def test_get_array_lpd_parallelgain(mock_lpd_parallelgain_run):
     np.testing.assert_array_equal(arr.coords['pulse'], np.arange(100))
 
     run = RunDirectory(mock_lpd_parallelgain_run)
-    det = LPDMINI(run.select_trains(by_index[:2]), parallel_gain=True)
+    det = LPDMini(run.select_trains(by_index[:2]), parallel_gain=True)
     assert det.detector_name == 'FXE_DET_LPD_MINI'
 
     arr = det.get_array('image.data')
@@ -207,7 +207,7 @@ def test_get_array_lpd_parallelgain_select_pulses(mock_lpd_parallelgain_run):
     np.testing.assert_array_equal(arr.coords['pulse'], np.arange(5))
 
     run = RunDirectory(mock_lpd_parallelgain_run)
-    det = LPDMINI(run.select_trains(by_index[:2]), parallel_gain=True)
+    det = LPDMini(run.select_trains(by_index[:2]), parallel_gain=True)
     assert det.detector_name == 'FXE_DET_LPD_MINI'
 
     arr = det.get_array('image.data', pulses=np.s_[:5])

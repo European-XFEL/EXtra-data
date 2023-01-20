@@ -20,7 +20,7 @@ __all__ = [
     'AGIPD500K',
     'DSSC1M',
     'LPD1M',
-    'LPDMINI',
+    'LPDMini',
     'JUNGFRAU',
     'identify_multimod_detectors',
 ]
@@ -1400,7 +1400,7 @@ class LPD1M(LPDBase, XtdfDetectorBase):
 
 
 @multimod_detectors
-class LPDMINI(LPDBase, XtdfDetectorBase):
+class LPDMini(LPDBase, XtdfDetectorBase):
     """An interface to LPD-Mini data.
 
     Parameters
