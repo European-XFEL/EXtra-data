@@ -7,7 +7,7 @@ from testpath import assert_isfile
 
 from extra_data.reader import RunDirectory, H5File, by_id, by_index
 from extra_data.components import (
-    AGIPD1M, DSSC1M, LPD1M, JUNGFRAU, identify_multimod_detectors,
+    AGIPD1M, DSSC1M, LPD1M, LPDMini, JUNGFRAU, identify_multimod_detectors,
 )
 
 
@@ -179,6 +179,17 @@ def test_get_array_lpd_parallelgain(mock_lpd_parallelgain_run):
     np.testing.assert_array_equal(arr.coords['gain'], np.arange(3))
     np.testing.assert_array_equal(arr.coords['pulse'], np.arange(100))
 
+    run = RunDirectory(mock_lpd_parallelgain_run)
+    det = LPDMini(run.select_trains(by_index[:2]), parallel_gain=True)
+    assert det.detector_name == 'FXE_DET_LPD_MINI'
+
+    arr = det.get_array('image.data')
+    assert arr.shape == (1, 2, 3, 100, 256, 256)
+    assert arr.dims == ('module', 'train', 'gain', 'pulse', 'slow_scan', 'fast_scan')
+    np.testing.assert_array_equal(arr.coords['gain'], np.arange(3))
+    np.testing.assert_array_equal(arr.coords['pulse'], np.arange(100))
+
+
 
 def test_get_array_lpd_parallelgain_select_pulses(mock_lpd_parallelgain_run):
     run = RunDirectory(mock_lpd_parallelgain_run)
@@ -193,6 +204,20 @@ def test_get_array_lpd_parallelgain_select_pulses(mock_lpd_parallelgain_run):
 
     arr = det.get_array('image.data', pulses=by_id[:5])
     assert arr.shape == (16, 2, 3, 5, 256, 256)
+    np.testing.assert_array_equal(arr.coords['pulse'], np.arange(5))
+
+    run = RunDirectory(mock_lpd_parallelgain_run)
+    det = LPDMini(run.select_trains(by_index[:2]), parallel_gain=True)
+    assert det.detector_name == 'FXE_DET_LPD_MINI'
+
+    arr = det.get_array('image.data', pulses=np.s_[:5])
+    assert arr.shape == (1, 2, 3, 5, 256, 256)
+    assert arr.dims == ('module', 'train', 'gain', 'pulse', 'slow_scan', 'fast_scan')
+    np.testing.assert_array_equal(arr.coords['gain'], np.arange(3))
+    np.testing.assert_array_equal(arr.coords['pulse'], np.arange(5))
+
+    arr = det.get_array('image.data', pulses=by_id[:5])
+    assert arr.shape == (1, 2, 3, 5, 256, 256)
     np.testing.assert_array_equal(arr.coords['pulse'], np.arange(5))
 
 
@@ -558,7 +583,7 @@ def test_write_selected_frames_proc(mock_spb_proc_run, tmp_path):
     test_file.unlink()
 
 def test_identify_multimod_detectors(mock_fxe_raw_run):
-    run = RunDirectory(mock_fxe_raw_run)
+    run = RunDirectory(mock_fxe_raw_run, include='*LPD[!MINI]*')
     name, cls = identify_multimod_detectors(run, single=True)
     assert name == 'FXE_DET_LPD1M-1'
     assert cls is LPD1M
