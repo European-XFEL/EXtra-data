@@ -1,6 +1,6 @@
 cloudpickle==2.2.1
 coverage==6.2
-h5py<3.8.0
+h5py<3.9.0
 karabo-bridge==0.6.2
 msgpack==1.0.4
 msgpack-numpy==0.4.8
