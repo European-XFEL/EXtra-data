@@ -35,6 +35,10 @@ def test_use_voview(mock_spb_raw_run, tmp_path):
     assert 'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf' in run.instrument_sources
     assert 'SA1_XTD2_XGM/DOOCS/MAIN' in run.control_sources
 
+    with RunDirectory(str(new_run_dir)) as run:
+        assert 'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf' in run.instrument_sources
+        assert 'SA1_XTD2_XGM/DOOCS/MAIN' in run.control_sources
+
 
 def open_run_with_voview(run_src, new_run_dir):
     copytree(run_src, new_run_dir)
