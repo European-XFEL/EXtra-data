@@ -76,6 +76,7 @@ setup(name="EXtra-data",
               'pytest',
               'pytest-cov',
               'testpath',
+              'psutil',
           ]
       },
       python_requires='>=3.6',

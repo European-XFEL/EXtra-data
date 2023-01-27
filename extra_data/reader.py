@@ -1398,7 +1398,9 @@ def RunDirectory(
     if _use_voview and (sel_files == files):
         voview_file_acc = voview.find_file_valid(path)
         if voview_file_acc is not None:
-            return DataCollection([voview_file_acc], is_single_run=True)
+            return DataCollection([voview_file_acc],
+                                  is_single_run=True,
+                                  ctx_closes=True)
 
     files_map = RunFilesMap(path)
     t0 = time.monotonic()
