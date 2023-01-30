@@ -920,9 +920,11 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
                     s = np.ones(len(self.det.train_ids_perframe), np.bool_)
                 else:
                     s = self.det._select_pulse_indices(p, self.det.frame_counts)
-            else:  # by_id
+            elif isinstance(p, by_id):
                 pulse_ids = self.det._collect_inner_ids('pulseId')
                 s = _select_pulse_ids(p, pulse_ids)
+            else:
+                raise TypeError(f"Pulse selection should not be {type(p)}")
             self._sel_frames_cached = s
         return self._sel_frames_cached
 
@@ -1234,8 +1236,10 @@ class MPxDetectorTrainIterator:
 
         if isinstance(self.pulses, by_id):
             positions = self._select_pulse_ids(pulse_ids)
-        else:  # by_index
+        elif isinstance(self.pulses, by_index):
             positions = self._select_pulse_indices(count)
+        else:
+            raise TypeError(f"Pulse selection should not be {type(self.pulses)}")
         pulse_ids = pulse_ids[positions]
         train_ids = np.array([tid] * len(pulse_ids), dtype=np.uint64)
         train_pulse_ids = self.data._make_image_index(train_ids, pulse_ids)
