@@ -863,7 +863,13 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         psv = self._pulse_sel.value
         return isinstance(psv, slice) and psv == slice(0, MAX_PULSES, 1)
 
-    def _shape(self, module_gaps=False, roi=()):
+    def buffer_shape(self, module_gaps=False, roi=()):
+        """Get the array shape for this data
+
+        If *module_gaps* is True, include space for modules which are missing
+        from the data. *roi* may be a tuple of slices defining a region of
+        interest on the inner dimensions of the data.
+        """
         module_dim = self.det.n_modules if module_gaps else len(self.modno_to_keydata)
         nframes_sel = len(self.train_id_coordinates())
 
@@ -875,7 +881,7 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
 
     @property
     def shape(self):
-        return self._shape()
+        return self.buffer_shape()
 
     def train_id_coordinates(self):
         # XTDF 'image' group can have >1 entry per train
@@ -977,7 +983,7 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
 
     def ndarray(self, *, fill_value=None, out=None, roi=(), astype=None, module_gaps=False):
         """Get an array of per-pulse data (image.*) for xtdf detector"""
-        out_shape = self._shape(module_gaps=module_gaps, roi=roi)
+        out_shape = self.buffer_shape(module_gaps=module_gaps, roi=roi)
 
         if out is None:
             dtype = self._eg_keydata.dtype if astype is None else np.dtype(astype)
