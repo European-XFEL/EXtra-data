@@ -847,10 +847,10 @@ class MultimodKeyData:
 
 class XtdfImageMultimodKeyData(MultimodKeyData):
     _sel_frames_cached = None
+    det: XtdfDetectorBase
 
     def __init__(self, det: XtdfDetectorBase, key, pulse_sel=by_index[0:MAX_PULSES:1]):
         super().__init__(det, key)
-        self.det = det  # Makes PyCharm happy that det is XtdfDetectorBase
         self._pulse_sel = pulse_sel
         entry_shape = self._eg_keydata.entry_shape
         self._extraneous_dim = (len(entry_shape) >= 1) and (entry_shape[0] == 1)
