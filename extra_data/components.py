@@ -7,7 +7,6 @@ from warnings import warn
 
 import numpy as np
 import pandas as pd
-import xarray
 
 from .exceptions import SourceNameError
 from .reader import DataCollection, by_id, by_index
@@ -91,6 +90,32 @@ def _check_pulse_selection(pulses):
     return type(pulses)(val)
 
 
+def _select_pulse_ids(pulses, data_pulse_ids):
+    """Select pulses by ID across a chunk of trains
+
+    Returns a boolean array of which entries in data_pulse_ids match.
+    """
+    if isinstance(pulses.value, slice):
+        s = pulses.value
+        desired = np.arange(s.start, s.stop, step=s.step, dtype=np.uint64)
+    else:
+        desired = pulses.value
+
+    return np.isin(data_pulse_ids, desired)
+
+
+def _out_array(shape, dtype, fill_value=None):
+    if fill_value is None:
+        fill_value = np.nan if dtype.kind == 'f' else 0
+    fill_value = dtype.type(fill_value)
+
+    # Zeroed memory can be allocated faster than explicitly writing zeros
+    if fill_value == 0:
+        return np.zeros(shape, dtype=dtype)
+    else:
+        return np.full(shape, fill_value, dtype=dtype)
+
+
 class MultimodDetectorBase:
     """Base class for detectors made of several modules as separate data sources
     """
@@ -99,6 +124,7 @@ class MultimodDetectorBase:
     # Override in subclass
     _main_data_key = ''  # Key to use for checking data counts match
     _frames_per_entry = 1  # Override if separate pulse dimension in files
+    _modnos_start_at = 0  # Override if module numbers start at 1 (JUNGFRAU)
     module_shape = (0, 0)
     n_modules = 0
 
@@ -147,6 +173,9 @@ class MultimodDetectorBase:
         )
         # If we add extra instance attributes, check whether they should be
         # updated in .select_trains() below.
+
+    def __getitem__(self, item):
+        return MultimodKeyData(self, item)
 
     @classmethod
     def _find_detector_name(cls, data):
@@ -370,30 +399,6 @@ class MultimodDetectorBase:
             # There will always be at least the last train left to yield
             yield self.select_trains(np.s_[chunk_start:])
 
-    @staticmethod
-    def _concat(arrays, index, fill_value, astype):
-        dtype = arrays[0].dtype if astype is None else np.dtype(astype)
-        if fill_value is None:
-            fill_value = np.nan if dtype.kind == 'f' else 0
-        fill_value = dtype.type(fill_value)
-
-        return xarray.concat(
-            [a.astype(dtype, copy=False) for a in arrays],
-            pd.Index(index, name='module'),
-            fill_value=fill_value
-        )
-
-    @staticmethod
-    def _out_array(shape, dtype, fill_value=None):
-        if fill_value is None:
-            fill_value = np.nan if dtype.kind == 'f' else 0
-        fill_value = dtype.type(fill_value)
-
-        if fill_value == 0:
-            return np.zeros(shape, dtype=dtype)
-        else:
-            return np.full(shape, fill_value, dtype=dtype)
-
     def get_array(self, key, *, fill_value=None, roi=(), astype=None):
         """Get a labelled array of detector data
 
@@ -412,36 +417,7 @@ class MultimodDetectorBase:
           Data type of the output array. If None (default) the dtype matches the
           input array dtype
         """
-        train_ids = np.asarray(self.data.train_ids)
-
-        eg_src = min(self.source_to_modno)
-        eg_keydata = self.data[eg_src, key]
-
-        # Find the shape of 1 frame for 1 module with the ROI applied
-        out_shape = ((len(self.modno_to_source), len(train_ids))
-                     + roi_shape(eg_keydata.entry_shape, roi))
-
-        dtype = eg_keydata.dtype if astype is None else np.dtype(astype)
-        out = self._out_array(out_shape, dtype, fill_value=fill_value)
-
-
-        modnos = []
-        for mod_ix, (modno, source) in enumerate(sorted(self.modno_to_source.items())):
-            for chunk in self.data._find_data_chunks(source, key):
-                for tgt_slice, chunk_slice in self._split_align_chunk(chunk, train_ids):
-                    chunk.dataset.read_direct(
-                        out[mod_ix, tgt_slice], source_sel=(chunk_slice,) + roi
-                    )
-
-            modnos.append(modno)
-
-        # Dimension labels
-        dims = ['module', 'trainId'] + ['dim_%d' % i for i in range(out.ndim - 2)]
-
-        # Train ID index
-        coords = {'module': modnos, 'trainId': train_ids}
-
-        return xarray.DataArray(out, dims=dims, coords=coords)
+        return self[key].xarray(fill_value=fill_value, roi=roi, astype=astype)
 
 
     def get_dask_array(self, key, fill_value=None, astype=None):
@@ -458,14 +434,7 @@ class MultimodDetectorBase:
           Data type of the output array. If None (default) the dtype matches the
           input array dtype
         """
-        arrays = []
-        modnos = []
-        for modno, source in sorted(self.modno_to_source.items()):
-            modnos.append(modno)
-            mod_arr = self.data.get_dask_array(source, key, labelled=True)
-            arrays.append(mod_arr)
-
-        return self._concat(arrays, modnos, fill_value, astype)
+        return self[key].dask_array(labelled=True, fill_value=fill_value, astype=astype)
 
     def trains(self, require_all=True):
         """Iterate over trains for detector data.
@@ -500,19 +469,12 @@ class XtdfDetectorBase(MultimodDetectorBase):
                  *, min_modules=1):
         super().__init__(data, detector_name, modules, min_modules=min_modules)
 
-    @staticmethod
-    def _select_pulse_ids(pulses, data_pulse_ids):
-        """Select pulses by ID across a chunk of trains
+    def __getitem__(self, item):
+        if item.startswith('image.'):
+            return XtdfImageMultimodKeyData(self, item)
+        return super().__getitem__(item)
 
-        Returns an array or slice of the indexes to include.
-        """
-        if isinstance(pulses.value, slice):
-            s = pulses.value
-            desired = np.arange(s.start, s.stop, step=s.step, dtype=np.uint64)
-        else:
-            desired = pulses.value
-
-        return np.isin(data_pulse_ids, desired)
+    # Several methods below are overridden in LPD1M for parallel gain mode
 
     @staticmethod
     def _select_pulse_indices(pulses, counts):
@@ -554,52 +516,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
         return pd.MultiIndex.from_arrays(
             [tids, inner_ids], names=['train', inner_name]
         )
-
-    @staticmethod
-    def _guess_axes(data, train_pulse_ids, unstack_pulses, modnos=None):
-        shape = data.shape
-        if modnos is not None:
-            shape = shape[1:]
-        ndim = len(shape)
-
-        # Raw files have a spurious extra dimension
-        if ndim >= 2 and shape[1] == 1:
-            if modnos is None:
-                data = data[:, 0]
-            else:
-                data = data[:, :, 0]
-            ndim -= 1
-
-        # TODO: this assumes we can tell what the axes are just from the
-        # number of dimensions. Works for the data we've seen, but we
-        # should look for a more reliable way.
-        if ndim == 4:
-            # image.data in raw data
-            dims = ['train_pulse', 'data_gain', 'slow_scan', 'fast_scan']
-        elif ndim == 3:
-            # image.data, image.gain, image.mask in calibrated data
-            dims = ['train_pulse', 'slow_scan', 'fast_scan']
-        else:
-            # Everything else seems to be 1D
-            dims = ['train_pulse']
-
-        coords = {'train_pulse': train_pulse_ids}
-        if modnos is not None:
-            dims = ['module'] + dims
-            coords['module'] = modnos
-
-        arr = xarray.DataArray(data, coords=coords, dims=dims)
-
-        if unstack_pulses:
-            # Separate train & pulse dimensions, and arrange dimensions
-            # so that the data is contiguous in memory.
-            if modnos is None:
-                dim_order = train_pulse_ids.names + dims[1:]
-            else:
-                dim_order = ['module'] + train_pulse_ids.names + dims[2:]
-            return arr.unstack('train_pulse').transpose(*dim_order)
-        else:
-            return arr
 
     def _read_inner_ids(self, field='pulseId'):
         """Read pulse/cell IDs into a 2D array (frames, modules)
@@ -655,100 +571,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
         # pulse ID for each frame.
         return inner_ids_min
 
-    def _read_chunk(self, chunk: DataChunk, sel_frames, mod_out, roi):
-        """Read per-pulse data from file into an output array (of 1 module)"""
-        for tgt_slice, chunk_slice in self._split_align_chunk(
-                chunk, self.train_ids_perframe
-        ):
-            inc_pulses_chunk = sel_frames[tgt_slice]
-            if inc_pulses_chunk.sum() == 0:  # No data from this chunk selected
-                continue
-            elif inc_pulses_chunk.all():  # All pulses in chunk
-                chunk.dataset.read_direct(
-                    mod_out[tgt_slice], source_sel=(chunk_slice,) + roi
-                )
-                continue
-
-            # Read a subset of pulses from the chunk:
-
-            # Reading a non-contiguous selection in HDF5 seems to be slow:
-            # https://forum.hdfgroup.org/t/performance-reading-data-with-non-contiguous-selection/8979
-            # Except it's fast if you read the data to a matching selection in
-            # memory (one weird trick).
-            # So as a workaround, this allocates a temporary array of the same
-            # shape as the dataset, reads into it, and then copies the selected
-            # data to the output array. The extra memory copy is not optimal,
-            # but it's better than the HDF5 performance issue, at least in some
-            # realistic cases.
-            # N.B. tmp should only use memory for the data it contains -
-            # zeros() uses calloc, so the OS can do virtual memory tricks.
-            # Don't change this to zeros_like() !
-            tmp = np.zeros(chunk.dataset.shape, chunk.dataset.dtype)
-            pulse_sel = np.nonzero(inc_pulses_chunk)[0] + chunk_slice.start
-            sel_region = (pulse_sel,) + roi
-            chunk.dataset.read_direct(
-                tmp, source_sel=sel_region, dest_sel=sel_region,
-            )
-            # Where does this data go in the target array?
-            tgt_start_ix = sel_frames[:tgt_slice.start].sum()
-            tgt_pulse_sel = slice(
-                tgt_start_ix, tgt_start_ix + inc_pulses_chunk.sum()
-            )
-            # Copy data from temp array to output array
-            tmp_frames_mask = np.zeros(len(tmp), dtype=np.bool_)
-            tmp_frames_mask[pulse_sel] = True
-            np.compress(
-                tmp_frames_mask, tmp[np.index_exp[:] + roi],
-                axis=0, out=mod_out[tgt_pulse_sel]
-            )
-
-    def _get_pulse_data(self, key, pulses, unstack_pulses=True,
-                        fill_value=None, subtrain_index='pulseId', roi=(),
-                        astype=None):
-        """Get a labelled array of per-pulse data (image.*) for xtdf detector"""
-        pulses = _check_pulse_selection(pulses)
-
-        if isinstance(pulses, by_index):
-            sel_frames = self._select_pulse_indices(pulses, self.frame_counts)
-            pulse_ids = None
-        else:  # by_id
-            pulse_ids = self._collect_inner_ids('pulseId')
-            sel_frames = self._select_pulse_ids(pulses, pulse_ids)
-
-        nframes_sel = sel_frames.sum()
-
-        eg_src = min(self.source_to_modno)
-        eg_keydata = self.data[eg_src, key]
-
-        if eg_keydata.ndim >= 2 and eg_keydata.entry_shape[0] == 1:
-            # Ensure ROI applies to pixel dimensions, not the extra
-            # dim in raw data (except AGIPD, where it is data/gain)
-            roi = np.index_exp[:] + roi
-
-        _roi_shape = roi_shape(eg_keydata.entry_shape, roi)
-        out_shape = (len(self.modno_to_source), nframes_sel) + _roi_shape
-
-        dtype = eg_keydata.dtype if astype is None else np.dtype(astype)
-        out = self._out_array(out_shape, dtype, fill_value=fill_value)
-
-        modnos = []
-        for mod_ix, (modno, source) in enumerate(sorted(self.modno_to_source.items())):
-            for chunk in self.data._find_data_chunks(source, key):
-                self._read_chunk(chunk, sel_frames, out[mod_ix], roi)
-
-            modnos.append(modno)
-        
-        if (subtrain_index == 'pulseId') and (pulse_ids is not None):
-            inner_ids = pulse_ids
-        else:
-            inner_ids = self._collect_inner_ids(subtrain_index)
-
-        index = self._make_image_index(
-            self.train_ids_perframe, inner_ids, subtrain_index[:-2]
-        )[sel_frames]
-        
-        return self._guess_axes(out, index, unstack_pulses, modnos=modnos)
-
     def get_array(self, key, pulses=np.s_[:], unstack_pulses=True, *,
                   fill_value=None, subtrain_index='pulseId', roi=(),
                   astype=None):
@@ -790,9 +612,9 @@ class XtdfDetectorBase(MultimodDetectorBase):
             roi = (roi,)
 
         if key.startswith('image.'):
-            return self._get_pulse_data(
-                key, pulses, unstack_pulses, fill_value=fill_value,
-                subtrain_index=subtrain_index, roi=roi, astype=astype,
+            return self[key].select_pulses(pulses).xarray(
+                fill_value=fill_value, roi=roi, subtrain_index=subtrain_index,
+                astype=astype, unstack_pulses=unstack_pulses,
             )
         else:
             return super().get_array(
@@ -824,36 +646,26 @@ class XtdfDetectorBase(MultimodDetectorBase):
           data type of the output array. If None (default) the dtype matches the
           input array dtype
         """
+        from xarray import DataArray
         if subtrain_index not in {'pulseId', 'cellId'}:
             raise ValueError("subtrain_index must be 'pulseId' or 'cellId'")
-        arrays = []
-        modnos = []
-        for modno, source in sorted(self.modno_to_source.items()):
-            modnos.append(modno)
-            mod_arr = self.data.get_dask_array(source, key, labelled=True)
-
-            # At present, all the per-pulse data is stored in the 'image' key.
-            # If that changes, this check will need to change as well.
-            if key.startswith('image.'):
-                # Add pulse IDs to create multi-level index
-                inner_ix = self.data.get_array(source, 'image.' + subtrain_index)
-                # Raw files have a spurious extra dimension
-                if inner_ix.ndim >= 2 and inner_ix.shape[1] == 1:
-                    inner_ix = inner_ix[:, 0]
-
-                mod_arr = mod_arr.rename({'trainId': 'train_pulse'})
-
-                mod_arr.coords['train_pulse'] = self._make_image_index(
-                    mod_arr.coords['train_pulse'].values, inner_ix.values,
-                    inner_name=subtrain_index,
-                ).set_names('trainId', level=0)
-                # This uses 'trainId' where a concrete array from the same class
-                # uses 'train'. I didn't notice that inconsistency when I
-                # introduced it, and now code may be relying on each name.
-
-            arrays.append(mod_arr)
-
-        return self._concat(arrays, modnos, fill_value, astype)
+        if key.startswith('image.'):
+            arr = self[key].dask_array(
+                labelled=True, subtrain_index=subtrain_index,
+                fill_value=fill_value, astype=astype
+            )
+            # Preserve the quirks of this method before refactoring
+            if self[key]._extraneous_dim:
+                arr = arr.expand_dims('tmp_name', axis=2)
+            frame_idx = arr.indexes['train_pulse'].set_names(
+                ['trainId', subtrain_index], level=[0, -1]
+            )
+            dims = ['module', 'train_pulse'] + [f'dim_{i}' for i in range(arr.ndim - 2)]
+            return DataArray(arr.data, dims=dims, coords={
+                'train_pulse': frame_idx, 'module': arr.indexes['module'],
+            })
+        else:
+            return super().get_dask_array(key, fill_value=fill_value, astype=astype)
 
     def trains(self, pulses=np.s_[:], require_all=True):
         """Iterate over trains for detector data.
@@ -926,6 +738,319 @@ def zip_trains_pulses(trains, pulses):
     res['pulseId'] = pulses
     return res
 
+
+
+class MultimodKeyData:
+    def __init__(self, det: MultimodDetectorBase, key):
+        self.det = det
+        self.key = key
+        self.modno_to_keydata = {
+            m: det.data[s, key] for (m, s) in det.modno_to_source.items()
+        }
+
+    @property
+    def train_ids(self):
+        return self.det.train_ids
+
+    def train_id_coordinates(self):
+        return self.det.train_ids
+
+    @property
+    def modules(self):
+        return sorted(self.modno_to_keydata)
+
+    @property
+    def _eg_keydata(self):
+        return self.modno_to_keydata[min(self.modno_to_keydata)]
+
+    @property
+    def ndim(self):
+        return self._eg_keydata.ndim + 1
+
+    @property
+    def shape(self):
+        return ((len(self.modno_to_keydata), len(self.train_id_coordinates()))
+                + self._eg_keydata.entry_shape)
+
+    @property
+    def dimensions(self):
+        return ['module', 'trainId'] + ['dim_%d' % i for i in range(self.ndim - 2)]
+
+    @property
+    def dtype(self):
+        return self._eg_keydata.dtype
+
+    def _with_selected_det(self, det_selected):
+        # Overridden for XtdfImageMultimodKeyData to preserve pulse selection
+        return MultimodKeyData(det_selected, self.key)
+
+    def select_trains(self, trains):
+        return self._with_selected_det(self.det.select_trains(trains))
+
+    def split_trains(self, parts=None, trains_per_part=None, frames_per_part=None):
+        for det_split in self.det.split_trains(parts, trains_per_part, frames_per_part):
+            yield self._with_selected_det(det_split)
+
+    def ndarray(self, *, fill_value=None, out=None, roi=(), astype=None, module_gaps=False):
+        """Get data as a plain NumPy array with no labels"""
+        train_ids = np.asarray(self.det.train_ids)
+
+        module_dim = self.det.n_modules if module_gaps else len(self.modno_to_keydata)
+
+        out_shape = ((module_dim, len(train_ids))
+                     # Shape of 1 frame for 1 module with the ROI applied:
+                     + roi_shape(self._eg_keydata.entry_shape, roi))
+
+        if out is None:
+            dtype = self._eg_keydata.dtype if astype is None else np.dtype(astype)
+            out = _out_array(out_shape, dtype, fill_value=fill_value)
+        elif out.shape != out_shape:
+            raise ValueError(f'requires output array of shape {out_shape}')
+
+        for i, (modno, kd) in enumerate(sorted(self.modno_to_keydata.items())):
+            mod_ix = (modno - self.det._modnos_start_at) if module_gaps else i
+            for chunk in kd._data_chunks:
+                for tgt_slice, chunk_slice in self.det._split_align_chunk(chunk, train_ids):
+                    chunk.dataset.read_direct(
+                        out[mod_ix, tgt_slice], source_sel=(chunk_slice,) + roi
+                    )
+        return out
+
+    def xarray(self, *, fill_value=None, roi=(), astype=None):
+        from xarray import DataArray
+        arr = self.ndarray(fill_value=fill_value, roi=roi, astype=astype)
+
+        coords = {'module': self.modules, 'trainId': self.train_id_coordinates()}
+        return DataArray(arr, dims=self.dimensions, coords=coords)
+
+    def dask_array(self, *, labelled=False, fill_value=None, astype=None):
+        from dask.delayed import delayed
+        from dask.array import concatenate, from_delayed
+
+        entry_size = (self.dtype.itemsize *
+            len(self.modno_to_keydata) * np.product(self._eg_keydata.entry_shape)
+        )
+        # Aim for 1GB chunks, with an arbitrary maximum of 256 trains
+        split = self.split_trains(frames_per_part=min(1024 ** 3 / entry_size, 256))
+
+        arr = concatenate([from_delayed(
+            delayed(c.ndarray)(fill_value=fill_value, astype=astype),
+            shape=c.shape, dtype=self.dtype
+        ) for c in split], axis=1)
+
+        if labelled:
+            from xarray import DataArray
+            coords = {'module': self.modules, 'trainId': self.train_id_coordinates()}
+            return DataArray(arr, dims=self.dimensions, coords=coords)
+
+        return arr
+
+
+class XtdfImageMultimodKeyData(MultimodKeyData):
+    _sel_frames_cached = None
+    det: XtdfDetectorBase
+
+    def __init__(self, det: XtdfDetectorBase, key, pulse_sel=by_index[0:MAX_PULSES:1]):
+        super().__init__(det, key)
+        self._pulse_sel = pulse_sel
+        entry_shape = self._eg_keydata.entry_shape
+        self._extraneous_dim = (len(entry_shape) >= 1) and (entry_shape[0] == 1)
+
+    @property
+    def ndim(self):
+        return super().ndim - (1 if self._extraneous_dim else 0)
+
+    def _all_pulses(self):
+        psv = self._pulse_sel.value
+        return isinstance(psv, slice) and psv == slice(0, MAX_PULSES, 1)
+
+    def buffer_shape(self, module_gaps=False, roi=()):
+        """Get the array shape for this data
+
+        If *module_gaps* is True, include space for modules which are missing
+        from the data. *roi* may be a tuple of slices defining a region of
+        interest on the inner dimensions of the data.
+        """
+        module_dim = self.det.n_modules if module_gaps else len(self.modno_to_keydata)
+        nframes_sel = len(self.train_id_coordinates())
+
+        entry_shape = self._eg_keydata.entry_shape
+        if self._extraneous_dim:
+            entry_shape = entry_shape[1:]
+
+        return (module_dim, nframes_sel) + roi_shape(entry_shape, roi)
+
+    @property
+    def shape(self):
+        return self.buffer_shape()
+
+    def train_id_coordinates(self):
+        # XTDF 'image' group can have >1 entry per train
+        a = self.det.train_ids_perframe
+        # Only allocate sel_frames array if we need it:
+        if not self._all_pulses():
+            a = a[self._sel_frames]
+        return a
+
+    @property
+    def dimensions(self):
+        ndim_inner = self.ndim - 2
+        # TODO: this assumes we can tell what the axes are just from the
+        # number of dimensions. Works for the data we've seen, but we
+        # should look for a more reliable way.
+        if ndim_inner == 3:
+            # image.data in raw data
+            entry_dims = ['data_gain', 'slow_scan', 'fast_scan']
+        elif ndim_inner == 2:
+            # image.data, image.gain, image.mask in calibrated data
+            entry_dims = ['slow_scan', 'fast_scan']
+        else:
+            # Everything else seems to be 1D, but just in case
+            entry_dims = [f'dim_{i}' for i in range(ndim_inner)]
+        return ['module', 'train_pulse'] + entry_dims
+
+    # Used for .select_trains() and .split_trains()
+    def _with_selected_det(self, det_selected):
+        return XtdfImageMultimodKeyData(det_selected, self.key, self._pulse_sel)
+
+    def select_pulses(self, pulses):
+        pulses = _check_pulse_selection(pulses)
+
+        return XtdfImageMultimodKeyData(self.det, self.key, pulses)
+
+    @property
+    def _sel_frames(self):
+        if self._sel_frames_cached is None:
+            p = self._pulse_sel
+            if isinstance(p, by_index):
+                if self._all_pulses():
+                    s = np.ones(len(self.det.train_ids_perframe), np.bool_)
+                else:
+                    s = self.det._select_pulse_indices(p, self.det.frame_counts)
+            elif isinstance(p, by_id):
+                pulse_ids = self.det._collect_inner_ids('pulseId')
+                s = _select_pulse_ids(p, pulse_ids)
+            else:
+                raise TypeError(f"Pulse selection should not be {type(p)}")
+            self._sel_frames_cached = s
+        return self._sel_frames_cached
+
+    def _read_chunk(self, chunk: DataChunk, mod_out, roi):
+        """Read per-pulse data from file into an output array (of 1 module)"""
+        for tgt_slice, chunk_slice in self.det._split_align_chunk(
+                chunk, self.det.train_ids_perframe
+        ):
+            inc_pulses_chunk = self._sel_frames[tgt_slice]
+            if inc_pulses_chunk.sum() == 0:  # No data from this chunk selected
+                continue
+            elif inc_pulses_chunk.all():  # All pulses in chunk
+                chunk.dataset.read_direct(
+                    mod_out[tgt_slice], source_sel=(chunk_slice,) + roi
+                )
+                continue
+
+            # Read a subset of pulses from the chunk:
+
+            # Reading a non-contiguous selection in HDF5 seems to be slow:
+            # https://forum.hdfgroup.org/t/performance-reading-data-with-non-contiguous-selection/8979
+            # Except it's fast if you read the data to a matching selection in
+            # memory (one weird trick).
+            # So as a workaround, this allocates a temporary array of the same
+            # shape as the dataset, reads into it, and then copies the selected
+            # data to the output array. The extra memory copy is not optimal,
+            # but it's better than the HDF5 performance issue, at least in some
+            # realistic cases.
+            # N.B. tmp should only use memory for the data it contains -
+            # zeros() uses calloc, so the OS can do virtual memory tricks.
+            # Don't change this to zeros_like() !
+            tmp = np.zeros(chunk.dataset.shape, chunk.dataset.dtype)
+            pulse_sel = np.nonzero(inc_pulses_chunk)[0] + chunk_slice.start
+            sel_region = (pulse_sel,) + roi
+            chunk.dataset.read_direct(
+                tmp, source_sel=sel_region, dest_sel=sel_region,
+            )
+            # Where does this data go in the target array?
+            tgt_start_ix = self._sel_frames[:tgt_slice.start].sum()
+            tgt_pulse_sel = slice(
+                tgt_start_ix, tgt_start_ix + inc_pulses_chunk.sum()
+            )
+            # Copy data from temp array to output array
+            tmp_frames_mask = np.zeros(len(tmp), dtype=np.bool_)
+            tmp_frames_mask[pulse_sel] = True
+            np.compress(
+                tmp_frames_mask, tmp[np.index_exp[:] + roi],
+                axis=0, out=mod_out[tgt_pulse_sel]
+            )
+
+    def ndarray(self, *, fill_value=None, out=None, roi=(), astype=None, module_gaps=False):
+        """Get an array of per-pulse data (image.*) for xtdf detector"""
+        out_shape = self.buffer_shape(module_gaps=module_gaps, roi=roi)
+
+        if out is None:
+            dtype = self._eg_keydata.dtype if astype is None else np.dtype(astype)
+            out = _out_array(out_shape, dtype, fill_value=fill_value)
+        elif out.shape != out_shape:
+            raise ValueError(f'requires output array of shape {out_shape}')
+
+        reading_view = out.view()
+        if self._extraneous_dim:
+            reading_view.shape = out.shape[:2] + (1,) + out.shape[2:]
+            # Ensure ROI applies to pixel dimensions, not the extra
+            # dim in raw data (except AGIPD, where it is data/gain)
+            roi = np.index_exp[:] + roi
+
+        for mod_ix, (modno, kd) in enumerate(sorted(self.modno_to_keydata.items())):
+            for chunk in kd._data_chunks:
+                self._read_chunk(chunk, reading_view[mod_ix], roi)
+
+        return out
+
+    def _wrap_xarray(self, arr, subtrain_index='pulseId'):
+        from xarray import DataArray
+        inner_ids = self.det._collect_inner_ids(subtrain_index)
+        index = self.det._make_image_index(
+            self.det.train_ids_perframe, inner_ids, subtrain_index[:-2]
+        )[self._sel_frames]
+
+        return DataArray(arr, dims=self.dimensions, coords={
+            'train_pulse': index, 'module': self.modules,
+        })
+
+    def xarray(self, *, pulses=None, fill_value=None, roi=(), astype=None,
+               subtrain_index='pulseId', unstack_pulses=False):
+        arr = self.ndarray(fill_value=fill_value, roi=roi, astype=astype)
+        out = self._wrap_xarray(arr, subtrain_index)
+
+        if unstack_pulses:
+            # Separate train & pulse dimensions, and arrange dimensions
+            # so that the data is contiguous in memory.
+            dim_order = ['module'] + out.indexes['train_pulse'].names + self.dimensions[2:]
+            return out.unstack('train_pulse').transpose(*dim_order)
+
+        return out
+
+    def dask_array(self, *, labelled=False, subtrain_index='pulseId',
+                   fill_value=None, astype=None, frames_per_chunk=None):
+        from dask.delayed import delayed
+        from dask.array import concatenate, from_delayed
+
+        entry_size = (self.dtype.itemsize *
+            len(self.modno_to_keydata) * np.product(self._eg_keydata.entry_shape)
+        )
+        if frames_per_chunk is None:
+            # Aim for 2GB chunks, with an arbitrary maximum of 1024 frames
+            frames_per_chunk = min(2 * 1024 ** 3 / entry_size, 1024)
+        split = self.split_trains(frames_per_part=frames_per_chunk)
+
+        arr = concatenate([from_delayed(
+            delayed(c.ndarray)(fill_value=fill_value, astype=astype),
+            shape=c.shape, dtype=self.dtype
+        ) for c in split], axis=1)
+
+        if labelled:
+            return self._wrap_xarray(arr, subtrain_index)
+
+        return arr
 
 class FramesFileWriter(FileWriter):
     """Write selected detector frames in European XFEL HDF5 format"""
@@ -1067,6 +1192,7 @@ class MPxDetectorTrainIterator:
           for the train id tid - train id dimension is kept indexing frames
           within tid.
         """
+        from xarray import DataArray
         file, pos, ds = self._find_data(source, key, tid)
         if file is None:
             return None
@@ -1075,9 +1201,9 @@ class MPxDetectorTrainIterator:
         firsts, counts = file.get_index(source, group)
         first, count = firsts[pos], counts[pos]
         if count == 1:
-            return xarray.DataArray(ds[first])
+            return DataArray(ds[first])
         else:
-            return xarray.DataArray(ds[first : first + count])
+            return DataArray(ds[first : first + count])
 
     def _get_pulse_data(self, source, key, tid):
         """
@@ -1099,6 +1225,7 @@ class MPxDetectorTrainIterator:
         xarray.DataArray
           Array of selected per pulse data.
         """
+        from xarray import DataArray
         file, pos, ds = self._find_data(source, key, tid)
         if file is None:
             return None
@@ -1116,8 +1243,10 @@ class MPxDetectorTrainIterator:
 
         if isinstance(self.pulses, by_id):
             positions = self._select_pulse_ids(pulse_ids)
-        else:  # by_index
+        elif isinstance(self.pulses, by_index):
             positions = self._select_pulse_indices(count)
+        else:
+            raise TypeError(f"Pulse selection should not be {type(self.pulses)}")
         pulse_ids = pulse_ids[positions]
         train_ids = np.array([tid] * len(pulse_ids), dtype=np.uint64)
         train_pulse_ids = self.data._make_image_index(train_ids, pulse_ids)
@@ -1131,9 +1260,21 @@ class MPxDetectorTrainIterator:
         else:  # ndarray
             data_positions = first + positions
 
-        return self.data._guess_axes(
-            ds[data_positions], train_pulse_ids, unstack_pulses=True
-        )
+        data = ds[data_positions]
+
+        # Raw files have a spurious extra dimension
+        if data.ndim >= 2 and data.shape[1] == 1:
+            data = data[:, 0]
+
+        dims = self.data[key].dimensions[1:]  # excluding 'module' dim
+        coords = {'train_pulse': train_pulse_ids}
+
+        arr = DataArray(data, coords=coords, dims=dims)
+
+        # Separate train & pulse dimensions, and arrange dimensions
+        # so that the data is contiguous in memory.
+        dim_order = train_pulse_ids.names + dims[1:]
+        return arr.unstack('train_pulse').transpose(*dim_order)
 
     def _select_pulse_ids(self, pulse_ids):
         """Select pulses by ID
@@ -1187,6 +1328,7 @@ class MPxDetectorTrainIterator:
           xarray
             Assembled data array.
         """
+        import xarray
         key_module_arrays = {}
 
         for modno, source in sorted(self.data.modno_to_source.items()):
@@ -1458,6 +1600,7 @@ class JUNGFRAU(MultimodDetectorBase):
         r'(MODULE_|RECEIVER-|JNGFR)(?P<modno>\d+)'
     )
     _main_data_key = 'data.adc'
+    _modnos_start_at = 1
     module_shape = (512, 1024)
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
