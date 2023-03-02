@@ -1,4 +1,3 @@
-import os.path
 from shutil import copytree
 
 from testpath import assert_isfile
