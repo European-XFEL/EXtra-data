@@ -36,6 +36,10 @@ def test_use_voview(mock_spb_raw_run, tmp_path):
     assert 'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf' in run.instrument_sources
     assert 'SA1_XTD2_XGM/DOOCS/MAIN' in run.control_sources
 
+    with RunDirectory(str(new_run_dir)) as run:
+        assert 'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf' in run.instrument_sources
+        assert 'SA1_XTD2_XGM/DOOCS/MAIN' in run.control_sources
+
     xgm_intens = run['SA1_XTD2_XGM/DOOCS/MAIN:output', 'data.intensityTD']
     assert {os.path.basename(p) for p in xgm_intens.source_files} == {
         'RAW-R0238-DA01-S00000.h5', 'RAW-R0238-DA01-S00001.h5'

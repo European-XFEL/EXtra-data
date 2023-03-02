@@ -9,6 +9,7 @@ import os
 import pandas as pd
 import pytest
 import stat
+import shutil
 from tempfile import mkdtemp
 from testpath import assert_isfile
 from unittest import mock
@@ -20,7 +21,7 @@ from extra_data import (
     MultiRunError
 )
 
-def test_iterate_trains(mock_agipd_data):
+def test_iterate_trains(mock_agipd_data, mock_control_data_with_empty_source):
     with H5File(mock_agipd_data) as f:
         for train_id, data in islice(f.trains(), 10):
             assert train_id in range(10000, 10250)
@@ -28,6 +29,10 @@ def test_iterate_trains(mock_agipd_data):
             assert len(data) == 1
             assert 'image.data' in data['SPB_DET_AGIPD1M-1/DET/7CH0:xtdf']
 
+    with H5File(mock_control_data_with_empty_source) as f:
+        # smoke test
+        tid, data = next(f.trains())
+        assert list(data['SA3_XTD10_VAC/GAUGE/G30520C'].keys()) == ['metadata']
 
 def test_iterate_trains_flat_keys(mock_agipd_data):
     with H5File(mock_agipd_data) as f:
@@ -151,7 +156,7 @@ def test_iterate_trains_require_all(mock_sa3_control_data):
 
 def test_read_fxe_raw_run(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
-    assert len(run.files) == 18  # 16 detector modules + 2 control data files
+    assert len(run.files) == 19  # 16 LPD 1M, 1 LPD Minimodules + 2 control data files
     assert run.train_ids == list(range(10000, 10480))
     run.info()  # Smoke test
 
@@ -263,7 +268,8 @@ def test_iterate_run_glob_devices(mock_fxe_raw_run):
     assert 'FXE_XAD_GEC/CAM/CAMERA' not in data
 
 
-def test_train_by_id_fxe_run(mock_fxe_raw_run):
+def test_train_by_id(mock_fxe_raw_run, mock_control_data_with_empty_source):
+    # full run
     run = RunDirectory(mock_fxe_raw_run)
     _, data = run.train_from_id(10024)
     assert 'FXE_DET_LPD1M-1/DET/15CH0:xtdf' in data
@@ -271,13 +277,18 @@ def test_train_by_id_fxe_run(mock_fxe_raw_run):
     assert 'FXE_XAD_GEC/CAM/CAMERA' in data
     assert 'firmwareVersion.value' in data['FXE_XAD_GEC/CAM/CAMERA']
 
-
-def test_train_by_id_fxe_run_selection(mock_fxe_raw_run):
+    # selection
     run = RunDirectory(mock_fxe_raw_run)
     _, data = run.train_from_id(10024, [('*/DET/*', 'image.data')])
     assert 'FXE_DET_LPD1M-1/DET/15CH0:xtdf' in data
     assert 'image.data' in data['FXE_DET_LPD1M-1/DET/15CH0:xtdf']
     assert 'FXE_XAD_GEC/CAM/CAMERA' not in data
+
+    # missing control data
+    with H5File(mock_control_data_with_empty_source) as f:
+        _, data = f.train_from_id(10000)
+        assert 'SA3_XTD10_VAC/GAUGE/G30520C' in data
+        assert ['metadata'] == list(data['SA3_XTD10_VAC/GAUGE/G30520C'].keys())
 
 
 def test_train_from_index_fxe_run(mock_fxe_raw_run):
@@ -768,18 +779,10 @@ def test_run_immutable_sources(mock_fxe_raw_run):
     assert len(test_run.all_sources) == before
 
 
-def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
-    prop_dir = os.path.join(str(tmpdir), 'SPB', '201830', 'p002012')
-    # Set up raw
-    os.makedirs(os.path.join(prop_dir, 'raw'))
-    os.symlink(mock_spb_raw_run, os.path.join(prop_dir, 'raw', 'r0238'))
+def test_open_run(mock_spb_raw_and_proc_run):
+    mock_data_root, raw_run_dir, proc_run_dir = mock_spb_raw_and_proc_run
 
-    # Set up proc
-    proc_run_dir = os.path.join(prop_dir, 'proc', 'r0238')
-    os.makedirs(os.path.join(prop_dir, 'proc'))
-    os.symlink(mock_spb_proc_run, proc_run_dir)
-
-    with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', str(tmpdir)):
+    with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', mock_data_root):
         # With integers
         run = open_run(proposal=2012, run=238)
         paths = {f.filename for f in run.files}
@@ -824,7 +827,7 @@ def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
                     assert '/proc/' not in file.filename
 
         # Delete the proc data
-        os.unlink(proc_run_dir)
+        shutil.rmtree(proc_run_dir)
         assert not os.path.isdir(proc_run_dir)
 
         with catch_warnings(record=True) as w:
@@ -842,7 +845,7 @@ def test_open_run(mock_spb_raw_run, mock_spb_proc_run, tmpdir):
             open_run(proposal=2012, run=999)
 
         # run directory exists but contains no data
-        os.makedirs(os.path.join(prop_dir, 'proc', 'r0238'))
+        os.makedirs(proc_run_dir)
         with catch_warnings(record=True) as w:
             open_run(proposal=2012, run=238, data='all')
             assert len(w) == 1
@@ -858,12 +861,15 @@ def test_open_file(mock_sa3_control_data):
         assert 'METADATA/dataSources/dataSourceId' in file_access.file
 
 
-def open_run_daemonized_helper(path):
-    RunDirectory(path, parallelize=False)
+def open_run_daemonized_helper(mock_data_root):
+    with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', mock_data_root):
+        open_run(2012, 238, data="all", parallelize=False)
 
-def test_open_run_daemonized(mock_fxe_raw_run):
+def test_open_run_daemonized(mock_spb_raw_and_proc_run):
+    mock_data_root, raw_run_dir, proc_run_dir = mock_spb_raw_and_proc_run
+
     # Daemon processes can't start their own children, check that opening a run is still possible.
-    p = Process(target=open_run_daemonized_helper, args=(mock_fxe_raw_run,), daemon=True)
+    p = Process(target=open_run_daemonized_helper, args=(mock_data_root,), daemon=True)
     p.start()
     p.join()
 

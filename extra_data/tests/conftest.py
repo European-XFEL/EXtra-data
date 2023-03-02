@@ -1,3 +1,4 @@
+import os
 import os.path as osp
 
 import h5py
@@ -56,6 +57,14 @@ def mock_sa3_control_data(format_version):
 
 
 @pytest.fixture(scope='module')
+def mock_control_data_with_empty_source(format_version):
+    with TemporaryDirectory() as td:
+        path = osp.join(td, 'RAW-R0451-DA01-S00001.h5')
+        make_examples.make_da_file_with_empty_source(path, format_version=format_version)
+        yield path
+
+
+@pytest.fixture(scope='module')
 def mock_spb_control_data_badname(format_version):
     with TemporaryDirectory() as td:
         path = osp.join(td, 'RAW-R0309-DA01-S00000.h5')
@@ -109,6 +118,24 @@ def mock_spb_raw_run(format_version):
 
 
 @pytest.fixture(scope='session')
+def mock_spb_raw_and_proc_run():
+    with TemporaryDirectory() as td:
+        prop_dir = osp.join(str(td), 'SPB', '201830', 'p002012')
+
+        # Set up raw
+        raw_run_dir = osp.join(prop_dir, 'raw', 'r0238')
+        os.makedirs(raw_run_dir)
+        make_examples.make_spb_run(raw_run_dir)
+
+        # Set up proc
+        proc_run_dir = osp.join(prop_dir, 'proc', 'r0238')
+        os.makedirs(proc_run_dir)
+        make_examples.make_spb_run(proc_run_dir, raw=False)
+
+        yield td, raw_run_dir, proc_run_dir
+
+
+@pytest.fixture(scope='session')
 def mock_jungfrau_run():
     with TemporaryDirectory() as td:
         make_examples.make_jungfrau_run(td)
@@ -137,6 +164,17 @@ def empty_h5_file():
             pass
 
         yield path
+
+
+@pytest.fixture(scope='session')
+def mock_no_metadata_file():
+    with TemporaryDirectory() as td:
+        path = osp.join(td, 'no_metadata.h5')
+        with h5py.File(path, 'w') as f:
+            f.create_dataset('INDEX/trainId', data=[], dtype=np.uint64)
+
+        yield path
+
 
 @pytest.fixture(scope='session')
 def mock_empty_file():

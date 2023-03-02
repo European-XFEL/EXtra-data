@@ -1,6 +1,10 @@
 """Exception classes specific to extra_data."""
 
 
+class FileStructureError(Exception):
+    pass
+
+
 class SourceNameError(KeyError):
     def __init__(self, source):
         self.source = source

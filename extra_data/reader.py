@@ -61,6 +61,10 @@ RUN_DATA = 'RUN'
 INDEX_DATA = 'INDEX'
 METADATA = 'METADATA'
 
+def ignore_sigint():
+    # Used in child processes to prevent them from receiving KeyboardInterrupt
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
 
 class DataCollection:
     """An assemblage of data generated at European XFEL
@@ -153,14 +157,10 @@ class DataCollection:
                 uncached.append(path)
 
         if uncached:
-            def initializer():
-                # prevent child processes from receiving KeyboardInterrupt
-                signal.signal(signal.SIGINT, signal.SIG_IGN)
-
             # Open the files either in parallel or serially
             if parallelize:
                 nproc = min(available_cpu_cores(), len(uncached))
-                with Pool(processes=nproc, initializer=initializer) as pool:
+                with Pool(processes=nproc, initializer=ignore_sigint) as pool:
                     for fname, fa in pool.imap_unordered(cls._open_file, uncached):
                         handle_open_file_attempt(fname, fa)
             else:
@@ -388,9 +388,14 @@ class DataCollection:
             if file is None:
                 continue
 
+            firsts, counts = file.get_index(source, '')
+            first, count = firsts[pos], counts[pos]
+            if not count:
+                continue
+
             for key in self.keys_for_source(source):
                 path = '/CONTROL/{}/{}'.format(source, key.replace('.', '/'))
-                source_data[key] = file.file[path][pos]
+                source_data[key] = file.file[path][first]
 
         for source in self.instrument_sources:
             source_data = res[source] = {
@@ -1288,12 +1293,17 @@ class TrainIterator:
             self._set_result(res, source, 'metadata',
                              {'source': source, 'timestamp.tid': tid})
 
-
             for key in self.data.keys_for_source(source):
-                _, pos, ds = self._find_data(source, key, tid)
+                file, pos, ds = self._find_data(source, key, tid)
                 if ds is None:
                     continue
-                self._set_result(res, source, key, ds[pos])
+
+                firsts, counts = file.get_index(source, '')
+                first, count = firsts[pos], counts[pos]
+                if not count:
+                    continue
+
+                self._set_result(res, source, key, ds[first])
 
         for source in self.data.instrument_sources:
             self._set_result(res, source, 'metadata',
@@ -1388,7 +1398,9 @@ def RunDirectory(
     if _use_voview and (sel_files == files):
         voview_file_acc = voview.find_file_valid(path)
         if voview_file_acc is not None:
-            return DataCollection([voview_file_acc], is_single_run=True)
+            return DataCollection([voview_file_acc],
+                                  is_single_run=True,
+                                  ctx_closes=True)
 
     files_map = RunFilesMap(path)
     t0 = time.monotonic()
@@ -1448,7 +1460,8 @@ def open_run(
     if data == 'all':
         common_args = dict(
             proposal=proposal, run=run, include=include,
-            file_filter=file_filter, inc_suspect_trains=inc_suspect_trains)
+            file_filter=file_filter, inc_suspect_trains=inc_suspect_trains,
+            parallelize=parallelize)
 
         # Open the raw data
         dc = open_run(**common_args, data='raw')
