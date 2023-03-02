@@ -20,7 +20,7 @@ def test_get_keydata(mock_spb_raw_run):
     assert am0.entry_shape == (2, 512, 128)
     assert am0.ndim == 4
     assert am0.dtype == np.dtype('u2')
-    assert {p.name for p in am0.source_files} == {
+    assert {p.name for p in am0.source_files_paths} == {
         'RAW-R0238-AGIPD00-S00000.h5'
     }
 
@@ -30,7 +30,7 @@ def test_get_keydata(mock_spb_raw_run):
     assert xgm_beam_x.entry_shape == ()
     assert xgm_beam_x.ndim == 1
     assert xgm_beam_x.dtype == np.dtype('f4')
-    assert {p.name for p in xgm_beam_x.source_files} == {
+    assert {p.name for p in xgm_beam_x.source_files_paths} == {
         'RAW-R0238-DA01-S00000.h5', 'RAW-R0238-DA01-S00001.h5'
     }
 
