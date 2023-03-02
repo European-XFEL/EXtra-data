@@ -41,10 +41,10 @@ def test_use_voview(mock_spb_raw_run, tmp_path):
         assert 'SA1_XTD2_XGM/DOOCS/MAIN' in run.control_sources
 
     xgm_intens = run['SA1_XTD2_XGM/DOOCS/MAIN:output', 'data.intensityTD']
-    assert {os.path.basename(p) for p in xgm_intens.source_files} == {
+    assert {p.name for p in xgm_intens.source_files_paths} == {
         'RAW-R0238-DA01-S00000.h5', 'RAW-R0238-DA01-S00001.h5'
     }
-    assert {os.path.basename(p) for p in xgm_intens[:30].source_files} == {
+    assert {p.name for p in xgm_intens[:30].source_files_paths} == {
         'RAW-R0238-DA01-S00000.h5'
     }
 
