@@ -1477,7 +1477,7 @@ class JUNGFRAU(MultimodDetectorBase):
         self._frames_per_entry = self.data[src, self._main_data_key].entry_shape[0]
 
     @staticmethod
-    def _label_dims(arr):
+    def _label_dims_update_module(arr, detector_name=None):
         # Label dimensions to match the AGIPD/DSSC/LPD data access
         ndim_pertrain = arr.ndim
         if 'trainId' in arr.dims:
@@ -1490,6 +1490,12 @@ class JUNGFRAU(MultimodDetectorBase):
             })
         elif ndim_pertrain == 2:
             arr = arr.rename({'dim_0': 'cell'})
+
+        # This detector module source is JNGFR03. Update the module coordinate
+        # from [3] to [1]
+        if detector_name == "FXE_XAD_JF500K":
+            arr['module'] = np.array([1])
+
         return arr
 
     def get_array(self, key, *, fill_value=None, roi=(), astype=None):
@@ -1513,7 +1519,7 @@ class JUNGFRAU(MultimodDetectorBase):
           input array dtype
         """
         arr = super().get_array(key, fill_value=fill_value, roi=roi, astype=astype)
-        return self._label_dims(arr)
+        return self._label_dims_update_module(arr, self.detector_name)
 
     def get_dask_array(self, key, fill_value=None, astype=None):
         """Get a labelled Dask array of detector data
@@ -1534,7 +1540,7 @@ class JUNGFRAU(MultimodDetectorBase):
           input array dtype
         """
         arr = super().get_dask_array(key, fill_value=fill_value, astype=astype)
-        return self._label_dims(arr)
+        return self._label_dims_update_module(arr, self.detector_name)
 
     def trains(self, require_all=True):
         """Iterate over trains for detector data.
@@ -1552,7 +1558,9 @@ class JUNGFRAU(MultimodDetectorBase):
           arrays.
         """
         for tid, d in super().trains(require_all=require_all):
-            yield tid, {k: self._label_dims(a) for (k, a) in d.items()}
+            yield tid, {
+                k: self._label_dims_update_module(
+                    a, self.detector_name) for (k, a) in d.items()}
 
     def write_virtual_cxi(self, filename, fillvalues=None):
         """Write a virtual CXI file to access the detector data.
