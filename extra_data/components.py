@@ -1572,19 +1572,19 @@ class LPDMini(XtdfDetectorBase):
         self.corrected = corrected
         self._source_re = self._source_re_corr if corrected else self._source_re_raw
         if detector_name is None:
-            detector_name = self._find_detector_name(data=self._source_re)
+            detector_name = self._find_detector_name(data, self._source_re)
         super().__init__(data, detector_name, modules=[0])
 
     def __getitem__(self, item):
-        if item == 'image.data' and not self.corrected:
-            return LPDMiniRawDataKey(self, item)
+        if item.startswith('image.') and not self.corrected:
+            return LPDMiniImageKey(self, item, corrected=self.corrected)
         return super().__getitem__(item)
 
 
 class LPDMiniImageKey(XtdfImageMultimodKeyData):
     def __init__(self, det: XtdfDetectorBase, key, pulse_sel=by_index[0:MAX_PULSES:1], modules=None, corrected=True):
         super().__init__(det, key, pulse_sel)
-        if modules is None:
+        if modules is None and self._has_modules:
             eshape = self._eg_keydata.entry_shape
             nmod = eshape[-3] if corrected else (eshape[-2] // 32)
             modules = list(range(nmod))
@@ -1620,18 +1620,18 @@ class LPDMiniImageKey(XtdfImageMultimodKeyData):
             nframes_sel = len(self.train_id_coordinates())
             module_dim = 8 if module_gaps else len(self.modules)
 
-            return (module_dim, nframes_sel) + roi_shape(self.det.module_shape, roi)
+            return (nframes_sel, module_dim) + roi_shape(self.det.module_shape, roi)
         else:
             return super().buffer_shape(module_gaps, roi)[1:]
 
     # Used for .select_trains() and .split_trains()
     def _with_selected_det(self, det_selected):
-        return LPDMiniRawDataKey(det_selected, self.key, self._pulse_sel, modules=self.modules)
+        return LPDMiniImageKey(det_selected, self.key, self._pulse_sel, modules=self.modules, corrected=self.corrected)
 
     def select_pulses(self, pulses):
         pulses = _check_pulse_selection(pulses)
 
-        return LPDMiniRawDataKey(self.det, self.key, pulses, modules=self.modules)
+        return LPDMiniImageKey(self.det, self.key, pulses, modules=self.modules, corrected=self.corrected)
 
     def ndarray(self, *, fill_value=None, out=None, roi=(), astype=None, module_gaps=False):
         """Get an array of per-pulse data (image.*) for xtdf detector"""
@@ -1651,8 +1651,8 @@ class LPDMiniImageKey(XtdfImageMultimodKeyData):
         if not self.corrected:
             reading_view.shape = (
                 out_shape[:1]
-                + (1,) if self._extraneous_dim else ()
-                + (self.modules * out_shape[2], out_shape[3]) if self._has_modules else ()
+                + ((1,) if self._extraneous_dim else ())
+                + ((out_shape[1] * out_shape[2], out_shape[3]) if self._has_modules else ())
             )
 
         for _modno, kd in self.modno_to_keydata.items():
