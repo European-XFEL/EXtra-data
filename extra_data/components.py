@@ -178,14 +178,16 @@ class MultimodDetectorBase:
         return MultimodKeyData(self, item)
 
     @classmethod
-    def _find_detector_name(cls, data):
+    def _find_detector_name(cls, data, source_re=None):
         detector_names = set()
+        if source_re is None:
+            source_re = cls._source_re
         for source in data.instrument_sources:
-            m = cls._source_re.match(source)
+            m = source_re.match(source)
             if m:
                 detector_names.add(m.group('detname'))
         if not detector_names:
-            raise SourceNameError(cls._source_re.pattern)
+            raise SourceNameError(source_re.pattern)
         elif len(detector_names) > 1:
             raise ValueError(
                 "Multiple detectors found in the data: {}. "
@@ -1569,6 +1571,8 @@ class LPDMini(XtdfDetectorBase):
                  *, corrected=True):
         self.corrected = corrected
         self._source_re = self._source_re_corr if corrected else self._source_re_raw
+        if detector_name is None:
+            detector_name = self._find_detector_name(data=self._source_re)
         super().__init__(data, detector_name, modules=[0])
 
     def __getitem__(self, item):
