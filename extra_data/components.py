@@ -1542,7 +1542,7 @@ class LPD1M(LPDBase, XtdfDetectorBase):
 
 
 @multimod_detectors
-class LPDMini(LPDBase, XtdfDetectorBase):
+class LPDMini(XtdfDetectorBase):
     """An interface to LPD-Mini data.
 
     Parameters
@@ -1561,8 +1561,101 @@ class LPDMini(LPDBase, XtdfDetectorBase):
       repeat the pulse & cell IDs from the first 1/3 of each train, and add gain
       stage labels from 0 (high-gain) to 2 (low-gain).
     """
-    _source_re = re.compile(r'(?P<detname>.+_LPD_MINI.*)/DET/(?P<modno>\d+)CH')
-    module_shape = (256, 256)
+    _source_re_raw = re.compile(r'(?P<detname>.+_LPD_MINI.*)/DET/(?P<modno>\d+)CH')
+    _source_re_corr = re.compile(r'(?P<detname>.+_LPD_MINI.*)/CORR/(?P<modno>\d+)CH')
+    module_shape = (32, 256)
+
+    def __init__(self, data: DataCollection, detector_name=None, modules=None,
+                 *, corrected=True):
+        self.corrected = corrected
+        self._source_re = self._source_re_corr if corrected else self._source_re_raw
+        super().__init__(data, detector_name, modules=[0])
+
+    def __getitem__(self, item):
+        if item == 'image.data' and not self.corrected:
+            return LPDMiniRawDataKey(self, item)
+        return super().__getitem__(item)
+
+
+class LPDMiniImageKey(XtdfImageMultimodKeyData):
+    def __init__(self, det: XtdfDetectorBase, key, pulse_sel=by_index[0:MAX_PULSES:1], modules=None, corrected=True):
+        super().__init__(det, key, pulse_sel)
+        if modules is None:
+            eshape = self._eg_keydata.entry_shape
+            nmod = eshape[-3] if corrected else (eshape[-2] // 32)
+            modules = list(range(nmod))
+        self._modules = modules
+        self.corrected = corrected
+
+    @property
+    def _has_modules(self):
+        return (self._eg_keydata.ndim - self._extraneous_dim) > 1
+
+    @property
+    def ndim(self):
+        return super().ndim if self._has_modules else (super().ndim - 1)
+
+    @property
+    def dimensions(self):
+        if self._has_modules:
+            return ['trainId', 'module'] + ['dim_%d' % i for i in range(self.ndim - 2)]
+        return ['trainId']
+
+    @property
+    def modules(self):
+        return self._modules
+
+    def buffer_shape(self, module_gaps=False, roi=()):
+        """Get the array shape for this data
+
+        If *module_gaps* is True, include space for modules which are missing
+        from the data. *roi* may be a tuple of slices defining a region of
+        interest on the inner dimensions of the data.
+        """
+        if self._has_modules:
+            nframes_sel = len(self.train_id_coordinates())
+            module_dim = 8 if module_gaps else len(self.modules)
+
+            return (module_dim, nframes_sel) + roi_shape(self.det.module_shape, roi)
+        else:
+            return super().buffer_shape(module_gaps, roi)[1:]
+
+    # Used for .select_trains() and .split_trains()
+    def _with_selected_det(self, det_selected):
+        return LPDMiniRawDataKey(det_selected, self.key, self._pulse_sel, modules=self.modules)
+
+    def select_pulses(self, pulses):
+        pulses = _check_pulse_selection(pulses)
+
+        return LPDMiniRawDataKey(self.det, self.key, pulses, modules=self.modules)
+
+    def ndarray(self, *, fill_value=None, out=None, roi=(), astype=None, module_gaps=False):
+        """Get an array of per-pulse data (image.*) for xtdf detector"""
+        if roi or module_gaps:
+            raise NotImplementedError
+
+        # trains, modules, 32, 256
+        out_shape = self.buffer_shape(module_gaps=module_gaps, roi=roi)
+
+        if out is None:
+            dtype = self._eg_keydata.dtype if astype is None else np.dtype(astype)
+            out = _out_array(out_shape, dtype, fill_value=fill_value)
+        elif out.shape != out_shape:
+            raise ValueError(f'requires output array of shape {out_shape}')
+
+        reading_view = out.view()
+        if not self.corrected:
+            reading_view.shape = (
+                out_shape[:1]
+                + (1,) if self._extraneous_dim else ()
+                + (self.modules * out_shape[2], out_shape[3]) if self._has_modules else ()
+            )
+
+        for _modno, kd in self.modno_to_keydata.items():
+            for chunk in kd._data_chunks:
+                self._read_chunk(chunk, reading_view, roi)
+
+        return out
 
 
 @multimod_detectors
