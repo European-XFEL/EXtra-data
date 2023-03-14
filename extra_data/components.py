@@ -1446,6 +1446,9 @@ class JUNGFRAU(MultimodDetectorBase):
     n_modules: int
       Number of detector modules in the experiment setup. Default is
       None, in which case it will be estimated from the available data.
+    st_modno: int
+      The module number that the detector starts with.
+      e.g. FXE_XAD_JF500K/DET/JNGFR03:daqOutput should has st_modno = 3
     """
     # We appear to have a few different formats for source names:
     # SPB_IRDA_JNGFR/DET/MODULE_1:daqOutput  (e.g. in p 2566, r 61)
@@ -1461,8 +1464,18 @@ class JUNGFRAU(MultimodDetectorBase):
     module_shape = (512, 1024)
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
-                 *, min_modules=1, n_modules=None):
+                 *, min_modules=1, n_modules=None, st_modno=1):
         super().__init__(data, detector_name, modules, min_modules=min_modules)
+
+        if st_modno:
+            self.modno_to_source = {}
+            # Overwrite modno based on given starting module number and update
+            # source_to_modno and modno_to_source.
+            for source in self.source_to_modno.keys():
+                # JUNGFRAU modono is expected (e.g. extra_geom) to start with 1.
+                modno = int(self._source_re.search(source)['modno']) - st_modno + 1
+                self.source_to_modno[source] = modno
+                self.modno_to_source[modno] = source
 
         if n_modules is not None:
             self.n_modules = int(n_modules)
@@ -1477,7 +1490,7 @@ class JUNGFRAU(MultimodDetectorBase):
         self._frames_per_entry = self.data[src, self._main_data_key].entry_shape[0]
 
     @staticmethod
-    def _label_dims_update_module(arr, detector_name=None):
+    def _label_dims(arr):
         # Label dimensions to match the AGIPD/DSSC/LPD data access
         ndim_pertrain = arr.ndim
         if 'trainId' in arr.dims:
@@ -1490,12 +1503,6 @@ class JUNGFRAU(MultimodDetectorBase):
             })
         elif ndim_pertrain == 2:
             arr = arr.rename({'dim_0': 'cell'})
-
-        # This detector module source is JNGFR03. Update the module coordinate
-        # from [3] to [1]
-        if detector_name == "FXE_XAD_JF500K":
-            arr['module'] = np.array([1])
-
         return arr
 
     def get_array(self, key, *, fill_value=None, roi=(), astype=None):
@@ -1519,7 +1526,7 @@ class JUNGFRAU(MultimodDetectorBase):
           input array dtype
         """
         arr = super().get_array(key, fill_value=fill_value, roi=roi, astype=astype)
-        return self._label_dims_update_module(arr, self.detector_name)
+        return self._label_dims(arr)
 
     def get_dask_array(self, key, fill_value=None, astype=None):
         """Get a labelled Dask array of detector data
@@ -1540,7 +1547,7 @@ class JUNGFRAU(MultimodDetectorBase):
           input array dtype
         """
         arr = super().get_dask_array(key, fill_value=fill_value, astype=astype)
-        return self._label_dims_update_module(arr, self.detector_name)
+        return self._label_dims(arr)
 
     def trains(self, require_all=True):
         """Iterate over trains for detector data.
@@ -1558,9 +1565,7 @@ class JUNGFRAU(MultimodDetectorBase):
           arrays.
         """
         for tid, d in super().trains(require_all=require_all):
-            yield tid, {
-                k: self._label_dims_update_module(
-                    a, self.detector_name) for (k, a) in d.items()}
+            yield tid, {k: self._label_dims(a) for (k, a) in d.items()}
 
     def write_virtual_cxi(self, filename, fillvalues=None):
         """Write a virtual CXI file to access the detector data.
