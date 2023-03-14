@@ -235,6 +235,30 @@ def test_get_array_jungfrau(mock_jungfrau_run):
     assert arr.dtype == np.float32
 
 
+def test_jungfraus_st_modno(mock_jungfrau_run, mock_fxe_jungfrau_run):
+
+    # Test SPB_IRDA_JF4M component by setting the st_modno to the default value 1.
+    run = RunDirectory(mock_jungfrau_run)
+    jf = JUNGFRAU(run.select_trains(by_index[:2]), st_modno=1)
+    assert jf.detector_name == 'SPB_IRDA_JF4M'
+
+    arr = jf.get_array('data.adc')
+    assert np.all(arr['module'] == list(range(1, 9)))
+
+    # Test FXE_XAD_JF500K component with and without setting st_modno to 3.
+    for st_modno, modno in zip([1, 3], [3, 1]):
+        run = RunDirectory(mock_fxe_jungfrau_run)
+        jf = JUNGFRAU(
+            run.select_trains(by_index[:2]),
+            detector_name='FXE_XAD_JF500K',
+            st_modno=st_modno,
+        )
+        assert jf.detector_name == 'FXE_XAD_JF500K'
+
+        arr = jf.get_array('data.adc')
+        assert np.all(arr['module'] == [modno])
+
+
 def test_get_dask_array(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run)

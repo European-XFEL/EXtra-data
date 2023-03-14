@@ -141,6 +141,11 @@ def mock_jungfrau_run():
         make_examples.make_jungfrau_run(td)
         yield td
 
+@pytest.fixture(scope='session')
+def mock_fxe_jungfrau_run():
+    with TemporaryDirectory() as td:
+        make_examples.make_fxe_jungfrau_run(td)
+        yield td
 
 @pytest.fixture(scope='session')
 def mock_scs_run():
