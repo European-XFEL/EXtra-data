@@ -1544,7 +1544,7 @@ class LPD1M(LPDBase, XtdfDetectorBase):
 
 
 @multimod_detectors
-class LPDMini(XtdfDetectorBase):
+class LPDMini(LPDBase, XtdfDetectorBase):
     """An interface to LPD-Mini data.
 
     Parameters
@@ -1568,15 +1568,15 @@ class LPDMini(XtdfDetectorBase):
     module_shape = (32, 256)
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
-                 *, corrected=True):
+                 *, corrected=True, parallel_gain=False):
         self.corrected = corrected
         self._source_re = self._source_re_corr if corrected else self._source_re_raw
         if detector_name is None:
             detector_name = self._find_detector_name(data, self._source_re)
-        super().__init__(data, detector_name, modules=[0])
+        super().__init__(data, detector_name, modules=[0], parallel_gain=parallel_gain)
 
     def __getitem__(self, item):
-        if item.startswith('image.') and not self.corrected:
+        if item.startswith('image.'):
             return LPDMiniImageKey(self, item, corrected=self.corrected)
         return super().__getitem__(item)
 
@@ -1601,9 +1601,17 @@ class LPDMiniImageKey(XtdfImageMultimodKeyData):
 
     @property
     def dimensions(self):
+        ndim_inner = self.ndim - 1 - self._has_modules
+        if ndim_inner == 2:
+            # 2D pixel data
+            entry_dims = ['slow_scan', 'fast_scan']
+        else:
+            # Everything else seems to be 1D, but just in case
+            entry_dims = [f'dim_{i}' for i in range(ndim_inner)]
+
         if self._has_modules:
-            return ['trainId', 'module'] + ['dim_%d' % i for i in range(self.ndim - 2)]
-        return ['trainId']
+            return ['train_pulse', 'module'] + entry_dims
+        return ['train_pulse'] + entry_dims
 
     @property
     def modules(self):
