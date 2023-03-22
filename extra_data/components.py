@@ -1563,6 +1563,9 @@ class LPDMini(LPDBase, XtdfDetectorBase):
       repeat the pulse & cell IDs from the first 1/3 of each train, and add gain
       stage labels from 0 (high-gain) to 2 (low-gain).
     """
+    # Some code uses cls._source_re, but when creating an instance we replace
+    # this with either the raw or corrected variant.
+    _source_re = re.compile(r'(?P<detname>.+_LPD_MINI.*)/(DET|CORR)/(?P<modno>\d+)CH')
     _source_re_raw = re.compile(r'(?P<detname>.+_LPD_MINI.*)/DET/(?P<modno>\d+)CH')
     _source_re_corr = re.compile(r'(?P<detname>.+_LPD_MINI.*)/CORR/(?P<modno>\d+)CH')
     module_shape = (32, 256)
