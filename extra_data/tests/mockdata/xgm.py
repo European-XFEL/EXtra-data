@@ -36,6 +36,10 @@ class XGM(DeviceBase):
         ('signalAdaption/dig', 'i4', ()),
     ]
 
+    extra_run_values = [
+        ('classId', None, 'DoocsXGM'),
+    ]
+
     # Technically, only the part before the / is the output channel.
     # But there is a structure associated with the part one level after that,
     # and we don't know what else to call it.

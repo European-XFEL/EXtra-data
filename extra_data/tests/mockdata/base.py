@@ -9,6 +9,7 @@ import numpy as np
 class DeviceBase:
     # Override these in subclasses
     control_keys = []
+    extra_run_values = []
     output_channels = ()
     instrument_keys = []
 
@@ -62,6 +63,14 @@ class DeviceBase:
                              (1,), 'u8', maxshape=(None,))
             f.create_dataset('RUN/%s/%s/value' % (self.device_id, topic),
                              (1,)+dims, datatype, maxshape=((None,)+dims))
+
+        for (topic, datatype, value) in self.extra_run_values:
+            if isinstance(value, str):
+                datatype = h5py.string_dtype('ascii')
+            f.create_dataset('RUN/%s/%s/timestamp' % (self.device_id, topic),
+                             (1,), 'u8', maxshape=(None,))
+            f.create_dataset('RUN/%s/%s/value' % (self.device_id, topic),
+                             (1,) + dims, datatype, data=[value], maxshape=((None,) + dims))
 
     def write_instrument(self, f):
         """Write the INSTRUMENT data, and the relevant parts of INDEX"""
