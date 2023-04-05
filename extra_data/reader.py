@@ -567,6 +567,19 @@ class DataCollection:
         """
         return self._get_source_data(source).run_values()
 
+    def _merge_aliases(self, alias_dicts):
+        """Merge multiple alias dictionaries and check for conflicts."""
+
+        new_aliases = {}
+
+        for aliases in alias_dicts:
+            for alias, literal in aliases.items():
+                if new_aliases.setdefault(alias, literal) != literal:
+                    raise ValueError(f'conflicting alias definition '
+                                     f'for {alias}')
+
+        return new_aliases
+
     def union(self, *others):
         """Join the data in this collection with one or more others.
 
@@ -586,22 +599,8 @@ class DataCollection:
         sources_data = {src: src_datas[0].union(*src_datas[1:])
                         for src, src_datas in sources_data_multi.items()}
 
-        # Check for alias conflicts across all data collections.
-        duplicate_aliases = set(self._aliases.keys()).intersection(
-            *[dc._aliases for dc in others])
-
-        for alias in duplicate_aliases:
-            # Find all values occuring for duplicate aliases.
-            duplicate_alias_values = set([self._aliases[alias]]).union(
-                [dc._aliases[alias] for dc in others])
-
-            if len(duplicate_alias_values) > 1:
-                raise ValueError('conflicting aliases across data collections '
-                                 'to be merged')
-
-        aliases = self._aliases.copy()
-        for dc in others:
-            aliases.update(dc._aliases)
+        aliases = self._merge_aliases(
+            [self._aliases] + [dc._aliases for dc in others])
 
         train_ids = sorted(set().union(*[sd.train_ids for sd in sources_data.values()]))
         files = set().union(*[sd.files for sd in sources_data.values()])
@@ -613,7 +612,9 @@ class DataCollection:
         )
 
     def _parse_aliases(self, alias_defs):
-        aliases = {}
+        """Parse alias definitions into alias dictionaries."""
+
+        alias_dicts = []
 
         def is_valid_alias(k, v):
             return (isinstance(k, str) and (
@@ -627,12 +628,13 @@ class DataCollection:
                                      'str keys to str values for sources or '
                                      '2-len tuples for sourcekeys')
 
-                aliases.update(alias_def)
+                alias_dicts.append(alias_def)
             elif isinstance(alias_def, (str, os.PathLike)):
                 # From a file.
-                aliases.update(self._load_aliases_from_file(Path(alias_def)))
+                alias_dicts.append(
+                    self._load_aliases_from_file(Path(alias_def)))
 
-        return aliases
+        return alias_dicts
 
     def _load_aliases_from_file(self, aliases_path):
         """Load alias definitions from file."""
@@ -718,9 +720,13 @@ class DataCollection:
         for sources and keys.
         """
 
+        # Check for conflicts within these definitions
+        new_aliases = self._merge_aliases(
+            [self._aliases] + self._parse_aliases(alias_defs))
+
         return DataCollection(
             self.files, sources_data=self._sources_data,
-            train_ids=self.train_ids, aliases=self._parse_aliases(alias_defs),
+            train_ids=self.train_ids, aliases=new_aliases,
             inc_suspect_trains=self.inc_suspect_trains,
             is_single_run=self.is_single_run
         )
@@ -746,8 +752,9 @@ class DataCollection:
         sources and keys.
         """
 
-        # New data with aliases applied.
-        aliases = self._parse_aliases(alias_defs)
+        # Create new aliases.
+        aliases = self._merge_aliases(
+            [self._aliases] + self._parse_aliases(alias_defs))
 
         # Set of sources aliased.
         aliased_sources = {literal for literal in aliases.values()
@@ -792,9 +799,19 @@ class DataCollection:
 
         # Create a new DataCollection from selecting and add the aliases.
         new_data = self.select(selection, require_all=require_all)
-        new_data._aliases.update(aliases)
+        new_data._aliases = aliases
 
         return new_data
+
+    def drop_aliases(self):
+        """Return a new DataCollection without any aliases."""
+
+        return DataCollection(
+            self.files, sources_data=self._sources_data,
+            train_ids=self.train_ids, aliases={},
+            inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=self.is_single_run
+        )
 
     @property
     def alias(self):

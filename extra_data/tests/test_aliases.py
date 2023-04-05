@@ -50,6 +50,23 @@ def test_with_aliases(mock_sa3_control_data, mock_sa3_control_aliases):
     with pytest.raises(PropertyNameError):
         run.alias['bogus-key']
 
+    # Test re-applying the same aliases.
+    run2 = run.with_aliases(mock_sa3_control_aliases)
+    assert run._aliases == run2._aliases
+
+    # Test adding additional aliases.
+    run3 = run.with_aliases({'foo': 'bar'})
+    assert set(run._aliases.keys()) < set(run3._aliases.keys())
+    assert 'foo' in run3._aliases
+
+    # Test adding conflicting aliases
+    with pytest.raises(ValueError):
+        run.with_aliases({'sa3-xgm': 'x'})
+
+    # Test dropping aliases again.
+    run4 = run.drop_aliases()
+    assert not run4._aliases
+
 
 def test_json_alias_file(mock_sa3_control_data, mock_sa3_control_aliases, tmp_path):
     aliases_path = tmp_path / 'aliases.json'
