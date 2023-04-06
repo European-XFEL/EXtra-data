@@ -29,8 +29,25 @@ def test_use_voview(mock_spb_raw_run, tmp_path):
     run = RunDirectory(str(new_run_dir))
     assert [f.filename for f in run.files] == [str(voview_file)]
     assert len(run.train_ids) == 64
-    assert run.run_metadata()['dataFormatVersion'] == \
-           run_orig.run_metadata()['dataFormatVersion']
+
+    run_metadata = run.run_metadata()
+    run_orig_metadata = run_orig.run_metadata()
+
+    # Check the format version specifically, this is the only metadata that may
+    # differ from the rest.
+    if run_orig_metadata['dataFormatVersion'] != "0.5":
+        # For all versions above 0.5 (i.e. 1.0 onwards), we write the voview
+        # files in the 1.0 format.
+        assert run_metadata['dataFormatVersion'] == "1.0"
+
+        del run_metadata['dataFormatVersion']
+        del run_orig_metadata['dataFormatVersion']
+    else:
+        assert run_metadata['dataFormatVersion'] == \
+            run_orig_metadata['dataFormatVersion']
+
+    # Check the rest of the metadata
+    assert run_metadata == run_orig_metadata
 
     assert 'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf' in run.instrument_sources
     assert 'SA1_XTD2_XGM/DOOCS/MAIN' in run.control_sources
@@ -38,6 +55,7 @@ def test_use_voview(mock_spb_raw_run, tmp_path):
     with RunDirectory(str(new_run_dir)) as run:
         assert 'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf' in run.instrument_sources
         assert 'SA1_XTD2_XGM/DOOCS/MAIN' in run.control_sources
+
 
 
 def open_run_with_voview(run_src, new_run_dir):

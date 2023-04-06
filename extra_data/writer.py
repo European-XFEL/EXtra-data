@@ -1,5 +1,6 @@
 import h5py
 import numpy as np
+from packaging import version
 
 from .exceptions import MultiRunError
 
@@ -117,7 +118,12 @@ class FileWriter:
             metadata = {}
 
         metadata_grp = self.file.create_group('METADATA')
-        if metadata.get('dataFormatVersion') == '1.0':
+        format_version = version.parse(metadata.get('dataFormatVersion'))
+        if format_version >= version.parse("1.0"):
+            # We don't care about the differences between version 1.0/1.1/1.2,
+            # so for simplicity we stick to the 1.0 format.
+            metadata["dataFormatVersion"] = "1.0"
+
             self.write_sources(metadata_grp.create_group('dataSources'))
 
             # File format 1.0 should also have INDEX/flag

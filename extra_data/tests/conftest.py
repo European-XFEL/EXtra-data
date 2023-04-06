@@ -9,7 +9,7 @@ from tempfile import TemporaryDirectory
 from . import make_examples
 
 
-@pytest.fixture(scope='session', params=['0.5', '1.0'])
+@pytest.fixture(scope='session', params=['0.5', '1.0', '1.2'])
 def format_version(request):
     return request.param
 
