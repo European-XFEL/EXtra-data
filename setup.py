@@ -62,6 +62,7 @@ setup(name="EXtra-data",
           ],
           'docs': [
               'sphinx',
+              'sphinx_rtd_theme',
               'nbsphinx',
               'ipython',  # For nbsphinx syntax highlighting
               'sphinxcontrib_github_alt',
