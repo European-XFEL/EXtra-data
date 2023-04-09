@@ -27,7 +27,7 @@ which denotes the HDF5 file with ``raw`` data for sequence ``2`` of the aggregat
 does not change. Each *proposal* can collect any number of runs during their granted
 beamtime.
 
-This document describes the most recent version ``1.2`` of this file format. While
+This document describes the most recent version ``1.3`` of this file format. While
 earlier version are used for data written at the time, their use is discouraged
 for any new files. The appendix lists the differences between each versions.
 
@@ -173,6 +173,21 @@ Each dataset has one entry per train, and the ``timestamp`` record when the
 current value was updated, which is typically less than once per train and thus
 likely in the past.
 
+The key groups themselves may have one or more HDF attributes attached with
+additional metadata:
+
+* ``displayedName [str]`` may denote a more exhaustive name for this key, e.g. ``Complete Target Burst duration`` for ``totBurstDuration``.
+* ``alias [str]`` may specify an alternative name depending on context, e.g. a hardware-specific designation for the value of a key.
+* ``description [str]`` may contain a full text explaining this key.
+* ``metricPrefixSymbol [str]`` may specify the metric prefix symbol for the unit this key's values are expressed in, e.g. ``G``m ``k`` or ``n``.
+* ``unitSymbol [str]`` may specify the unit symbol this key's values are expressed in, e.g. ``A``, ``Hz`` or ``eV``. Enumerations may use the symbol ``#`` and ratios the symbol ``%``.
+
+EuXFEL DAQ recording often contain further attributes corresponding to attributes in
+the Karabo control system.
+
+[``metricPrefixName``, ``unitName`` are *sometimes* there with the full prefix/unit, e.g. ``kilo`` and ``Ampere``, mention here?]
+[also regularly present are ``options``, ``tags``, mention here?]
+
 ``RUN`` holds a complete duplicate of the ``CONTROL`` hierarchy, but each pair
 of ``timestamp`` and ``value`` contain only one entry taken at the start of
 the run. All datasets continue to be vectors, so even for scalar values the
@@ -186,6 +201,13 @@ that name in the file. All these datasets have the same length in the first dime
 
 Format versions
 ---------------
+
+1.2
+~~~
+
+* There are no attributes yet for keys in ``CONTROL``, ``RUN``  and ``INSTRUMENT``.
+
+The EuXFEL DAQ software used this format version between July 2021 and Februrary 2023.
 
 1.1
 ~~~
