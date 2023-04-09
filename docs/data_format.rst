@@ -144,10 +144,10 @@ For each source in ``METADATA/dataSources/deviceId``, the ``INDEX`` group then a
 datasets that map the train entries in the top-level datasets above to each source's data rows
 in ``CONTROL`` or ``INSTRUMENT``:
 
-* ``INDEX/{deviceId}/count [uint64]``: For each train ID, how many data samples did
-  this source record. This may be 0 if no data was recorded for this train.
-* ``INDEX/{deviceId}/first [uint64]``: for each train ID, the index at which the
-  corresponding data starts in the arrays for this device.
+* ``INDEX/{deviceId}/count [uint64]`` counts how many data samples did
+  this source record for each train. This may be 0 if no data was recorded.
+* ``INDEX/{deviceId}/first [uint64]`` contains the index at which the
+  corresponding data for each train starts in the arrays for this device.
 
 Thus, to find the data for a given train ID, we could do::
 
@@ -156,9 +156,6 @@ Thus, to find the data for a given train ID, we could do::
     count = file[f'INDEX/{device_id}/count'][train_index]
     train_data = file[f'INSTRUMENT/{device_id}/{key}][first:first+count]
 
-Some older files use a different index format with first/last/status instead of
-first/count. In this case, a status of 0 means that no data was recorded
-for that train. [never saw those files, is it relevant enough to list it?]
 
 CONTROL and RUN
 ~~~~~~~~~~~~~~~
@@ -191,13 +188,19 @@ the Karabo control system.
 ``RUN`` holds a complete duplicate of the ``CONTROL`` hierarchy, but each pair
 of ``timestamp`` and ``value`` contain only one entry taken at the start of
 the run. All datasets continue to be vectors, so even for scalar values the
-first dimension has length 1.
+first dimension has length 1. It may also contain additional keys not present in
+``CONTROL``, e.g. whose values either do not change or is not relevant across trains.
+
 
 INSTRUMENT
 ~~~~~~~~~~
 
+TODO
 For each *INSTRUMENT* entry in ``METADATA/dataSourceId``, there is a group with
-that name in the file. All these datasets have the same length in the first dimension: this represents the successive readings taken. The slices defined by the corresponding datasets in *INDEX* work on this dimension.
+that name in the file. All these datasets have the same length in the first dimension:
+this represents the successive readings taken. The slices defined by the corresponding
+datasets in *INDEX* work on this dimension.
+
 
 Format versions
 ---------------
