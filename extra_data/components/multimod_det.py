@@ -1,4 +1,4 @@
-"""Interfaces to data from specific instruments
+"""High-level interfaces for multi-module frame-based detectors
 """
 import logging
 import re
@@ -8,13 +8,14 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 
-from .exceptions import SourceNameError
-from .reader import DataCollection, by_id, by_index
-from .read_machinery import DataChunk, roi_shape, split_trains
-from .writer import FileWriter
-from .write_cxi import XtdfCXIWriter, JUNGFRAUCXIWriter
+from ..exceptions import SourceNameError
+from ..reader import DataCollection, by_id, by_index
+from ..read_machinery import DataChunk, roi_shape, split_trains
+from ..writer import FileWriter
+from ..write_cxi import XtdfCXIWriter, JUNGFRAUCXIWriter
 
 __all__ = [
+    'XtdfDetectorBase',
     'AGIPD1M',
     'AGIPD500K',
     'DSSC1M',
