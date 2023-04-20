@@ -89,8 +89,8 @@ def test_json_alias_file(mock_sa3_control_data, mock_sa3_control_aliases, tmp_pa
     "mcp-voltage": ["SA3_XTD10_MCP/MCPS/MPOD", "channels.U3.voltage"],
     "mcp-trace": ["SA3_XTD10_MCP/ADC/1:channel_5.output", "data.rawData"],
 
-    "bogus-source": "SA4_XTD20_XGM/DOOCS/MAIN",
-    "bogus-key": ["SA1_XTD2_XGM/DOOCS/MAIN", "foo"]
+    "bogus-source": "SA4_XTD20_XGM/XGM/DOOCS",
+    "bogus-key": ["SA3_XTD10_XGM/XGM/DOOCS", "foo"]
 }
     ''')
 
@@ -118,8 +118,8 @@ mcp-mpod: SA3_XTD10_MCP/MCPS/MPOD
 mcp-voltage: [SA3_XTD10_MCP/MCPS/MPOD, channels.U3.voltage]
 mcp-trace: [SA3_XTD10_MCP/ADC/1:channel_5.output, data.rawData]
 
-bogus-source: SA4_XTD20_XGM/DOOCS/MAIN
-bogus-key: [SA1_XTD2_XGM/DOOCS/MAIN, foo]
+bogus-source: SA4_XTD20_XGM/XGM/DOOCS
+bogus-key: [SA3_XTD10_XGM/XGM/DOOCS, foo]
     ''')
 
     run = H5File(mock_sa3_control_data).with_aliases(aliases_path)
@@ -141,8 +141,8 @@ mcp-mpod = "SA3_XTD10_MCP/MCPS/MPOD"
 mcp-voltage = ["SA3_XTD10_MCP/MCPS/MPOD", "channels.U3.voltage"]
 mcp-trace = ["SA3_XTD10_MCP/ADC/1:channel_5.output", "data.rawData"]
 
-bogus-source = "SA4_XTD20_XGM/DOOCS/MAIN"
-bogus-key = ["SA1_XTD2_XGM/DOOCS/MAIN", "foo"]
+bogus-source = "SA4_XTD20_XGM/XGM/DOOCS"
+bogus-key = ["SA3_XTD10_XGM/XGM/DOOCS", "foo"]
 
 ["SA3_XTD10_XGM/XGM/DOOCS"]
 hv = "pulseEnergy.wavelengthUsed"
