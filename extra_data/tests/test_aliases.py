@@ -94,7 +94,7 @@ def test_json_alias_file(mock_sa3_control_data, mock_sa3_control_aliases, tmp_pa
 }
     ''')
 
-    run = H5File(mock_sa3_control_data).with_aliases(mock_sa3_control_aliases)
+    run = H5File(mock_sa3_control_data).with_aliases(aliases_path)
     assert run._aliases == mock_sa3_control_aliases
 
 
@@ -122,7 +122,7 @@ bogus-source: SA4_XTD20_XGM/DOOCS/MAIN
 bogus-key: [SA1_XTD2_XGM/DOOCS/MAIN, foo]
     ''')
 
-    run = H5File(mock_sa3_control_data).with_aliases(mock_sa3_control_aliases)
+    run = H5File(mock_sa3_control_data).with_aliases(aliases_path)
     assert run._aliases == mock_sa3_control_aliases
 
 
@@ -150,7 +150,7 @@ beam-x = "beamPosition.ixPos"
 beam-y = "beamPosition.iyPos"
     ''')
 
-    run = H5File(mock_sa3_control_data).with_aliases(mock_sa3_control_aliases)
+    run = H5File(mock_sa3_control_data).with_aliases(aliases_path)
     assert run._aliases == mock_sa3_control_aliases
 
 
