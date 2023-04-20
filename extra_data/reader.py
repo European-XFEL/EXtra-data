@@ -21,10 +21,11 @@ import sys
 import tempfile
 import time
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from itertools import groupby
 from multiprocessing import Pool
 from operator import index
+from pathlib import Path
 from typing import Tuple
 from warnings import warn
 
@@ -33,7 +34,7 @@ import numpy as np
 
 from . import locality, voview
 from .exceptions import (MultiRunError, PropertyNameError, SourceNameError,
-                         TrainIDError)
+                         AliasError, TrainIDError)
 from .file_access import FileAccess
 from .keydata import KeyData
 from .read_machinery import (DETECTOR_SOURCE_RE, FilenameInfo, by_id, by_index,
@@ -76,8 +77,8 @@ class DataCollection:
     for a single file or :func:`RunDirectory` for a directory.
     """
     def __init__(
-            self, files, sources_data=None, train_ids=None, ctx_closes=False, *,
-            inc_suspect_trains=True, is_single_run=False,
+            self, files, sources_data=None, train_ids=None, aliases=None,
+            ctx_closes=False, *, inc_suspect_trains=True, is_single_run=False,
     ):
         self.files = list(files)
         self.ctx_closes = ctx_closes
@@ -111,6 +112,8 @@ class DataCollection:
                 for ((src, section), files) in files_by_sources.items()
             }
         self._sources_data = sources_data
+
+        self._aliases = aliases or {}
 
         # Throw an error if we have conflicting data for the same source
         self._check_source_conflicts()
@@ -259,7 +262,7 @@ class DataCollection:
         elif isinstance(item, str):
             return self._get_source_data(item)
 
-        raise TypeError("Expected data[source, key]")
+        raise TypeError("Expected data[source] or data[source, key]")
 
     def get_entry_shape(self, source, key):
         """Get the shape of a single data entry for the given source & key"""
@@ -564,15 +567,30 @@ class DataCollection:
         """
         return self._get_source_data(source).run_values()
 
+    def _merge_aliases(self, alias_dicts):
+        """Merge multiple alias dictionaries and check for conflicts."""
+
+        new_aliases = {}
+
+        for aliases in alias_dicts:
+            for alias, literal in aliases.items():
+                if new_aliases.setdefault(alias, literal) != literal:
+                    raise ValueError(f'conflicting alias definition '
+                                     f'for {alias}')
+
+        return new_aliases
+
     def union(self, *others):
         """Join the data in this collection with one or more others.
 
         This can be used to join multiple sources for the same trains,
         or to extend the same sources with data for further trains.
-        The order of the datasets doesn't matter.
+        The order of the datasets doesn't matter. Any aliases defined on
+        the collections are combined as well unless their values conflict.
 
         Returns a new :class:`DataCollection` object.
         """
+
         sources_data_multi = defaultdict(list)
         for dc in (self,) + others:
             for source, srcdata in dc._sources_data.items():
@@ -581,17 +599,226 @@ class DataCollection:
         sources_data = {src: src_datas[0].union(*src_datas[1:])
                         for src, src_datas in sources_data_multi.items()}
 
+        aliases = self._merge_aliases(
+            [self._aliases] + [dc._aliases for dc in others])
+
         train_ids = sorted(set().union(*[sd.train_ids for sd in sources_data.values()]))
         files = set().union(*[sd.files for sd in sources_data.values()])
 
         return DataCollection(
             files, sources_data=sources_data, train_ids=train_ids,
-            inc_suspect_trains=self.inc_suspect_trains,
+            aliases=aliases, inc_suspect_trains=self.inc_suspect_trains,
             is_single_run=same_run(self, *others),
         )
 
-    def _expand_selection(self, selection):
+    def _parse_aliases(self, alias_defs):
+        """Parse alias definitions into alias dictionaries."""
 
+        alias_dicts = []
+
+        def is_valid_alias(k, v):
+            return (isinstance(k, str) and (
+                isinstance(v, str) or (isinstance(v, tuple) and len(v) == 2)
+            ))
+
+        for alias_def in alias_defs:
+            if isinstance(alias_def, Mapping):
+                if any([not is_valid_alias(k, v) for k, v in alias_def.items()]):
+                    raise ValueError('alias definition by dict must be all '
+                                     'str keys to str values for sources or '
+                                     '2-len tuples for sourcekeys')
+
+                alias_dicts.append(alias_def)
+            elif isinstance(alias_def, (str, os.PathLike)):
+                # From a file.
+                alias_dicts.append(
+                    self._load_aliases_from_file(Path(alias_def)))
+
+        return alias_dicts
+
+    def _load_aliases_from_file(self, aliases_path):
+        """Load alias definitions from file."""
+
+        if aliases_path.suffix == '.json':
+            import json
+
+            with open(aliases_path, 'r') as f:
+                data = json.load(f)
+
+        elif aliases_path.suffix == '.yaml':
+            import yaml
+
+            with open(aliases_path, 'r') as f:
+                data = yaml.safe_load(f)
+
+        elif aliases_path.suffix == '.toml':
+            try:
+                from tomli import load as load_toml
+            except ImportError:
+                # Try the built-in tomllib for 3.11+.
+                from tomllib import load as load_toml
+
+            with open(aliases_path, 'rb') as f:
+                data = load_toml(f)
+
+        aliases = {}
+
+        def walk_dict_value(source, key_aliases):
+            for alias, key in key_aliases.items():
+                aliases[alias] = (source, key)
+
+        for key, value in data.items():
+            if isinstance(value, str):
+                # Source alias.
+                aliases[key] = value
+            elif isinstance(value, list) and len(value) == 2:
+                # Sourcekey alias by explicit list.
+                aliases[key] = tuple((str(x) for x in value))
+            elif isinstance(value, dict):
+                # Sourcekey alias by nested mapping.
+                walk_dict_value(key, value)
+            else:
+                raise ValueError(f"unsupported literal type for alias '{key}'")
+
+        return aliases
+
+    def with_aliases(self, *alias_defs):
+        """Apply aliases for convenient source and key access.
+
+        Allows to define aliases for sources or source-key combinations
+        that may be used instead of their literal names to retrieve
+        :class:`SourceData` and :class:`KeyData` objects via
+        :property:`DataCollection.alias`.
+
+        Multiple alias definitions may be passed as positional arguments
+        in different formats:
+
+        1. Passing a dictionary mapping aliases to sources (passed as strings)
+           or source-key pairs (passed as a 2-len tuple of strings).
+
+        2. Passing a string or PathLike pointing to a JSON, YAML (requires
+           pyYAML installed) or TOML (requires Python 3.11 or with tomli
+           installed) file containing the aliases. For unsupported formats,
+           an ImportError is raised.
+
+           The file should contain mappings from alias to sources as strings
+           or source-key pairs as lists. In addition, source-key aliases may
+           be defined by nested key-value pairs according to the respective
+           format, shown here in YAML::
+
+             # Source alias.
+             sa1-xgm: SA1_XTD2_XGM/XGM/DOOCS
+
+             # Direct source key alias.
+             sa1-intensity: [SA1_XTD2_XGM/XGM/DOOCS:output, data.intensityTD]
+
+             # Nested source key alias.
+             SA3_XTD10_MONO/MDL/PHOTON_ENERGY:
+               mono-central-energy: actualEnergy
+
+        Returns a new :class:`DataCollection` object with the aliases
+        for sources and keys.
+        """
+
+        # Check for conflicts within these definitions
+        new_aliases = self._merge_aliases(
+            [self._aliases] + self._parse_aliases(alias_defs))
+
+        return DataCollection(
+            self.files, sources_data=self._sources_data,
+            train_ids=self.train_ids, aliases=new_aliases,
+            inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=self.is_single_run
+        )
+
+    def only_aliases(self, *alias_defs, strict=False, require_all=False):
+        """Apply aliases and select only the aliased sources and keys.
+
+        A convenient function around :method:`DataCollection.with_aliases`
+        and :method:`DataCollection.select` applying both the aliases passed
+        as `alias_defs` to the former and then selecting down the
+        :class:`DataCollection` to any sources and/or their keys for which
+        aliases exist.
+
+        By default and unlike :method:`DataCollection.select`, any sources
+        or keys present in the alias definitions but not the data itself are
+        ignored. This can be changed via the optional argument `strict`.
+
+        The optional `require_all` argument restricts the trains to those for
+        which all selected sources and keys have at least one data entry. By
+        default, all trains remain selected.
+
+        Returns a new :class:`DataCollection` object with only the aliased
+        sources and keys.
+        """
+
+        # Create new aliases.
+        aliases = self._merge_aliases(
+            [self._aliases] + self._parse_aliases(alias_defs))
+
+        # Set of sources aliased.
+        aliased_sources = {literal for literal in aliases.values()
+                           if isinstance(literal, str)}
+
+        # In the current implementation of DataCollection.select(), any
+        # occurence of a wildcard glob will include all keys for a given
+        # source, even if specific keys are listed as well. To be safe,
+        # the source aliases are picked first and no specific sourcekey
+        # aliases for the same source are included in the selection.
+
+        # Entire source selections.
+        selection = [(source, '*') for source in aliased_sources]
+
+        # Specific key selections.
+        selection += [
+            literal for literal in aliases.values()
+            if isinstance(literal, tuple) \
+                and literal[0] not in aliased_sources
+        ]
+
+        if not strict:
+            # If strict mode is disabled, any non-existing sources or
+            # keys are stripped out.
+
+            existing_sel_idx = []
+
+            for sel_idx, (source, key) in enumerate(selection):
+                try:
+                    sd = self[source]
+                except SourceNameError:
+                    # Source not present.
+                    continue
+                else:
+                    if key != '*' and key not in sd:
+                        # Source present, but not key.
+                        continue
+
+                existing_sel_idx.append(sel_idx)
+
+            selection = [selection[sel_idx] for sel_idx in existing_sel_idx]
+
+        # Create a new DataCollection from selecting and add the aliases.
+        new_data = self.select(selection, require_all=require_all)
+        new_data._aliases = aliases
+
+        return new_data
+
+    def drop_aliases(self):
+        """Return a new DataCollection without any aliases."""
+
+        return DataCollection(
+            self.files, sources_data=self._sources_data,
+            train_ids=self.train_ids, aliases={},
+            inc_suspect_trains=self.inc_suspect_trains,
+            is_single_run=self.is_single_run
+        )
+
+    @property
+    def alias(self):
+        """Enables item access via source and key aliases."""
+        return AliasIndexer(self)
+
+    def _expand_selection(self, selection):
         if isinstance(selection, dict):
             # {source: {key1, key2}}
             # {source: set()} or {source: None} -> all keys for this source
@@ -780,7 +1007,7 @@ class DataCollection:
         files = set().union(*[sd.files for sd in sources_data.values()])
 
         return DataCollection(
-            files, sources_data, train_ids=train_ids,
+            files, sources_data, train_ids=train_ids, aliases=self._aliases,
             inc_suspect_trains=self.inc_suspect_trains,
             is_single_run=self.is_single_run
         )
@@ -818,7 +1045,7 @@ class DataCollection:
 
         return DataCollection(
             files, sources_data=sources_data, train_ids=self.train_ids,
-            inc_suspect_trains=self.inc_suspect_trains,
+            aliases=self._aliases, inc_suspect_trains=self.inc_suspect_trains,
             is_single_run=self.is_single_run,
         )
 
@@ -853,7 +1080,7 @@ class DataCollection:
 
         return DataCollection(
             files, sources_data=sources_data, train_ids=new_train_ids,
-            inc_suspect_trains=self.inc_suspect_trains,
+            aliases=self._aliases, inc_suspect_trains=self.inc_suspect_trains,
             is_single_run=self.is_single_run,
         )
 
@@ -983,6 +1210,22 @@ class DataCollection:
             ))
         print()
 
+        # Invert aliases for faster lookup.
+        src_aliases = defaultdict(set)
+        srckey_aliases = defaultdict(lambda: defaultdict(set))
+
+        for alias, literal in self._aliases.items():
+            if isinstance(literal, str):
+                src_aliases[literal].add(alias)
+            else:
+                srckey_aliases[literal[0]][literal[1]].add(alias)
+
+        def src_alias_list(s):
+            if src_aliases[s]:
+                alias_str = ', '.join(src_aliases[s])
+                return f'<{alias_str}>'
+            return ''
+
         def src_data_detail(s, keys, prefix=''):
             """Detail for how much data is present for an instrument group"""
             if not keys:
@@ -1004,12 +1247,18 @@ class DataCollection:
                 else:
                     entry_info = ""
                 dt = self.get_dtype(s, k)
-                print(f"{prefix}{k}\t[{dt}{entry_info}]")
+
+                if k in srckey_aliases[s]:
+                    alias_str = ' <' + ', '.join(srckey_aliases[s][k]) + '>'
+                else:
+                    alias_str = ''
+
+                print(f"{prefix}{k}{alias_str}\t[{dt}{entry_info}]")
 
         non_detector_inst_srcs = self.instrument_sources - self.detector_sources
         print(len(non_detector_inst_srcs), 'instrument sources (excluding detectors):')
         for s in sorted(non_detector_inst_srcs):
-            print('  -', s)
+            print('  -', s, src_alias_list(s))
             if not any(p.match(s) for p in details_sources_re):
                 continue
 
@@ -1021,11 +1270,10 @@ class DataCollection:
                 src_data_detail(s, keys, prefix='      ')
                 keys_detail(s, keys, prefix='      - ')
 
-
         print()
         print(len(self.control_sources), 'control sources:')
         for s in sorted(self.control_sources):
-            print('  -', s)
+            print('  -', s, src_alias_list(s))
             if any(p.match(s) for p in details_sources_re):
                 # Detail for control sources: list keys
                 ctrl_keys = self[s].keys(inc_timestamps=False)
@@ -1038,6 +1286,11 @@ class DataCollection:
                 if run_only_keys:
                     print('    - Additional run keys (1 entry per run):')
                     for k in sorted(run_only_keys):
+                        if k in srckey_aliases[s]:
+                            alias_str = ' <' + ', '.join(srckey_aliases[s][k]) + '>'
+                        else:
+                            alias_str = ''
+
                         ds = self._sources_data[s].files[0].file[
                             f"/RUN/{s}/{k.replace('.', '/')}/value"
                         ]
@@ -1049,7 +1302,7 @@ class DataCollection:
                         dt = ds.dtype
                         if h5py.check_string_dtype(dt):
                             dt = 'string'
-                        print(f"      - {k}\t[{dt}{entry_info}]")
+                        print(f"      - {k}{alias_str}\t[{dt}{entry_info}]")
 
         print()
 
@@ -1329,6 +1582,121 @@ class TrainIterator:
             if self.require_all and self.data._check_data_missing(tid):
                 continue
             yield tid, self._assemble_data(tid)
+
+
+class AliasIndexer:
+    __slots__ = ('data',)
+
+    def __init__(self, data):
+        self.data = data
+
+    def _resolve_any_alias(self, alias):
+        try:
+            literal = self.data._aliases[alias]
+        except KeyError:
+            raise AliasError(alias) from None
+
+        return literal
+
+    def _resolve_source_alias(self, alias):
+        source = self._resolve_any_alias(alias)
+
+        if isinstance(source, tuple):
+            raise ValueError(f'{alias} not aliasing a source for this data')
+
+        return source
+
+    def __getitem__(self, aliased_item):
+        if isinstance(aliased_item, tuple) and len(aliased_item) == 2:
+            # Source alias with key literal.
+            return self.data[self._resolve_source_alias(aliased_item[0]),
+                                aliased_item[1]]
+        elif isinstance(aliased_item, str):
+            # Source or key alias.
+            return self.data[self._resolve_any_alias(aliased_item)]
+
+        raise TypeError('expected alias or (source alias, key) tuple')
+
+    def _resolve_aliased_selection(self, selection):
+        if isinstance(selection, dict):
+            res = {self._resolve_source_alias(alias): keys
+                    for alias, keys in selection.items()}
+
+        elif isinstance(selection, Iterable):
+            res = []
+
+            for item in selection:
+                if isinstance(item, tuple) and len(item) == 2:
+                    # Source alias and literal key.
+                    item = (self._resolve_source_alias(item[0]), item[1])
+                elif isinstance(item, str):
+                    item = self._resolve_any_alias(item)
+
+                    if isinstance(item, str):
+                        # Source alias.
+                        item = (item, '*')
+
+                res.append(item)
+
+        return res
+
+    def select(self, seln_or_alias, key_glob='*', require_all=False):
+        """Select a subset of sources and keys from this using aliases.
+
+        In contrast to :method:`DataCollection.select`, only a subset of
+        ways to select data via aliases is supported:
+
+        1. With a source alias and literal key glob pattern::
+
+            # Select all pulse energy keys for an aliased XGM fast data.
+            sel = run.alias.select('sa1-xgm', 'data.intensity*')
+
+        2. With an iterable of aliases and/or (source alias, key pattern) tuples::
+
+            # Select specific keys for an aliased XGM fast data.
+            sel = run.alias.select([('sa1-xgm', 'data.intensitySa1TD'),
+                                    ('sa1-xgm', 'data.intensitySa3TD')]
+
+            # Select several aliases, may be both source and key aliases.
+            sel = run.alias.select(['sa1-xgm', 'mono-hv'])
+
+            Data is included if it matches any of the aliases. Note that
+            this method does not support glob patterns for the source alias.
+
+        3. With a dict of source aliases mapped to sets of key names
+            (or empty sets to get all keys)::
+
+                # Select image.data from an aliased AGIPD and all data
+                # from an aliased XGM.
+                sel = run.select({'agipd': {'image.data'}, 'sa1-xgm': set()})
+
+        The optional `require_all` argument restricts the trains to those for
+        which all selected sources and keys have at least one data entry. By
+        default, all trains remain selected.
+
+        Returns a new :class:`DataCollection` object for the selected data.
+        """
+
+        if isinstance(seln_or_alias, str):
+            seln_or_alias = [(seln_or_alias, key_glob)]
+
+        return self.data.select(self._resolve_aliased_selection(
+            seln_or_alias))
+
+    def deselect(self, seln_or_alias, key_glob='*'):
+        """Select everything except the specified sources and keys using aliases.
+
+        This takes the same arguments as :meth:`select`, but the sources
+        and keys you specify are dropped from the selection.
+
+        Returns a new :class:`DataCollection` object for the remaining data.
+        """
+
+        if isinstance(seln_or_alias, str):
+            seln_or_alias = [(seln_or_alias, key_glob)]
+
+        return self.data.deselect(self._resolve_aliased_selection(
+            seln_or_alias))
 
 
 def H5File(path, *, inc_suspect_trains=True):

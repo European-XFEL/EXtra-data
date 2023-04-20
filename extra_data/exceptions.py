@@ -33,6 +33,14 @@ class TrainIDError(KeyError):
         return "Train ID {!r} not found in this data".format(self.train_id)
 
 
+class AliasError(KeyError):
+    def __init__(self, alias):
+        self.alias = alias
+
+    def __str__(self):
+        return f"'{self.alias}' not known as alias for this data"
+
+
 class MultiRunError(ValueError):
     def __str__(self):
         return (

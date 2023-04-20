@@ -56,6 +56,29 @@ def mock_sa3_control_data(format_version):
         yield path
 
 
+@pytest.fixture
+def mock_sa3_control_aliases():
+    return {
+        'sa3-xgm': 'SA3_XTD10_XGM/XGM/DOOCS',
+        'hv': ('SA3_XTD10_XGM/XGM/DOOCS', 'pulseEnergy.wavelengthUsed'),
+        'beam-x': ('SA3_XTD10_XGM/XGM/DOOCS', 'beamPosition.ixPos'),
+        'beam-y': ('SA3_XTD10_XGM/XGM/DOOCS', 'beamPosition.iyPos'),
+
+        'imgfel-frames': ('SA3_XTD10_IMGFEL/CAM/BEAMVIEW:daqOutput', 'data.image.pixels'),
+        'imgfel-frames2': ('SA3_XTD10_IMGFEL/CAM/BEAMVIEW2:daqOutput', 'data.image.pixels'),
+        'imgfel-screen-pos': ('SA3_XTD10_IMGFEL/MOTOR/SCREEN', 'actualPosition'),
+        'imgfel-filter-pos': ('SA3_XTD10_IMGFEL/MOTOR/FILTER', 'actualPosition'),
+
+        'mcp-adc': 'SA3_XTD10_MCP/ADC/1',
+        'mcp-mpod': 'SA3_XTD10_MCP/MCPS/MPOD',
+        'mcp-voltage': ('SA3_XTD10_MCP/MCPS/MPOD', 'channels.U3.voltage'),
+        'mcp-trace': ('SA3_XTD10_MCP/ADC/1:channel_5.output', 'data.rawData'),
+
+        'bogus-source': 'SA4_XTD20_XGM/XGM/DOOCS',
+        'bogus-key': ('SA3_XTD10_XGM/XGM/DOOCS', 'foo')
+    }
+
+
 @pytest.fixture(scope='module')
 def mock_control_data_with_empty_source(format_version):
     with TemporaryDirectory() as td:

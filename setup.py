@@ -78,6 +78,8 @@ setup(name="EXtra-data",
               'pytest-cov',
               'testpath',
               'psutil',
+              'pyyaml',
+              'tomli; python_version < "3.11"'
           ]
       },
       python_requires='>=3.6',
