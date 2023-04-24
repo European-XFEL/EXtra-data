@@ -645,7 +645,7 @@ class DataCollection:
             with open(aliases_path, 'r') as f:
                 data = json.load(f)
 
-        elif aliases_path.suffix == '.yaml':
+        elif aliases_path.suffix in ['.yaml', '.yml']:
             import yaml
 
             with open(aliases_path, 'r') as f:
