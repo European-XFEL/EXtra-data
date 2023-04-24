@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from itertools import islice
 from multiprocessing import Process
+from pathlib import Path
+from textwrap import dedent
 from warnings import catch_warnings
 
 import h5py
@@ -20,6 +22,7 @@ from extra_data import (
     SourceNameError, PropertyNameError, DataCollection, open_run,
     MultiRunError
 )
+from extra_data.reader import DEFAULT_ALIASES_FILE
 
 def test_iterate_trains(mock_agipd_data, mock_control_data_with_empty_source):
     with H5File(mock_agipd_data) as f:
@@ -849,6 +852,36 @@ def test_open_run(mock_spb_raw_and_proc_run):
         with catch_warnings(record=True) as w:
             open_run(proposal=2012, run=238, data='all')
             assert len(w) == 1
+
+        # Helper function to write an alias file at a specific path
+        def write_aliases(path):
+            aliases_path.parent.mkdir(parents=True, exist_ok=True)
+            aliases_path.write_text(dedent("""
+            xgm: SA1_XTD2_XGM/DOOCS/MAIN
+            """))
+
+        # To set the aliases, we should be able to use a string relative to the
+        # proposal directory.
+        aliases_path = Path(mock_data_root) / "SPB/201830/p002012/foo.yml"
+        write_aliases(aliases_path)
+        run = open_run(2012, 238, aliases="{}/foo.yml")
+        assert "xgm" in run.alias
+
+        # And a proper path
+        aliases_path = Path(mock_data_root) / "foo.yml"
+        write_aliases(aliases_path)
+        run = open_run(2012, 238, aliases=aliases_path)
+        assert "xgm" in run.alias
+
+        # And a plain string
+        run = open_run(2012, 238, aliases=str(aliases_path))
+        assert "xgm" in run.alias
+
+        # If the default file exists, it should be used automatically
+        aliases_path = Path(DEFAULT_ALIASES_FILE.format(mock_data_root + "/SPB/201830/p002012"))
+        write_aliases(aliases_path)
+        run = open_run(2012, 238)
+        assert "xgm" in run.alias
 
 def test_open_file(mock_sa3_control_data):
     f = H5File(mock_sa3_control_data)

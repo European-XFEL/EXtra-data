@@ -1793,10 +1793,12 @@ def RunDirectory(
 # any code was already using it.
 RunHandler = RunDirectory
 
+DEFAULT_ALIASES_FILE = "{}/usr/extra-data-aliases.yml"
 
 def open_run(
         proposal, run, data='raw', include='*', file_filter=locality.lc_any, *,
-        inc_suspect_trains=True, parallelize=True, _use_voview=True,
+        inc_suspect_trains=True, parallelize=True, aliases=DEFAULT_ALIASES_FILE,
+        _use_voview=True,
 ):
     """Access EuXFEL data on the Maxwell cluster by proposal and run number.
 
@@ -1831,6 +1833,13 @@ def open_run(
         Enable or disable opening files in parallel. Particularly useful if
         creating child processes is not allowed (e.g. in a daemonized
         :class:`multiprocessing.Process`).
+    aliases: str, Path
+        Path to an alias file for the run, see the documentation for
+        :meth:`DataCollection.with_aliases` for details. If the
+        argument is a string with a format argument like
+        ``{}/path/to/aliases.yml``, then the format argument will be replaced with
+        the proposal directory path. By default it looks for a file named
+        ``{}/usr/extra-data-aliases.yml``.
     """
     if data == 'all':
         common_args = dict(
@@ -1878,8 +1887,24 @@ def open_run(
         run = index(run)  # Allow integers, including numpy integers
     run = 'r' + str(run).zfill(4)
 
-    return RunDirectory(
+    dc = RunDirectory(
         osp.join(prop_dir, data, run), include=include, file_filter=file_filter,
         inc_suspect_trains=inc_suspect_trains, parallelize=parallelize,
         _use_voview=_use_voview,
     )
+
+    # Normalize string arguments to be an absolute Path
+    if isinstance(aliases, str):
+        aliases = Path(aliases.format(prop_dir))
+
+    # If we're using the default aliases file and it doesn't exist, ignore it
+    # without throwing any errors.
+    default_aliases = Path(DEFAULT_ALIASES_FILE.format(prop_dir))
+    if aliases == default_aliases and not default_aliases.is_file():
+        aliases = None
+
+    if aliases is not None:
+        dc = dc.with_aliases(aliases)
+        print(f"Loading {len(dc._aliases)} aliases from: {aliases}", flush=True, file=sys.stderr)
+
+    return dc
