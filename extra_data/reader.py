@@ -1617,6 +1617,13 @@ class AliasIndexer:
 
         raise TypeError('expected alias or (source alias, key) tuple')
 
+    def __contains__(self, aliased_item):
+        try:
+            self[aliased_item]
+            return True
+        except KeyError:
+            return False
+
     def _resolve_aliased_selection(self, selection):
         if isinstance(selection, dict):
             res = {self._resolve_source_alias(alias): keys

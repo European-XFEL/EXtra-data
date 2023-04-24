@@ -23,6 +23,12 @@ def test_with_aliases(mock_sa3_control_data, mock_sa3_control_aliases):
     # Test whether source alias yields identical SourceData.
     assert run.alias['sa3-xgm'] is run['SA3_XTD10_XGM/XGM/DOOCS']
 
+    # Test __contains__()
+    assert "sa3-xgm" in run.alias
+    assert not "sa42-xgm" in run.alias
+    with pytest.raises(TypeError):
+        42 in run.alias
+
     # Test whether source alias plus literal key yields equal KeyData.
     assert_equal_keydata(
         run.alias['sa3-xgm', 'pulseEnergy.wavelengthUsed'],
