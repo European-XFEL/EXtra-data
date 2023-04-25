@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from extra_data import RunDirectory, by_id, by_index
-from extra_data.exceptions import PropertyNameError, SourceNameError
+from extra_data.exceptions import PropertyNameError, SourceNameError, NoDataError
 
 
 def test_get_sourcedata(mock_spb_raw_run):
@@ -138,6 +138,21 @@ def test_device_class(mock_spb_raw_run):
 
     xgm_inst = run['SPB_XTD9_XGM/DOOCS/MAIN:output']
     assert xgm_inst.device_class is None
+
+
+def test_path_traits(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
+
+    assert xgm.storage_class is None  # Not an EuXFEL path.
+    assert xgm.data_category == 'RAW'
+    assert xgm.aggregator == 'DA01'
+
+    run = RunDirectory(mock_spb_raw_run).select_trains(np.s_[:0])
+    xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
+
+    with pytest.raises(NoDataError):
+        xgm.storage_class
 
 
 @pytest.mark.parametrize('source', [
