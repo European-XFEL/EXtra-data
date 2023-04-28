@@ -90,7 +90,7 @@ class KeyData:
         return (sum(c.total_count for c in self._data_chunks),) + self.entry_shape
 
     @property
-    def source_files_paths(self):
+    def source_file_paths(self):
         paths = []
         for chunk in self._data_chunks:
             if chunk.dataset.is_virtual:
@@ -111,10 +111,6 @@ class KeyData:
 
         from pathlib import Path
         return [Path(p) for p in paths]
-
-    @property
-    def source_files(self):
-        return [FileAccess(p) for p in self.source_files_paths]
 
     def select_trains(self, trains):
         """Select a subset of trains in this data as a new :class:`KeyData` object.
