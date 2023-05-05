@@ -55,6 +55,7 @@ setup(name="EXtra-data",
           'packaging',
           'pandas',
           'xarray',
+          'euxfel_bunch_pattern'
       ],
       extras_require={
           'bridge': [
