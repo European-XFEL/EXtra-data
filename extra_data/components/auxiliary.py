@@ -73,7 +73,7 @@ class PulseTiming:
         else:
             self.bpt_key = self.timeserver_src['bunchPatternTable']
 
-        if (bam is False) and (bam is None or bam not in data.all_sources):
+        if (bam is not False) and (bam is None or bam not in data.all_sources):
             # BAM is not disabled and not given or only partially.
             bam = self._find_bam(data, bam or '')
 
@@ -85,6 +85,7 @@ class PulseTiming:
             for key in ['data.absoluteTD', 'data.lowChargeArrivalTime']:
                 if key in self.bam_src:
                     self.bam_key = self.bam_src[key]
+                    break
             else:
                 raise ValueError(f'BAM source {bam} contains none of the '
                                  f'known keys for arrival time.')
