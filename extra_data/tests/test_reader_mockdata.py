@@ -24,6 +24,7 @@ from extra_data import (
 )
 from extra_data.reader import DEFAULT_ALIASES_FILE
 
+
 def test_iterate_trains(mock_agipd_data, mock_control_data_with_empty_source):
     with H5File(mock_agipd_data) as f:
         for train_id, data in islice(f.trains(), 10):
@@ -36,6 +37,7 @@ def test_iterate_trains(mock_agipd_data, mock_control_data_with_empty_source):
         # smoke test
         tid, data = next(f.trains())
         assert list(data['SA3_XTD10_VAC/GAUGE/G30520C'].keys()) == ['metadata']
+
 
 def test_iterate_trains_flat_keys(mock_agipd_data):
     with H5File(mock_agipd_data) as f:
@@ -163,6 +165,7 @@ def test_read_fxe_raw_run(mock_fxe_raw_run):
     assert run.train_ids == list(range(10000, 10480))
     run.info()  # Smoke test
 
+
 def test_read_fxe_raw_run_selective(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run, include='*DA*')
     assert run.train_ids == list(range(10000, 10480))
@@ -172,6 +175,7 @@ def test_read_fxe_raw_run_selective(mock_fxe_raw_run):
     assert run.train_ids == list(range(10000, 10480))
     assert 'SA1_XTD2_XGM/DOOCS/MAIN' not in run.control_sources
     assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in run.detector_sources
+
 
 def test_read_spb_proc_run(mock_spb_proc_run):
     run = RunDirectory(mock_spb_proc_run) #Test for calib data
@@ -186,6 +190,7 @@ def test_read_spb_proc_run(mock_spb_proc_run):
     assert 'u4' == data[device]['image.mask'].dtype
     assert 'f4' == data[device]['image.data'].dtype
     run.info() # Smoke test
+
 
 def test_iterate_spb_raw_run(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
@@ -595,12 +600,13 @@ def test_select(mock_fxe_raw_run):
     ['*/BEAMVIEW2:daqOutput', '*/BEAMVIEW2*', '*', [('*/BEAMVIEW2:*', 'data.image.*')]]
 )
 def test_select_require_all(mock_sa3_control_data, select_str):
-    # De-select two sources in this example set, which have no trains
-    # at all, to allow matching trains across all sources with the same
-    # result.
+    # De-select two sources in this example set which have no trains
+    # at all as well as one other with partuial trains, to allow
+    # matching trains across all sources with the same result.
     run = H5File(mock_sa3_control_data) \
         .deselect([('SA3_XTD10_MCP/ADC/1:*', '*'),
-                   ('SA3_XTD10_IMGFEL/CAM/BEAMVIEW:*', '*')])
+                   ('SA3_XTD10_IMGFEL/CAM/BEAMVIEW:*', '*'),
+                   ('SA3_XTD10_IMGFEL/CAM/BEAMVIEW3:*', '*')])
     subrun = run.select(select_str, require_all=True)
     np.testing.assert_array_equal(subrun.train_ids, run.train_ids[1::2])
 
@@ -608,6 +614,23 @@ def test_select_require_all(mock_sa3_control_data, select_str):
     # sure it's a list of np.uint64 again.
     assert isinstance(subrun.train_ids, list)
     assert all([isinstance(x, np.uint64) for x in subrun.train_ids])
+
+
+def test_select_require_any(mock_sa3_control_data):
+    run = H5File(mock_sa3_control_data)
+
+    # BEAMVIEW2 has 250/500 trains, BEAMVIEW3 has 200/500 trains.
+    # Compare the train IDs resulting from a require-any select with the
+    # union of their respective train IDs.
+    np.testing.assert_array_equal(
+        run.select('*/BEAMVIEW*:daqOutput', require_any=True).train_ids,
+        np.union1d(
+            run.select('*/BEAMVIEW2:daqOutput', require_all=True).train_ids,
+            run.select('*/BEAMVIEW3:daqOutput', require_all=True).train_ids
+        ))
+
+    # BEAMVIEW has no trains, should also yield an empty list.
+    assert run.select('*/BEAMVIEW:daqOutput', require_any=True).train_ids == []
 
 
 def test_deselect(mock_fxe_raw_run):

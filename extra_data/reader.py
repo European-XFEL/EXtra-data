@@ -909,7 +909,8 @@ class DataCollection:
                              .format((source_glob, key_glob)))
         return matched
 
-    def select(self, seln_or_source_glob, key_glob='*', require_all=False):
+    def select(self, seln_or_source_glob, key_glob='*', require_all=False,
+               require_any=False):
         """Select a subset of sources and keys from this data.
 
         There are four possible ways to select data:
@@ -945,9 +946,9 @@ class DataCollection:
              # Select the same data contained in another DataCollection
              prev_run.select(sel)
 
-        The optional `require_all` argument restricts the trains to those for
-        which all selected sources and keys have at least one data entry. By
-        default, all trains remain selected.
+        The optional `require_all` and `require_any` arguments restrict the
+        trains to those for which all or at least one selected sources and
+        keys have at least one data entry. By default, all trains remain selected.
 
         Returns a new :class:`DataCollection` object for the selected data.
 
@@ -969,17 +970,21 @@ class DataCollection:
             seln_or_source_glob = [(seln_or_source_glob, key_glob)]
         sources_data = self._expand_selection(seln_or_source_glob)
 
-        if require_all:
-            # Select only those trains for which all selected sources
-            # and keys have data, i.e. have a count > 0 in their
-            # respective INDEX section.
+        if require_all or require_any:
+            # Select only those trains for which all (require_all) or at
+            # least one (require_any) selected sources and keys have
+            # data, i.e. have a count > 0 in their respective INDEX
+            # section.
 
-            train_ids = self.train_ids
+            if require_all:
+                train_ids = self.train_ids
+            else:  # require_any
+                # Empty list would be converted to np.float64 array.
+                train_ids = np.empty(0, dtype=np.uint64)
 
             for source, srcdata in sources_data.items():
 
                 for group in srcdata._index_group_names():
-                    # Empty list would be converted to np.float64 array.
                     source_tids = np.empty(0, dtype=np.uint64)
 
                     for f in self._sources_data[source].files:
@@ -992,7 +997,11 @@ class DataCollection:
 
                     # Remove any trains previously selected, for which this
                     # selected source and key group has no data.
-                    train_ids = np.intersect1d(train_ids, source_tids)
+
+                    if require_all:
+                        train_ids = np.intersect1d(train_ids, source_tids)
+                    else:  # require_any
+                        train_ids = np.union1d(train_ids, source_tids)
 
             sources_data = {
                 src: srcdata._only_tids(train_ids)
@@ -1647,7 +1656,8 @@ class AliasIndexer:
 
         return res
 
-    def select(self, seln_or_alias, key_glob='*', require_all=False):
+    def select(self, seln_or_alias, key_glob='*', require_all=False,
+               require_any=False):
         """Select a subset of sources and keys from this using aliases.
 
         In contrast to :method:`DataCollection.select`, only a subset of
@@ -1677,9 +1687,9 @@ class AliasIndexer:
                 # from an aliased XGM.
                 sel = run.select({'agipd': {'image.data'}, 'sa1-xgm': set()})
 
-        The optional `require_all` argument restricts the trains to those for
-        which all selected sources and keys have at least one data entry. By
-        default, all trains remain selected.
+        The optional `require_all` and `require_any` arguments restrict the
+        trains to those for which all or at least one selected sources and
+        keys have at least one data entry. By default, all trains remain selected.
 
         Returns a new :class:`DataCollection` object for the selected data.
         """
@@ -1688,7 +1698,7 @@ class AliasIndexer:
             seln_or_alias = [(seln_or_alias, key_glob)]
 
         return self.data.select(self._resolve_aliased_selection(
-            seln_or_alias))
+            seln_or_alias), require_all=require_all, require_any=require_any)
 
     def deselect(self, seln_or_alias, key_glob='*'):
         """Select everything except the specified sources and keys using aliases.

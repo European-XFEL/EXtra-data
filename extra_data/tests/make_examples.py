@@ -190,6 +190,7 @@ def make_sa3_da_file(path, ntrains=500, format_version='0.5'):
         XGM('SA3_XTD10_XGM/XGM/DOOCS'),
         IMGFELCamera('SA3_XTD10_IMGFEL/CAM/BEAMVIEW', nsamples=0),
         IMGFELCamera('SA3_XTD10_IMGFEL/CAM/BEAMVIEW2', nsamples=250),
+        IMGFELCamera('SA3_XTD10_IMGFEL/CAM/BEAMVIEW3', nsamples=200),
         IMGFELMotor('SA3_XTD10_IMGFEL/MOTOR/FILTER'),
         IMGFELMotor('SA3_XTD10_IMGFEL/MOTOR/SCREEN'),
         MPOD('SA3_XTD10_MCP/MCPS/MPOD'),
