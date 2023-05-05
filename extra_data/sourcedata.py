@@ -11,10 +11,12 @@ from .read_machinery import glob_wildcards_re, same_run, select_train_ids
 
 
 class SourceData:
-    """Data for one key in one source
+    """Data for one source
 
     Don't create this directly; get it from ``run[source]``.
     """
+    _device_class = ...
+
     def __init__(
             self, source, *, sel_keys, train_ids, files, section,
             is_single_run, inc_suspect_trains=True
@@ -222,7 +224,7 @@ class SourceData:
 
         return self.files[0].metadata()
 
-    def run_value(self, key):
+    def run_value(self, key, *, allow_multi_run=False):
         """Get a single value from the RUN section of data files.
 
         This method is intended for use with data from a single run. If you
@@ -230,7 +232,7 @@ class SourceData:
 
         Returns the RUN parameter value corresponding to the *key* argument.
         """
-        if not self.is_single_run:
+        if not (self.is_single_run or allow_multi_run):
             raise MultiRunError()
 
         if not self._is_control:
@@ -273,6 +275,19 @@ class SourceData:
         # Arbitrary file - should be the same across a run
         self.files[0].file['RUN'][self.source].visititems(visitor)
         return res
+
+    @property
+    def device_class(self):
+        """The name of the Karabo device class which this source belongs to
+
+        Only for CONTROL data. This will be None for INSTRUMENT data, or if it's not available in the files.
+        """
+        if self._device_class is ...:
+            try:
+                self._device_class = self.run_value('classId', allow_multi_run=True)
+            except (PropertyNameError, ValueError):
+                self._device_class = None
+        return self._device_class
 
     def union(self, *others) -> 'SourceData':
         """Combine two or more ``SourceData`` objects

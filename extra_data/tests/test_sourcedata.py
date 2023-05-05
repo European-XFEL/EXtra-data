@@ -104,3 +104,12 @@ def test_run_value(mock_spb_raw_run):
     with pytest.raises(ValueError):
         # no run values for instrument sources
         am0.run_values()
+
+
+def test_device_class(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    xgm_ctrl = run['SPB_XTD9_XGM/DOOCS/MAIN']
+    assert xgm_ctrl.device_class == 'DoocsXGM'
+
+    xgm_inst = run['SPB_XTD9_XGM/DOOCS/MAIN:output']
+    assert xgm_inst.device_class is None
