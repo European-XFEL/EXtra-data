@@ -887,7 +887,7 @@ def test_open_run(mock_spb_raw_and_proc_run):
         # proposal directory.
         aliases_path = Path(mock_data_root) / "SPB/201830/p002012/foo.yml"
         write_aliases(aliases_path)
-        run = open_run(2012, 238, aliases="{}/foo.yml")
+        run = open_run(2012, 238, data="all", aliases="{}/foo.yml")
         assert "xgm" in run.alias
 
         # And a proper path

@@ -1951,11 +1951,13 @@ def open_run(
             parallelize=parallelize)
 
         # Open the raw data
-        dc = open_run(**common_args, data='raw')
+        dc = open_run(**common_args, data='raw', aliases=aliases)
 
         try:
-            # Attempt to open proc data, but this may not exist
-            proc_dc = open_run(**common_args, data='proc')
+            # Attempt to open proc data, but this may not exist. Note that we
+            # explicitly disable loading aliases again because this will print
+            # out an extra 'aliases loaded' message.
+            proc_dc = open_run(**common_args, data='proc', aliases=None)
         except FileNotFoundError:
             warn("Proc data is not available for this run")
         else:
