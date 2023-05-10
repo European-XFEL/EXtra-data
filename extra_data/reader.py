@@ -1633,6 +1633,99 @@ class AliasIndexer:
         except KeyError:
             return False
 
+    def __repr__(self):
+        """
+        Pretty-print all the aliases.
+        """
+        RED = "\033[91m"
+        END_COLOR = "\033[0m"
+
+        # Get the right icon for an alias
+        def alias_icon(exists):
+            if isinstance(exists, str):
+                exists = exists in self
+
+            return " " if exists else f"{RED}✗{END_COLOR}"
+
+        # Find the alias for a source, if one exists
+        def source_alias(source):
+            for alias, alias_ident in self.data._aliases.items():
+                if isinstance(alias_ident, str) and source == alias_ident:
+                    return alias
+
+            return None
+
+        # Group all the aliases by source. The keys of this
+        # dictionary can be either just the source name, or a
+        # tuple of (alias, source). The values are a list of
+        # tuples of (alias, key).
+        source_key_aliases = defaultdict(list)
+        for alias in self.data._aliases.keys():
+            alias_ident = self.data._aliases[alias]
+
+            if isinstance(alias_ident, tuple):
+                source = alias_ident[0]
+                if source_alias(source) is not None:
+                    dict_key = (source_alias(source), source)
+                else:
+                    dict_key = source
+
+                source_key_aliases[dict_key].append((alias, alias_ident[1]))
+            elif isinstance(alias_ident, str):
+                source_key_aliases[(alias, alias_ident)].extend([])
+
+        # Print the aliases
+        output_lines = ["Loaded aliases:"]
+        for source, alias_keys in source_key_aliases.items():
+            if len(alias_keys) == 0:
+                # If there are no keys then this is a plain source alias
+                alias, source = source
+                output_lines.append(f"{alias_icon(alias)} {alias}: {source}")
+            else:
+                # Check if all the key aliases for the source are valid,
+                # and use that to select an icon for the source
+                keys_exists = [alias in self for alias, _ in alias_keys]
+                if all(keys_exists):
+                    source_icon = alias_icon(True)
+                elif not any(keys_exists):
+                    source_icon = alias_icon(False)
+                else:
+                    source_icon = "~"
+
+                # Extract the source alias, if it exists
+                if isinstance(source, tuple):
+                    source_alias = source[0]
+                    source = source[1]
+                else:
+                    source_alias = None
+
+                # If a source has a single key alias, print it on one
+                # line. Otherwise we print the keys indented under the source.
+                if len(alias_keys) == 1:
+                    alias, key = alias_keys[0]
+                    output_lines.append(f"{alias_icon(alias)} {alias}: ({source}, {key})")
+                else:
+                    # If there's an alias, include it in the source header
+                    if source_alias is None:
+                        source_str = f"{source}"
+                    else:
+                        source_str = f"{source_alias} ({source})"
+                    output_lines.append(f"{source_icon} {source_str}:")
+
+                    for alias, key in alias_keys:
+                        output_lines.append(f"  {alias_icon(alias)} {alias}: {key}")
+
+            # Add a newline to the last line added. We can't add a newline by
+            # itself because otherwise it would double up with other newlines
+            # when being joined together at the end
+            output_lines[-1] = output_lines[-1] + "\n"
+
+        # Flush everything we've printed
+        return "\n".join(output_lines)
+
+    def __str__(self):
+        return f"<extra_data.AliasIndexer with {len(self.data._aliases)} aliases>"
+
     def _resolve_aliased_selection(self, selection):
         if isinstance(selection, dict):
             res = {self._resolve_source_alias(alias): keys
