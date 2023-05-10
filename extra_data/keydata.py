@@ -89,6 +89,29 @@ class KeyData:
         """
         return (sum(c.total_count for c in self._data_chunks),) + self.entry_shape
 
+    @property
+    def source_file_paths(self):
+        paths = []
+        for chunk in self._data_chunks:
+            if chunk.dataset.is_virtual:
+                for vspace, filename, _, _ in chunk.dataset.virtual_sources():
+                    if filename in paths:
+                        continue  # Already got it
+
+                    # Does the mapping overlap with this chunk of selected data?
+                    # We can assume that each mapping is a simple, contiguous
+                    # block, and only selection on the first dimension matters.
+                    starts, ends = vspace.get_select_bounds()
+                    map_start, map_stop = starts[0], ends[0]
+                    ck = chunk.slice
+                    if (map_stop > ck.start) and (map_start < ck.stop):
+                        paths.append(filename)
+            else:
+                paths.append(chunk.file.filename)
+
+        from pathlib import Path
+        return [Path(p) for p in paths]
+
     def select_trains(self, trains):
         """Select a subset of trains in this data as a new :class:`KeyData` object.
 
