@@ -1391,7 +1391,7 @@ class DataCollection:
 
         # Plot missing data
         import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(9, max(2, len(flaky_sources) / 4)))
 
         bar_height = 0.5
         for i, src in enumerate(flaky_sources):
