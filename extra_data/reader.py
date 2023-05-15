@@ -1315,6 +1315,128 @@ class DataCollection:
 
         print()
 
+    @staticmethod
+    def _running_in_notebook():
+        """Check if we're running in a Jupyter notebook or not.
+
+        Inspired by: https://stackoverflow.com/a/39662359.
+        """
+        try:
+            shell = get_ipython().__class__.__name__
+        except NameError:
+            shell = None
+
+        # Technically this might also be a console, but that's not a situation
+        # we run into much (if at all).
+        return shell == "ZMQInteractiveShell"
+
+    def plot_missing_data(self, min_saved_pct=95):
+        """Plot sources that have missing data for some trains.
+
+        Parameters
+        ----------
+
+        min_saved_pct: int or float, optional
+            Only show sources with less than this percentage of trains saved.
+        """
+        n_trains = len(self.train_ids)
+
+        # Helper function that returns an alias for a source if one is
+        # available, and the source name otherwise.
+        def best_src_name(src):
+            for alias, alias_ident in self._aliases.items():
+                if isinstance(alias_ident, str) and alias_ident == src:
+                    return alias
+
+            return src
+
+        # If possible, create a progress bar. Loading the train IDs for every
+        # source can be very slow (tens of seconds) so it's good to give the
+        # user some feedback to know that the method hasn't frozen.
+        display_progress = False
+        if self._running_in_notebook():
+            try:
+                from ipywidgets import IntProgress
+                from IPython.display import display
+            except ImportError:
+                pass
+            else:
+                progress_bar = IntProgress(min=0, max=len(self.all_sources),
+                                           description="Checking:")
+                display(progress_bar)
+                display_progress = True
+
+        # Find sources with missing data
+        flaky_sources = { }
+        run_tids = set(self.train_ids)
+        for src in self.all_sources:
+            key = list(self[src].keys())[0]
+            kd_tids = self[src, key].drop_empty_trains().train_ids
+            save_pct = len(kd_tids) / n_trains * 100
+
+            if set(kd_tids) != run_tids and save_pct <= min_saved_pct:
+                flaky_sources[best_src_name(src)] = kd_tids
+
+            if display_progress:
+                progress_bar.value += 1
+
+        # Hide the progress bar now that we've checked all the sources
+        if display_progress:
+            progress_bar.close()
+
+        # Sort the flaky sources by decreasing order of how many trains they're missing
+        flaky_sources = dict(sorted(flaky_sources.items(), key=lambda x: len(x[1]),
+                                    reverse=True)
+                             )
+
+        # Plot missing data
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+
+        bar_height = 0.5
+        for i, src in enumerate(flaky_sources):
+            # First find all the trains that are missing
+            save_line = np.zeros(n_trains).astype(bool)
+            save_line[np.intersect1d(self.train_ids, flaky_sources[src], return_indices=True)[1]] = True
+
+            # Loop over each train to find blocks of trains that are either
+            # present or missing.
+            bars = { }
+            block_start = 0
+            for idx in range(n_trains):
+                if save_line[idx] != save_line[block_start]:
+                    # If we find a train that doesn't match the save status of
+                    # the current block, create a new entry in `bars` to record
+                    # the start index, the block length, and the save status.
+                    bars[(block_start, idx - block_start)] = save_line[block_start]
+                    block_start = idx
+
+            # Add the last block
+            bars[(block_start, n_trains - block_start)] = save_line[block_start]
+
+            # Plot all the blocks
+            ax.broken_barh(bars.keys(),
+                           (i, bar_height),
+                           color=["k" if x else "r" for x in bars.values()])
+
+        # Set labels and ticks
+        tick_labels = [f"{src} ({len(tids) / n_trains * 100:.2f}%)"
+                  for i, (src, tids) in enumerate(flaky_sources.items())]
+        ax.set_yticks(np.arange(len(flaky_sources)) + bar_height / 2,
+                      labels=tick_labels, fontsize=8)
+        ax.set_xlabel("Train ID index")
+
+        # Set title
+        title = f"Sources with less than {min_saved_pct}% of trains saved"
+        run_meta = self.run_metadata()
+        if "proposalNumber" in run_meta and "runNumber" in run_meta:
+            title += f" in p{run_meta['proposalNumber']}, run {run_meta['runNumber']}"
+        ax.set_title(title)
+
+        fig.tight_layout()
+
+        return ax
+
     def detector_info(self, source):
         """Get statistics about the detector data.
 
