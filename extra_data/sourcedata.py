@@ -2,6 +2,7 @@ import fnmatch
 import re
 from typing import Dict, List, Optional
 
+import numpy as np
 import h5py
 
 from .exceptions import MultiRunError, PropertyNameError
@@ -244,6 +245,41 @@ class SourceData:
         """
         for s in split_trains(len(self.train_ids), parts, trains_per_part):
             yield self.select_trains(s)
+
+    def data_counts(self, labelled=True, index_group=None):
+        """Get a count of data entries in each train.
+
+        if *index_group* is omitted, the largest count across all index
+        groups is returned for each train.
+
+        If *labelled* is True, returns a pandas series with an index of train
+        IDs. Otherwise, returns a NumPy array of counts to match ``.train_ids``.
+        """
+
+        if index_group is None:
+            sample_keys = dict(zip(
+                [self[key].index_group for key in self.keys()], self.keys()))
+
+            data_counts = {
+                prefix: self[key].data_counts(labelled=labelled)
+                for prefix, key in sample_keys.items()
+            }
+
+            if labelled:
+                import pandas as pd
+                return pd.DataFrame(data_counts).max(axis=1)
+            else:
+                return np.stack(list(data_counts.values())).max(axis=0)
+
+        else:
+            for key in self.keys():
+                if self[key].index_group == index_group:
+                    break
+            else:
+                raise ValueError(f'{index_group} not an index group of this '
+                                 f'source')
+
+            return self[key].data_counts(labelled=labelled)
 
     def run_metadata(self) -> Dict:
         """Get a dictionary of metadata about the run
