@@ -81,6 +81,19 @@ def test_select_trains(mock_spb_raw_run):
     assert sel.train_ids == []
     assert sel.keys() == xgm.keys()
 
+def test_split_trains(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
+    assert len(xgm.train_ids) == 64
+
+    chunks = list(xgm.split_trains(3))
+    assert len(chunks) == 3
+    assert {len(c.train_ids) for c in chunks} == {21, 22}
+
+    chunks = list(xgm.split_trains(3, trains_per_part=20))
+    assert len(chunks) == 4
+    assert {len(c.train_ids) for c in chunks} == {16}
+
 def test_union(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
     xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
