@@ -33,7 +33,7 @@ class KeyData:
             if len(file.train_ids) == 0:
                 continue
 
-            firsts, counts = file.get_index(self.source, self._key_group)
+            firsts, counts = file.get_index(self.source, self.index_group)
 
             # Of trains in this file, which are in selection
             include = np.isin(file.train_ids, self.train_ids)
@@ -69,7 +69,7 @@ class KeyData:
                f"for {len(self.train_ids)} trains>"
 
     @property
-    def _key_group(self):
+    def index_group(self):
         """The part of the key needed to look up index data"""
         if self.section == 'INSTRUMENT':
             return self.key.partition('.')[0]
@@ -458,7 +458,7 @@ class KeyData:
         if fa is None:
             return np.empty((0,) + self.entry_shape, dtype=self.dtype)
 
-        firsts, counts = fa.get_index(self.source, self._key_group)
+        firsts, counts = fa.get_index(self.source, self.index_group)
         first, count = firsts[ix], counts[ix]
         if count == 1 and not keep_dims:
             return tid, fa.file[self.hdf5_data_path][first]

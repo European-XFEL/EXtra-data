@@ -12,12 +12,14 @@ def test_get_sourcedata(mock_spb_raw_run):
     assert am0.section == 'INSTRUMENT'
     assert am0.is_instrument
     assert not am0.is_control
+    assert am0.index_groups == {'header', 'detector', 'image', 'trailer'}
 
     xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
     assert len(xgm.files) == 2
     assert xgm.section == 'CONTROL'
     assert xgm.is_control
     assert not xgm.is_instrument
+    assert xgm.index_groups == {''}
 
 
 def test_keys(mock_spb_raw_run):

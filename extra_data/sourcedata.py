@@ -105,14 +105,16 @@ class SourceData:
         for f in self.files:
             return f.get_keys(self.source)
 
-    def _index_group_names(self) -> set:
-        if self.section == 'INSTRUMENT':
+    @property
+    def index_groups(self) -> set:
+        """The part of keys needed to look up index data."""
+        if self.is_instrument:
             # For INSTRUMENT sources, the INDEX is saved by
             # key group, which is the first hash component. In
             # many cases this is 'data', but not always.
             if self.sel_keys is None:
                 # All keys are selected.
-                return self.files[0].index_group_names(self.source)
+                return self.files[0].index_groups(self.source)
             else:
                 return {key.partition('.')[0] for key in self.sel_keys}
         else:
