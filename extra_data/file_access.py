@@ -342,7 +342,7 @@ class FileAccess(metaclass=MetaFileAccess):
             counts = np.uint64((ix_group['last'][:ntrains] - firsts + 1) * status)
         return firsts, counts
 
-    def index_group_names(self, source):
+    def index_groups(self, source):
         """Get group names for index data, to use with .get_index()"""
         if source in self.control_sources:
             return {''}

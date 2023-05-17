@@ -12,12 +12,14 @@ def test_get_sourcedata(mock_spb_raw_run):
     assert am0.section == 'INSTRUMENT'
     assert am0.is_instrument
     assert not am0.is_control
+    assert am0.index_groups == {'header', 'detector', 'image', 'trailer'}
 
     xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
     assert len(xgm.files) == 2
     assert xgm.section == 'CONTROL'
     assert xgm.is_control
     assert not xgm.is_instrument
+    assert xgm.index_groups == {''}
 
 
 def test_keys(mock_spb_raw_run):
@@ -136,3 +138,52 @@ def test_device_class(mock_spb_raw_run):
 
     xgm_inst = run['SPB_XTD9_XGM/DOOCS/MAIN:output']
     assert xgm_inst.device_class is None
+
+
+@pytest.mark.parametrize('source', [
+    'SPB_XTD9_XGM/DOOCS/MAIN',  # Control data.
+    'SPB_IRU_CAM/CAM/SIDEMIC:daqOutput',  # Pipeline data.
+    'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf'  # XTDF data.
+])
+def test_data_counts_modes(mock_reduced_spb_proc_run, source):
+    run = RunDirectory(mock_reduced_spb_proc_run)
+    sd = run[source]
+
+    import pandas as pd
+
+    for index_group in [None, *sd.index_groups]:
+        count1 = sd.data_counts(index_group=index_group)
+        assert isinstance(count1, pd.Series)
+        assert count1.index.tolist() == sd.train_ids
+
+        count2 = sd.data_counts(labelled=False, index_group=index_group)
+        assert isinstance(count2, np.ndarray)
+        assert len(count2) == len(sd.train_ids)
+
+        np.testing.assert_equal(count1, count2)
+
+
+def test_data_counts_values(mock_reduced_spb_proc_run):
+    run = RunDirectory(mock_reduced_spb_proc_run)
+
+    # control data
+    xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
+    assert (xgm.data_counts().values == 1).all()
+
+    with pytest.raises(ValueError):
+        xgm.data_counts(index_group='data')
+
+    # instrument data
+    camera = run['SPB_IRU_CAM/CAM/SIDEMIC:daqOutput']
+    assert (camera.data_counts().values == 1).all()
+
+    with pytest.raises(ValueError):
+        camera.data_counts(index_group='not-data')
+
+    am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf']
+    num_images = am0['image.data'].shape[0]
+    assert am0.data_counts().values.sum() >= num_images
+    assert am0.data_counts(index_group='image').values.sum() == num_images
+
+    with pytest.raises(ValueError):
+        am0.data_counts(index_group='preamble')

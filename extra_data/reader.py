@@ -983,8 +983,7 @@ class DataCollection:
                 train_ids = np.empty(0, dtype=np.uint64)
 
             for source, srcdata in sources_data.items():
-
-                for group in srcdata._index_group_names():
+                for group in srcdata.index_groups:
                     source_tids = np.empty(0, dtype=np.uint64)
 
                     for f in self._sources_data[source].files:
