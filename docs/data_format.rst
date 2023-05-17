@@ -195,11 +195,23 @@ first dimension has length 1. It may also contain additional keys not present in
 INSTRUMENT
 ~~~~~~~~~~
 
-TODO
-For each *INSTRUMENT* entry in ``METADATA/dataSourceId``, there is a group with
-that name in the file. All these datasets have the same length in the first dimension:
-this represents the successive readings taken. The slices defined by the corresponding
-datasets in *INDEX* work on this dimension.
+For each *INSTRUMENT* entry in ``METADATA/dataSources``, there is a group with
+that name in the file with further arbitrarily nested subgroups representing different
+keys of that source, e.g. ``INSTRUMENT/SPB_DET_AGIPD1M-1/DET/0CH0:xtdf/image/data``
+for the key ``image.data`` of source ``SPB_DET_AGIPD1M-1/DET/0CH:xtdf``. Unlike for
+*CONTROL* sources, the top-level part of the key called index group (in this example,
+``image``) is part of the entry in ``METADATA/dataSources`` to allow a variable number
+of data entries per train for each of these index groups. Note that while the key
+hierarchy is expressed using groups in files, a dot is commonly used to separate
+the components.
+
+The leafs of this tree directly contain the datasets holding the key values. Those
+datasets of the same index group of a given source have the same length in the first
+dimension, with each row representing a successive reading. The index group's ``INDEX``
+records can be used to connect them to the respective trains.
+
+As with *CONTROL* sources, the keys of *INSTRUMENT* sources may have the same HDF
+attributes attached with additional metadata.
 
 
 Format versions
