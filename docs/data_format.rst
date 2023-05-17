@@ -22,12 +22,12 @@ structured HDF5 in a single directory. Here these files follow a naming pattern:
 
     RAW-R0348-AGIPD04-S00002.h5
 
-which denotes the HDF5 file with ``raw`` data for sequence ``2`` of the aggregator
-``AGIPD04`` in run ``348``. Within a run the grouping of sources into aggregators
-does not change. Each *proposal* can collect any number of runs during their granted
-beamtime.
+which denotes the HDF5 file with data for the ``RAW`` data class of the aggregator
+``AGIPD04`` in sequence ``2`` of run ``348``. Within a run the grouping of sources
+into  aggregators does not change. Each *proposal* can collect any number of runs
+during their granted beamtime.
 
-This document describes the most recent version ``1.3`` of this file format. While
+This document describes the most recent version **1.3** of this file format. While
 earlier version are used for data written at the time, their use is discouraged
 for any new files. The appendix lists the differences between each versions.
 
@@ -59,22 +59,22 @@ device naming convention [2]_ for source names.
   or pulse. This covers most scientific detectors such as digitizers, cameras and
   more. These sources are never guaranteed to have data for every train, but may
   also have multiple and varying entries per train. Their names should follow the
-  pattern ``DOMAIN/TYPE/MEMBER:PIPELINE/ROOT``. The data is saved in the ``INSTRUMENT``
+  pattern ``DOMAIN/TYPE/MEMBER:PIPELINE/GROUP``. The data is saved in the ``INSTRUMENT``
   top-level groups described further below.
 
-  The last component ``ROOT`` is often considered part of key rathern than the source
-  itself and in a Karabo perspective equivalent to the top-level key in pipeline data.
-  In files however, a Karabo pipeline source may have different entries based on
-  this ``ROOT``.
+  The last component ``GROUP`` or index group is generally considered part of the key
+  rather than the source itself. In a Karabo perspective it is equivalent to the
+  top-level key in pipeline data. In files however, an instrument source may have
+  a different number of entries per train for each of its index groups and it is
+  thus treated differently than keys further down in the hierarchy.
 
 
 HDF5 file structure
 -------------------
 
-Every HDF5 file must contain the top-level groups ``METADATA`` and ``INDEX``.
+Every HDF5 file must contain the top-level groups ``/METADATA`` and ``/INDEX``.
 Depending on the included sources, there may additionally be the groups
-``CONTROL``, ``RUN`` and ``INSTRUMENT``.
-[note 1: is this clear enough it may be a combination of those?]
+``/CONTROL``, ``/RUN`` and ``/INSTRUMENT``.
 
 
 METADATA
@@ -164,8 +164,10 @@ CONTROL and RUN
 
 For each *CONTROL* entry in ``METADATA/dataSources``, there is a group with
 that name in the file with further arbitrarily nested subgroups representing different
-keys of that device, e.g. ``/CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/current/bottom/output``
-for the key ``current/bottom/output`` of source ``SA1_XTD2_XG/DOOCs/MAIN``.
+keys of that source, e.g. ``CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/current/bottom/output``
+for the key ``current.bottom.output`` of source ``SA1_XTD2_XG/DOOCS/MAIN``. Note that
+while the key hierarchy is expressed using groups in files, a dot is commonly used
+to separate the components.
 
 The leaves of this tree are pairs of datasets called ``timestamp`` and ``value``.
 Each dataset has one entry per train, and the ``timestamp`` record when the
@@ -218,6 +220,12 @@ attributes attached with additional metadata.
 
 Format versions
 ---------------
+
+1.3
+~~~
+
+The EuXFEL DAQ software is currently using this format version since January 2023.
+
 
 1.2
 ~~~
