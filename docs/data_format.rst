@@ -80,32 +80,34 @@ Depending on the included sources, there may additionally be the groups
 METADATA
 ~~~~~~~~
 
-The ``METADATA`` group in an HDF5 file contains auxiliary information as
-individual datasets, most of which are constant across a run and or even
-proposal. Some of these datasets may not be present in any given file depending
-on how it was created.
+The ``METADATA`` group in an HDF5 file contains auxiliary information as individual
+datasets, most of which are constant across a run and or even proposal. Even when only
+containing a single entry, all these datasets are 1D with a length of 1 or more.
 
-This list contains all the datasets to be expected for data recorded with the
-EuXFEL DAQ software. Even when only containing a single entry, all these datasets
-are 1D with a length of 1 or more.
+For any given collections, not all of these datasets may be present depending on how
+it was created. The following datasets however are considered mandatory to allow
+proper interpretation of a file's structure:
 
-[`ascii` is supposed to refer to "String (fixed-length)"]
-
-* ``creationDate [ascii]`` [what was this time again?]
-
-* ``daqLibrary [ascii]`` EuXFEL DAQ software version used to write this file, only applicable to raw recordings.
-
-* ``dataFormatVersion [ascii]`` Data file format version of this file.
+* ``dataFormatVersion [str]`` Data file format version of this file.
 
 * ``dataSources`` describes the sources in this file in three different representations.
 
-  * ``dataSources/root [ascii]`` lists the top-level group a source is found in, ``CONTROL`` or ``INSTRUMENT``.
+  * ``dataSources/root [str]`` lists the top-level group a source is found in, ``CONTROL``
+    or ``INSTRUMENT``.
 
-  * ``dataSources/deviceId [ascii]`` lists the source names itself. For instrument sources, this includes the top-level key and the same source may thus be listed multiple times for each of its top-level keys.
+  * ``dataSources/deviceId [str]`` lists the source names itself. For instrument sources,
+    this includes the top-level key called index group, and the same source may thus be listed
+    multiple times for each of its index groups.
 
-  * ``dataSources/dataSourceId [ascii]`` lists the combination of the prior two, i.e. the full path to each source's top-level group.
+  * ``dataSources/dataSourceId [str]`` lists the combination of the prior two, i.e. the
+    full path to each source's index group.
 
-* ``karaboFramework [ascii]`` Karabo framework version the DAQ software ran in, only applicable to raw recordings.
+For scientific data, it is recommended to include the following datasets to describe their
+origin:
+
+* ``creationDate [str]`` [what was this time again?]
+
+* ``updateDate [str]``  [probably last change to this file?]
 
 * ``proposalNumber [uint32]`` Proposal number this file belongs to.
 
