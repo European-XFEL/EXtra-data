@@ -35,10 +35,6 @@ for any new files. The appendix lists the differences between each versions.
 Data sources
 ------------
 
-[went back and forth on this having its own section, but too often it seemed confusing to
-leave it. I've tried to keep this description agnostic of Karabo, but ultimately of course
-it does map back to it]
-
 Sources differ in the semantics of data generation and validity by either being
 *control data* (also called slow or broker data) or *instrument data*
 (also called fast, pipeline or XTDF data). In terms of the Karabo control system,
@@ -115,16 +111,18 @@ origin:
 
 * ``sequenceNumber [uint32]``  Sequence number this file has for the aggregator it belongs to.
 
-* ``updateDate [ascii]``  [probably last change to this file?]
+Raw data recorded with the EuXFEL DAQ software will contain the datasets to indicate the
+software versions used in this process:
 
-[we should add the ```pycalibration`` release here, or some form of version in case of processing]
+* ``daqLibrary [str]`` EuXFEL DAQ software version used to write this file
 
+* ``karaboFramework [str]`` Karabo framework version the DAQ software ran in
 
 INDEX
 ~~~~~
 
 The ``INDEX`` group contains information about the *trains* contained in the file and how
-the actual data rows in `CONTROL` and `INSTRUMENT` relate to them. All datasets in this group
+the actual data rows in ``CONTROL`` and ``INSTRUMENT`` relate to them. All datasets in this group
 are 1D and have a length identical to the number of trains in the file.
 
 There are three datasets at the top-level of this group:
@@ -135,12 +133,12 @@ There are three datasets at the top-level of this group:
 
 * ``flag [int32]`` lists ``1`` for safe train entries and ``0`` for train entries where the timing
   may be unreliable, e.g. because it is attributed to the wrong train ID. For DAQ recordings up
-  to `EXDF-v1.2`, this is only the case when a source different than the timeserver sent the first
+  to version **1.2**, this is only the case when a source different than the timeserver sent the first
   data entry for a given train.
 
-* ``origin [int32]`` lists the actual source index into `METADATA/dataSources` that sent that first
+* ``origin [int32]`` lists the actual source index into ``METADATA/dataSources`` that sent that first
   entry for each given train entry, or ``-1`` if it is the timeserver. For DAQ recordings up to
-  `EXDF-v1.2`, every entry with a non-negative ``origin`` will have a ``flag`` of ``0``.
+  version **1.2**, every entry with a non-negative ``origin`` will have a ``flag`` of ``0``.
 
 For each source in ``METADATA/dataSources/deviceId``, the ``INDEX`` group then also contains two
 datasets that map the train entries in the top-level datasets above to each source's data rows
@@ -177,17 +175,19 @@ likely in the past.
 The key groups themselves may have one or more HDF attributes attached with
 additional metadata:
 
-* ``displayedName [str]`` may denote a more exhaustive name for this key, e.g. ``Complete Target Burst duration`` for ``totBurstDuration``.
-* ``alias [str]`` may specify an alternative name depending on context, e.g. a hardware-specific designation for the value of a key.
+* ``displayedName [str]`` may denote a more exhaustive name for this key, e.g.
+  ``Complete Target Burst duration`` for ``totBurstDuration``.
+* ``alias [str]`` may specify an alternative name depending on context, e.g.
+  a hardware-specific designation for the value of a key.
 * ``description [str]`` may contain a full text explaining this key.
-* ``metricPrefixSymbol [str]`` may specify the metric prefix symbol for the unit this key's values are expressed in, e.g. ``G``m ``k`` or ``n``.
-* ``unitSymbol [str]`` may specify the unit symbol this key's values are expressed in, e.g. ``A``, ``Hz`` or ``eV``. Enumerations may use the symbol ``#`` and ratios the symbol ``%``.
+* ``metricPrefixSymbol [str]`` may specify the metric prefix symbol for the unit
+  this key's values are expressed in, e.g. ``G``, ``k`` or ``n``.
+* ``unitSymbol [str]`` may specify the unit symbol this key's values are expressed
+  in, e.g. ``A``, ``Hz`` or ``eV``. Enumerations may use the symbol ``#`` and ratios
+  the symbol ``%``.
 
 EuXFEL DAQ recording often contain further attributes corresponding to attributes in
 the Karabo control system.
-
-[``metricPrefixName``, ``unitName`` are *sometimes* there with the full prefix/unit, e.g. ``kilo`` and ``Ampere``, mention here?]
-[also regularly present are ``options``, ``tags``, mention here?]
 
 ``RUN`` holds a complete duplicate of the ``CONTROL`` hierarchy, but each pair
 of ``timestamp`` and ``value`` contain only one entry taken at the start of
