@@ -34,8 +34,14 @@ class SourceData:
                f"for {len(self.train_ids)} trains>"
 
     @property
-    def _is_control(self):
+    def is_control(self):
+        """Whether this source is a control source."""
         return self.section == 'CONTROL'
+
+    @property
+    def is_instrument(self):
+        """Whether this source is an instrument source."""
+        return self.section == 'INSTRUMENT'
 
     def _has_exact_key(self, key):
         if self.sel_keys is not None:
@@ -46,7 +52,7 @@ class SourceData:
 
     def __contains__(self, key):
         res = self._has_exact_key(key)
-        if (not res) and self._is_control:
+        if (not res) and self.is_control:
             res = self._has_exact_key(key + '.value')
         return res
 
@@ -88,7 +94,7 @@ class SourceData:
         combine two runs where the source was configured differently, the
         result can be unpredictable.
         """
-        if (not inc_timestamps) and self._is_control:
+        if (not inc_timestamps) and self.is_control:
             return {k[:-6] for k in self.keys() if k.endswith('.value')}
 
         if self.sel_keys is not None:
@@ -114,7 +120,7 @@ class SourceData:
             return {''}
 
     def _glob_keys(self, pattern: str) -> Optional[set]:
-        if self._is_control and not pattern.endswith(('.value', '*')):
+        if self.is_control and not pattern.endswith(('.value', '*')):
             pattern += '.value'
 
         if pattern == '*':
@@ -153,7 +159,7 @@ class SourceData:
             for key in keys:
                 if self._has_exact_key(key):
                     normed_keys.add(key)
-                elif self._is_control and self._has_exact_key(key + '.value'):
+                elif self.is_control and self._has_exact_key(key + '.value'):
                     normed_keys.add(key + '.value')
                 else:
                     raise PropertyNameError(key, self.source)
@@ -260,7 +266,7 @@ class SourceData:
         if not (self.is_single_run or allow_multi_run):
             raise MultiRunError()
 
-        if not self._is_control:
+        if self.is_instrument:
             raise ValueError('Only CONTROL sources have run values, '
                              f'{self.source} is an INSTRUMENT source')
 
@@ -285,7 +291,7 @@ class SourceData:
         if not self.is_single_run:
             raise MultiRunError()
 
-        if not self._is_control:
+        if self.is_instrument:
             raise ValueError('Only CONTROL sources have run values, '
                              f'{self.source} is an INSTRUMENT source')
 

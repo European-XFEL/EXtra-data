@@ -4,15 +4,21 @@ import pytest
 from extra_data import RunDirectory, by_id, by_index
 from extra_data.exceptions import PropertyNameError, SourceNameError
 
+
 def test_get_sourcedata(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
     am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf']
     assert len(am0.files) == 1
     assert am0.section == 'INSTRUMENT'
+    assert am0.is_instrument
+    assert not am0.is_control
 
     xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
     assert len(xgm.files) == 2
     assert xgm.section == 'CONTROL'
+    assert xgm.is_control
+    assert not xgm.is_instrument
+
 
 def test_keys(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
@@ -31,6 +37,7 @@ def test_keys(mock_spb_raw_run):
     assert 'beamPosition.ixPos.value' not in xgm.keys(inc_timestamps=False)
     assert 'beamPosition.ixPos.timestamp' not in xgm.keys(inc_timestamps=False)
     assert 'beamPosition.ixPos' in xgm.keys(inc_timestamps=False)
+
 
 def test_select_keys(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
@@ -66,6 +73,7 @@ def test_select_keys(mock_spb_raw_run):
     with pytest.raises(PropertyNameError):
         am0.select_keys('data.image')
 
+
 def test_select_trains(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
     xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
@@ -81,6 +89,7 @@ def test_select_trains(mock_spb_raw_run):
     assert sel.train_ids == []
     assert sel.keys() == xgm.keys()
 
+
 def test_split_trains(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
     xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
@@ -93,6 +102,7 @@ def test_split_trains(mock_spb_raw_run):
     chunks = list(xgm.split_trains(3, trains_per_part=20))
     assert len(chunks) == 4
     assert {len(c.train_ids) for c in chunks} == {16}
+
 
 def test_union(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
