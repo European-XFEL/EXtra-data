@@ -22,8 +22,8 @@ structured HDF5 in a single directory. Here these files follow a naming pattern:
 
     RAW-R0348-AGIPD04-S00002.h5
 
-which denotes the HDF5 file with data for the ``RAW`` data class of the aggregator
-``AGIPD04`` in sequence ``2`` of run ``348``. Within a run the grouping of sources
+which denotes an HDF5 file for the ``RAW`` data class of aggregator ``AGIPD04``
+of sequence ``2`` in run ``348``. Within a run the grouping of sources
 into  aggregators does not change. Each *proposal* can collect any number of runs
 during their granted beamtime.
 
@@ -149,7 +149,7 @@ in ``CONTROL`` or ``INSTRUMENT``:
 * ``INDEX/{deviceId}/first [uint64]`` contains the index at which the
   corresponding data for each train starts in the arrays for this device.
 
-Thus, to find the data for a given train ID, we could do::
+Thus, to find the data for a given train ID::
 
     train_index = list(file['INDEX/trainId']).index(train_id)
     first = file[f'INDEX/{device_id}/first'][train_index]
@@ -224,13 +224,14 @@ Format versions
 1.3
 ~~~
 
-The EuXFEL DAQ software is currently using this format version since January 2023.
+The EuXFEL DAQ software is using this format version since January 2023.
 
+This section only lists the differences to past format versions.
 
 1.2
 ~~~
 
-* There are no attributes yet for keys in ``CONTROL``, ``RUN``  and ``INSTRUMENT``.
+* There are no metadata attributes for keys in ``CONTROL``, ``RUN``  and ``INSTRUMENT``.
 
 The EuXFEL DAQ software used this format version between July 2021 and Februrary 2023.
 
