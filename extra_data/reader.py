@@ -34,7 +34,7 @@ import numpy as np
 
 from . import locality, voview
 from .exceptions import (MultiRunError, PropertyNameError, SourceNameError,
-                         AliasError, TrainIDError)
+                         TrainIDError)
 from .file_access import FileAccess
 from .keydata import KeyData
 from .read_machinery import (DETECTOR_SOURCE_RE, FilenameInfo, by_id, by_index,
@@ -43,6 +43,7 @@ from .read_machinery import (DETECTOR_SOURCE_RE, FilenameInfo, by_id, by_index,
 from .run_files_map import RunFilesMap
 from .sourcedata import SourceData
 from .utils import available_cpu_cores
+from .aliases import AliasIndexer
 
 __all__ = [
     'H5File',
@@ -1592,129 +1593,6 @@ class TrainIterator:
             yield tid, self._assemble_data(tid)
 
 
-class AliasIndexer:
-    __slots__ = ('data',)
-
-    def __init__(self, data):
-        self.data = data
-
-    def _resolve_any_alias(self, alias):
-        try:
-            literal = self.data._aliases[alias]
-        except KeyError:
-            raise AliasError(alias) from None
-
-        return literal
-
-    def _resolve_source_alias(self, alias):
-        source = self._resolve_any_alias(alias)
-
-        if isinstance(source, tuple):
-            raise ValueError(f'{alias} not aliasing a source for this data')
-
-        return source
-
-    def __getitem__(self, aliased_item):
-        if isinstance(aliased_item, tuple) and len(aliased_item) == 2:
-            # Source alias with key literal.
-            return self.data[self._resolve_source_alias(aliased_item[0]),
-                                aliased_item[1]]
-        elif isinstance(aliased_item, str):
-            # Source or key alias.
-            return self.data[self._resolve_any_alias(aliased_item)]
-
-        raise TypeError('expected alias or (source alias, key) tuple')
-
-    def __contains__(self, aliased_item):
-        try:
-            self[aliased_item]
-            return True
-        except KeyError:
-            return False
-
-    def _resolve_aliased_selection(self, selection):
-        if isinstance(selection, dict):
-            res = {self._resolve_source_alias(alias): keys
-                    for alias, keys in selection.items()}
-
-        elif isinstance(selection, Iterable):
-            res = []
-
-            for item in selection:
-                if isinstance(item, tuple) and len(item) == 2:
-                    # Source alias and literal key.
-                    item = (self._resolve_source_alias(item[0]), item[1])
-                elif isinstance(item, str):
-                    item = self._resolve_any_alias(item)
-
-                    if isinstance(item, str):
-                        # Source alias.
-                        item = (item, '*')
-
-                res.append(item)
-
-        return res
-
-    def select(self, seln_or_alias, key_glob='*', require_all=False,
-               require_any=False):
-        """Select a subset of sources and keys from this using aliases.
-
-        In contrast to :method:`DataCollection.select`, only a subset of
-        ways to select data via aliases is supported:
-
-        1. With a source alias and literal key glob pattern::
-
-            # Select all pulse energy keys for an aliased XGM fast data.
-            sel = run.alias.select('sa1-xgm', 'data.intensity*')
-
-        2. With an iterable of aliases and/or (source alias, key pattern) tuples::
-
-            # Select specific keys for an aliased XGM fast data.
-            sel = run.alias.select([('sa1-xgm', 'data.intensitySa1TD'),
-                                    ('sa1-xgm', 'data.intensitySa3TD')]
-
-            # Select several aliases, may be both source and key aliases.
-            sel = run.alias.select(['sa1-xgm', 'mono-hv'])
-
-            Data is included if it matches any of the aliases. Note that
-            this method does not support glob patterns for the source alias.
-
-        3. With a dict of source aliases mapped to sets of key names
-            (or empty sets to get all keys)::
-
-                # Select image.data from an aliased AGIPD and all data
-                # from an aliased XGM.
-                sel = run.select({'agipd': {'image.data'}, 'sa1-xgm': set()})
-
-        The optional `require_all` and `require_any` arguments restrict the
-        trains to those for which all or at least one selected sources and
-        keys have at least one data entry. By default, all trains remain selected.
-
-        Returns a new :class:`DataCollection` object for the selected data.
-        """
-
-        if isinstance(seln_or_alias, str):
-            seln_or_alias = [(seln_or_alias, key_glob)]
-
-        return self.data.select(self._resolve_aliased_selection(
-            seln_or_alias), require_all=require_all, require_any=require_any)
-
-    def deselect(self, seln_or_alias, key_glob='*'):
-        """Select everything except the specified sources and keys using aliases.
-
-        This takes the same arguments as :meth:`select`, but the sources
-        and keys you specify are dropped from the selection.
-
-        Returns a new :class:`DataCollection` object for the remaining data.
-        """
-
-        if isinstance(seln_or_alias, str):
-            seln_or_alias = [(seln_or_alias, key_glob)]
-
-        return self.data.deselect(self._resolve_aliased_selection(
-            seln_or_alias))
-
-
 def H5File(path, *, inc_suspect_trains=True):
     """Open a single HDF5 file generated at European XFEL.
 
@@ -1857,11 +1735,13 @@ def open_run(
             parallelize=parallelize)
 
         # Open the raw data
-        dc = open_run(**common_args, data='raw')
+        dc = open_run(**common_args, data='raw', aliases=aliases)
 
         try:
-            # Attempt to open proc data, but this may not exist
-            proc_dc = open_run(**common_args, data='proc')
+            # Attempt to open proc data, but this may not exist. Note that we
+            # explicitly disable loading aliases again because this will print
+            # out an extra 'aliases loaded' message.
+            proc_dc = open_run(**common_args, data='proc', aliases=None)
         except FileNotFoundError:
             warn("Proc data is not available for this run")
         else:

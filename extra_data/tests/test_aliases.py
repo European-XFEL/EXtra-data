@@ -73,6 +73,10 @@ def test_with_aliases(mock_sa3_control_data, mock_sa3_control_aliases):
     run4 = run.drop_aliases()
     assert not run4._aliases
 
+    # Smoke test for __str__() and __repr__()
+    repr(run.alias)
+    str(run.alias)
+
 
 def test_json_alias_file(mock_sa3_control_data, mock_sa3_control_aliases, tmp_path):
     aliases_path = tmp_path / 'aliases.json'
