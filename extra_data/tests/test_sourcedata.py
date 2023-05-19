@@ -187,3 +187,21 @@ def test_data_counts_values(mock_reduced_spb_proc_run):
 
     with pytest.raises(ValueError):
         am0.data_counts(index_group='preamble')
+
+
+def test_drop_empty_trains(mock_reduced_spb_proc_run):
+    run = RunDirectory(mock_reduced_spb_proc_run)
+    am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf']
+
+    # Compare all index groups with `require_any`.
+    np.testing.assert_equal(
+        am0.drop_empty_trains().train_ids,
+        run.select(am0.source, '*', require_any=True).train_ids)
+
+    # Compare one specific index group with `require_all`.
+    np.testing.assert_equal(
+        am0.drop_empty_trains(index_group='image').train_ids,
+        run.select(am0.source, 'image.*', require_all=True).train_ids)
+
+    with pytest.raises(ValueError):
+        am0.drop_empty_trains(index_group='preamble')
