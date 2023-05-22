@@ -221,6 +221,16 @@ class SourceData:
             inc_suspect_trains=self.inc_suspect_trains
         )
 
+    def drop_empty_trains(self, index_group=None):
+        """Select only trains with data as a new :class:`SourceData` object.
+
+        If *index_group* is omitted, those trains with data for any of this
+        source's index groups are selected.
+        """
+        counts = self.data_counts(labelled=False, index_group=index_group)
+        tids = np.array(self.train_ids)[counts > 0]
+        return self._only_tids(list(tids))
+
     def split_trains(self, parts=None, trains_per_part=None):
         """Split this data into chunks with a fraction of the trains each.
 
