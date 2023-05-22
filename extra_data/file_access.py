@@ -9,6 +9,7 @@ import h5py, h5py.h5o
 import numpy as np
 import os
 import os.path as osp
+import re
 import resource
 from warnings import warn
 from weakref import WeakValueDictionary
@@ -29,11 +30,11 @@ class OpenFilesLimiter(object):
         # We don't use the values, but OrderedDict is a handy as a queue
         # with efficient removal of entries by key.
         self._cache = OrderedDict()
-        
+
     @property
     def maxfiles(self):
         return self._maxfiles
-    
+
     @maxfiles.setter
     def maxfiles(self, maxfiles):
         """Set the new file limit and closes files over the limit"""
@@ -62,15 +63,15 @@ class OpenFilesLimiter(object):
             if file_access is not None:
                 file_access.close()
             n -= 1
-    
+
     def touch(self, filename):
         """
         Add/move the touched file to the end of the `cache`.
 
         If adding a new file takes it over the limit of open files, another file
         will be closed.
-        
-        For use of the file cache, FileAccess should use `touch(filename)` every time 
+
+        For use of the file cache, FileAccess should use `touch(filename)` every time
         it provides the underlying instance of `h5py.File` for reading.
         """
         if filename in self._cache:
@@ -122,7 +123,19 @@ class FileAccess(metaclass=MetaFileAccess):
     """
     _file = None
     _format_version = None
+    _path_traits = None
+    _filename_traits = None
     metadata_fstat = None
+
+    exdf_path_pattern = re.compile(
+        # A path may have three different prefixes depending on the storage location.
+        r'\/(gpfs\/exfel\/exp|gpfs\/exfel\/d|pnfs\/xfel.eu\/exfel\/archive\/XFEL)'
+
+        # The first prefix above uses the pattern <instrument>/<cycle>/<proposal>/<class>/<run>,
+        # the other two use <class>/<instrument>/<cycle>/<proposal>
+        r'\/(\w+)\/(\d{6}|\w+)\/(\d{6}|p\d{6})\/(p\d{6}|[a-z]+)\/r\d{4}')
+
+    exdf_filename_pattern = re.compile(r'([A-Z]+)-R\d{4}-(\w+)-S(\d{5}).h5')
 
     def __init__(self, filename, _cache_info=None):
         self.filename = osp.abspath(filename)
@@ -190,6 +203,61 @@ class FileAccess(metaclass=MetaFileAccess):
             file = self._file = h5py.File(self.filename, 'r')
 
         return file
+
+    def _evaluate_path_traits(self):
+        m = self.exdf_path_pattern.match(osp.dirname(osp.realpath(self.filename)))
+
+        if m:
+            if m[1] == 'gpfs/exfel/exp':
+                self._path_traits = (m[5], m[2], m[3])  # ONC path.
+            else:
+                self._path_traits = (m[2], m[3], m[4])  # Maxwell path.
+        else:
+            self._path_traits = (None, None, None)
+
+    def _evaluate_filename_traits(self):
+        m = self.exdf_filename_pattern.match(osp.basename(self.filename))
+
+        if m:
+            self._filename_traits = (m[1], m[2], int(m[3]))
+        else:
+            self._filename_traits = (None, None, None)
+
+    @property
+    def storage_class(self):
+        if self._path_traits is None:
+            self._evaluate_path_traits()
+        return self._path_traits[0]
+
+    @property
+    def instrument(self):
+        if self._path_traits is None:
+            self._evaluate_path_traits()
+        return self._path_traits[1]
+
+    @property
+    def cycle(self):
+        if self._path_traits is None:
+            self._evaluate_path_traits()
+        return self._path_traits[2]
+
+    @property
+    def data_category(self):
+        if self._filename_traits is None:
+            self._evaluate_filename_traits()
+        return self._filename_traits[0]
+
+    @property
+    def aggregator(self):
+        if self._filename_traits is None:
+            self._evaluate_filename_traits()
+        return self._filename_traits[1]
+
+    @property
+    def sequence(self):
+        if self._filename_traits is None:
+            self._evaluate_filename_traits()
+        return self._filename_traits[2]
 
     @property
     def valid_train_ids(self):

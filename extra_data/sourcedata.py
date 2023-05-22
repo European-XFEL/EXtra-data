@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import h5py
 
-from .exceptions import MultiRunError, PropertyNameError
+from .exceptions import MultiRunError, PropertyNameError, NoDataError
 from .file_access import FileAccess
 from .keydata import KeyData
 from .read_machinery import glob_wildcards_re, same_run, select_train_ids, split_trains
@@ -17,6 +17,7 @@ class SourceData:
     Don't create this directly; get it from ``run[source]``.
     """
     _device_class = ...
+    _first_source_file = ...
 
     def __init__(
             self, source, *, sel_keys, train_ids, files, section,
@@ -78,6 +79,38 @@ class SourceData:
             eshape=ds0.shape[1:],
             inc_suspect_trains=self.inc_suspect_trains,
         )
+
+    def _get_first_source_file(self):
+        first_kd = self[next(iter(self.keys()))]
+
+        try:
+            # This property is an empty list if no trains are selected.
+            sample_path = first_kd.source_file_paths[0]
+        except IndexError:
+            raise NoDataError(self.source) from None
+
+        return FileAccess(sample_path)
+
+    @property
+    def storage_class(self):
+        if self._first_source_file is ...:
+            self._first_source_file = self._get_first_source_file()
+
+        return self._first_source_file.storage_class
+
+    @property
+    def data_category(self):
+        if self._first_source_file is ...:
+            self._first_source_file = self._get_first_source_file()
+
+        return self._first_source_file.data_category
+
+    @property
+    def aggregator(self):
+        if self._first_source_file is ...:
+            self._first_source_file = self._get_first_source_file()
+
+        return self._first_source_file.aggregator
 
     def keys(self, inc_timestamps=True):
         """Get a set of key names for this source
