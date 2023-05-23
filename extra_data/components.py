@@ -1471,7 +1471,7 @@ class JUNGFRAU(MultimodDetectorBase):
         # Overwrite modno based on given starting module number and update
         # source_to_modno and modno_to_source.
         for source in self.source_to_modno.keys():
-            # JUNGFRAU modono is expected (e.g. extra_geom) to start with 1.
+            # JUNGFRAU modno is expected (e.g. extra_geom) to start with 1.
             modno = int(self._source_re.search(source)['modno']) - first_modno + 1
             self.source_to_modno[source] = modno
             self.modno_to_source[modno] = source
