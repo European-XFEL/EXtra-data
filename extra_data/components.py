@@ -1448,7 +1448,7 @@ class JUNGFRAU(MultimodDetectorBase):
       None, in which case it will be estimated from the available data.
     first_modno: int
       The module number in the source name for the first detector module.
-      e.g. FXE_XAD_JF500K/DET/JNGFR03:daqOutput should has first_modno = 3
+      e.g. FXE_XAD_JF500K/DET/JNGFR03:daqOutput should have first_modno = 3
     """
     # We appear to have a few different formats for source names:
     # SPB_IRDA_JNGFR/DET/MODULE_1:daqOutput  (e.g. in p 2566, r 61)
