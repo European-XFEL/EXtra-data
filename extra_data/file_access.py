@@ -123,11 +123,13 @@ class FileAccess(metaclass=MetaFileAccess):
     """
     _file = None
     _format_version = None
-    _path_traits = None
-    _filename_traits = None
+    _path_infos = None
+    _filename_infos = None
     metadata_fstat = None
 
-    exdf_path_pattern = re.compile(
+    # Regular expressions to extract path and filename information for HDF5
+    # files saved on the EuXFEL computing infrastructure.
+    euxfel_path_pattern = re.compile(
         # A path may have three different prefixes depending on the storage location.
         r'\/(gpfs\/exfel\/exp|gpfs\/exfel\/d|pnfs\/xfel.eu\/exfel\/archive\/XFEL)'
 
@@ -135,7 +137,7 @@ class FileAccess(metaclass=MetaFileAccess):
         # the other two use <class>/<instrument>/<cycle>/<proposal>
         r'\/(\w+)\/(\d{6}|\w+)\/(\d{6}|p\d{6})\/(p\d{6}|[a-z]+)\/r\d{4}')
 
-    exdf_filename_pattern = re.compile(r'([A-Z]+)-R\d{4}-(\w+)-S(\d{5}).h5')
+    euxfel_filename_pattern = re.compile(r'([A-Z]+)-R\d{4}-(\w+)-S(\d{5}).h5')
 
     def __init__(self, filename, _cache_info=None):
         self.filename = osp.abspath(filename)
@@ -204,60 +206,60 @@ class FileAccess(metaclass=MetaFileAccess):
 
         return file
 
-    def _evaluate_path_traits(self):
-        m = self.exdf_path_pattern.match(osp.dirname(osp.realpath(self.filename)))
+    def _evaluate_path_infos(self):
+        m = self.euxfel_path_pattern.match(osp.dirname(osp.realpath(self.filename)))
 
         if m:
             if m[1] == 'gpfs/exfel/exp':
-                self._path_traits = (m[5], m[2], m[3])  # ONC path.
+                self._path_infos = (m[5], m[2], m[3])  # ONC path.
             else:
-                self._path_traits = (m[2], m[3], m[4])  # Maxwell path.
+                self._path_infos = (m[2], m[3], m[4])  # Maxwell path.
         else:
-            self._path_traits = (None, None, None)
+            self._path_infos = (None, None, None)
 
-    def _evaluate_filename_traits(self):
-        m = self.exdf_filename_pattern.match(osp.basename(self.filename))
+    def _evaluate_filename_infos(self):
+        m = self.euxfel_filename_pattern.match(osp.basename(self.filename))
 
         if m:
-            self._filename_traits = (m[1], m[2], int(m[3]))
+            self._filename_infos = (m[1], m[2], int(m[3]))
         else:
-            self._filename_traits = (None, None, None)
+            self._filename_infos = (None, None, None)
 
     @property
     def storage_class(self):
-        if self._path_traits is None:
-            self._evaluate_path_traits()
-        return self._path_traits[0]
+        if self._path_infos is None:
+            self._evaluate_path_infos()
+        return self._path_infos[0]
 
     @property
     def instrument(self):
-        if self._path_traits is None:
-            self._evaluate_path_traits()
-        return self._path_traits[1]
+        if self._path_infos is None:
+            self._evaluate_path_infos()
+        return self._path_infos[1]
 
     @property
     def cycle(self):
-        if self._path_traits is None:
-            self._evaluate_path_traits()
-        return self._path_traits[2]
+        if self._path_infos is None:
+            self._evaluate_path_infos()
+        return self._path_infos[2]
 
     @property
     def data_category(self):
-        if self._filename_traits is None:
-            self._evaluate_filename_traits()
-        return self._filename_traits[0]
+        if self._filename_infos is None:
+            self._evaluate_filename_infos()
+        return self._filename_infos[0]
 
     @property
     def aggregator(self):
-        if self._filename_traits is None:
-            self._evaluate_filename_traits()
-        return self._filename_traits[1]
+        if self._filename_infos is None:
+            self._evaluate_filename_infos()
+        return self._filename_infos[1]
 
     @property
     def sequence(self):
-        if self._filename_traits is None:
-            self._evaluate_filename_traits()
-        return self._filename_traits[2]
+        if self._filename_infos is None:
+            self._evaluate_filename_infos()
+        return self._filename_infos[2]
 
     @property
     def valid_train_ids(self):
