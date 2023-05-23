@@ -241,6 +241,7 @@ def test_jungfraus_first_modno(mock_jungfrau_run, mock_fxe_jungfrau_run):
     run = RunDirectory(mock_jungfrau_run)
     jf = JUNGFRAU(run.select_trains(by_index[:2]), first_modno=1)
     assert jf.detector_name == 'SPB_IRDA_JF4M'
+    assert jf.n_modules == 8
 
     arr = jf.get_array('data.adc')
     assert np.all(arr['module'] == list(range(1, 9)))
@@ -254,6 +255,7 @@ def test_jungfraus_first_modno(mock_jungfrau_run, mock_fxe_jungfrau_run):
             first_modno=first_modno,
         )
         assert jf.detector_name == 'FXE_XAD_JF500K'
+        assert jf.n_modules == modno
 
         arr = jf.get_array('data.adc')
         assert np.all(arr['module'] == [modno])

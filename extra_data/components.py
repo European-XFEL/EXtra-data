@@ -1480,7 +1480,7 @@ class JUNGFRAU(MultimodDetectorBase):
             self.n_modules = int(n_modules)
         else:
             # For JUNGFRAU modules are indexed from 1
-            self.n_modules = max(modno for (_, modno) in self._source_matches(
+            self.n_modules = max(modno - first_modno + 1 for (_, modno) in self._source_matches(
                 data, self.detector_name
             ))
 
