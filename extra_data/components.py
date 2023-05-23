@@ -1447,7 +1447,7 @@ class JUNGFRAU(MultimodDetectorBase):
       Number of detector modules in the experiment setup. Default is
       None, in which case it will be estimated from the available data.
     first_modno: int
-      The module number that the detector starts with.
+      The module number in the source name for the first detector module.
       e.g. FXE_XAD_JF500K/DET/JNGFR03:daqOutput should has first_modno = 3
     """
     # We appear to have a few different formats for source names:
