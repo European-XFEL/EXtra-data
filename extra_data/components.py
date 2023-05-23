@@ -1588,6 +1588,9 @@ class JUNGFRAU(MultimodDetectorBase):
     n_modules: int
       Number of detector modules in the experiment setup. Default is
       None, in which case it will be estimated from the available data.
+    first_modno: int
+      The module number in the source name for the first detector module.
+      e.g. FXE_XAD_JF500K/DET/JNGFR03:daqOutput should have first_modno = 3
     """
     # We appear to have a few different formats for source names:
     # SPB_IRDA_JNGFR/DET/MODULE_1:daqOutput  (e.g. in p 2566, r 61)
@@ -1604,14 +1607,23 @@ class JUNGFRAU(MultimodDetectorBase):
     module_shape = (512, 1024)
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
-                 *, min_modules=1, n_modules=None):
+                 *, min_modules=1, n_modules=None, first_modno=1):
         super().__init__(data, detector_name, modules, min_modules=min_modules)
+
+        self.modno_to_source = {}
+        # Overwrite modno based on given starting module number and update
+        # source_to_modno and modno_to_source.
+        for source in self.source_to_modno.keys():
+            # JUNGFRAU modno is expected (e.g. extra_geom) to start with 1.
+            modno = int(self._source_re.search(source)['modno']) - first_modno + 1
+            self.source_to_modno[source] = modno
+            self.modno_to_source[modno] = source
 
         if n_modules is not None:
             self.n_modules = int(n_modules)
         else:
             # For JUNGFRAU modules are indexed from 1
-            self.n_modules = max(modno for (_, modno) in self._source_matches(
+            self.n_modules = max(modno - first_modno + 1 for (_, modno) in self._source_matches(
                 data, self.detector_name
             ))
 

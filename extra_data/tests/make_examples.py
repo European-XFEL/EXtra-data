@@ -405,6 +405,24 @@ def make_jungfrau_run(dir_path):
         JUNGFRAUPower('SPB_IRDA_JF4M/MDL/POWER'),
     ], ntrains=100, chunksize=1, format_version='1.0')
 
+def make_fxe_jungfrau_run(dir_path):
+    # Naming based on /gpfs/exfel/exp/FXE/202101/p002478/raw/
+    for modno in range(1, 3):
+        path = osp.join(dir_path, f'RAW-R0012-JNGFR{modno:02}-S00000.h5')
+        write_file(path, [
+            JUNGFRAUModule(f'FXE_XAD_JF1M/DET/JNGFR{modno:02}')
+        ], ntrains=100, chunksize=1, format_version='1.0')
+
+    path = osp.join(dir_path, f'RAW-R0052-JNGFR03-S00000.h5')
+    write_file(path, [
+        JUNGFRAUModule(f'FXE_XAD_JF500K/DET/JNGFR03')
+    ], ntrains=100, chunksize=1, format_version='1.0')
+
+    write_file(osp.join(dir_path, f'RAW-R0052-JNGFRCTRL00-S00000.h5'), [
+        JUNGFRAUControl('FXE_XAD_JF1M/DET/CONTROL'),
+        JUNGFRAUControl('FXE_XAD_JF500K/DET/CONTROL'),
+    ], ntrains=100, chunksize=1, format_version='1.0')
+
 def make_remi_run(dir_path):
     write_file(osp.join(dir_path, f'CORR-R0210-REMI01-S00000.h5'), [
         ReconstructedDLD6('SQS_REMI_DLD6/DET/TOP'),
