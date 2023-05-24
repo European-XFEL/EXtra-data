@@ -72,7 +72,7 @@ _empty_cache_info = dict(
 )
 
 
-def test_path_traits(mock_sa3_control_data, monkeypatch):
+def test_euxfel_path_infos(mock_sa3_control_data, monkeypatch):
     fa = FileAccess(mock_sa3_control_data)
 
     # Default path is not a EuXFEL storage location.
@@ -94,7 +94,7 @@ def test_path_traits(mock_sa3_control_data, monkeypatch):
         assert fa.cycle == '202301'
 
 
-def test_filename_traits(mock_sa3_control_data, monkeypatch):
+def test_euxfel_filename_infos(mock_sa3_control_data, monkeypatch):
     fa = FileAccess(mock_sa3_control_data)
 
     assert fa.data_category == 'RAW'

@@ -140,7 +140,7 @@ def test_device_class(mock_spb_raw_run):
     assert xgm_inst.device_class is None
 
 
-def test_path_traits(mock_spb_raw_run):
+def test_euxfel_path_infos(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
     xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
 
