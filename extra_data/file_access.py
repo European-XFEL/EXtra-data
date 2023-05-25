@@ -467,6 +467,21 @@ class FileAccess(metaclass=MetaFileAccess):
         self._keys_cache[source] = res
         return res
 
+    def get_one_key(self, source):
+        """Similar to get_keys(), except it returns only a single key for performance"""
+        if source in self.control_sources:
+            group = '/CONTROL/' + source
+        elif source in self.instrument_sources:
+            group = '/INSTRUMENT/' + source
+        else:
+            raise SourceNameError(source)
+
+        def get_key(key, value):
+            if isinstance(value, h5py.Dataset):
+                return key.replace('/', '.')
+
+        return self.file[group].visititems(get_key)
+
     def get_run_keys(self, source):
         """Get the keys in the RUN section for a given control source name
 

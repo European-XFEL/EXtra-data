@@ -139,6 +139,18 @@ class SourceData:
         for f in self.files:
             return f.get_keys(self.source)
 
+    def one_key(self):
+        """Get a single (random) key for this source
+
+        If you only need a single key, this can be much faster than calling
+        :meth:`keys`.
+        """
+        if self.sel_keys is not None:
+            return next(iter(self.sel_keys))
+
+        for f in self.files:
+            return f.get_one_key(self.source)
+
     @property
     def index_groups(self) -> set:
         """The part of keys needed to look up index data."""
