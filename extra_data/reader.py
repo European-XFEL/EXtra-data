@@ -1315,22 +1315,7 @@ class DataCollection:
 
         print()
 
-    @staticmethod
-    def _running_in_notebook():
-        """Check if we're running in a Jupyter notebook or not.
-
-        Inspired by: https://stackoverflow.com/a/39662359.
-        """
-        try:
-            shell = get_ipython().__class__.__name__
-        except NameError:
-            shell = None
-
-        # Technically this might also be a console, but that's not a situation
-        # we run into much (if at all).
-        return shell == "ZMQInteractiveShell"
-
-    def plot_missing_data(self, min_saved_pct=95):
+    def plot_missing_data(self, min_saved_pct=95, all_xtdf_subsections=False):
         """Plot sources that have missing data for some trains.
 
         Parameters
@@ -1338,6 +1323,9 @@ class DataCollection:
 
         min_saved_pct: int or float, optional
             Only show sources with less than this percentage of trains saved.
+        all_xtdf_subsections: bool, optional
+            Control which subsections of XTDF sources are checked. By default
+            only the ``image`` subsection will be checked.
         """
         n_trains = len(self.train_ids)
 
@@ -1350,47 +1338,49 @@ class DataCollection:
 
             return src
 
-        # If possible, create a progress bar. Loading the train IDs for every
-        # source can be very slow (tens of seconds) so it's good to give the
-        # user some feedback to know that the method hasn't frozen.
-        display_progress = False
-        if self._running_in_notebook():
-            try:
-                from ipywidgets import IntProgress
-                from IPython.display import display
-            except ImportError:
-                pass
-            else:
-                progress_bar = IntProgress(min=0, max=len(self.all_sources),
-                                           description="Checking:")
-                display(progress_bar)
-                display_progress = True
-
         # Find sources with missing data
         flaky_sources = { }
+        save_pcts = { }
         run_tids = set(self.train_ids)
+        start = time.time()
         for src in self.all_sources:
-            key = list(self[src].keys())[0]
-            kd_tids = self[src, key].drop_empty_trains().train_ids
-            save_pct = len(kd_tids) / n_trains * 100
+            kds = { }
+            if src.endswith(":xtdf"):
+                keys = self[src].keys()
+                subsections = set(k.split(".")[0] for k in keys) if all_xtdf_subsections else { "image" }
+                keys_for_subsections = { sec: next(iter(k for k in keys if k.startswith(f"{sec}.")))
+                                         for sec in subsections }
 
-            if set(kd_tids) != run_tids and save_pct <= min_saved_pct:
-                flaky_sources[best_src_name(src)] = kd_tids
+                src_name = best_src_name(src)
+                for subsection, key in keys_for_subsections.items():
+                    kds[f"{src_name}, {subsection}.*"] = self[src, key]
+            else:
+                key = self[src].one_key()
+                kds[best_src_name(src)] = self[src, key]
 
-            if display_progress:
-                progress_bar.value += 1
+            for name, kd in kds.items():
+                kd_tids = kd.drop_empty_trains().train_ids
+                save_pct = len(kd_tids) / n_trains * 100
 
-        # Hide the progress bar now that we've checked all the sources
-        if display_progress:
-            progress_bar.close()
+                if set(kd_tids) != run_tids and save_pct <= min_saved_pct:
+                    flaky_sources[name] = kd_tids
+                    save_pcts[name] = save_pct
+
+                # Warn the user if the function will take longer than a couple seconds
+                if start is not None and (time.time() - start) > 2:
+                    print(f"Checking sources in {len(self.files)} files, this may take a minute...")
+                    # Set the start time to a dummy value so the message will
+                    # never be printed again.
+                    start = None
 
         # Sort the flaky sources by decreasing order of how many trains they're missing
-        flaky_sources = dict(sorted(flaky_sources.items(), key=lambda x: len(x[1]),
+        flaky_sources = dict(sorted(flaky_sources.items(), key=lambda x: (len(x[1]), x[0]),
                                     reverse=True)
                              )
 
         # Plot missing data
         import matplotlib.pyplot as plt
+        from matplotlib.lines import Line2D
         fig, ax = plt.subplots(figsize=(9, max(2, len(flaky_sources) / 4)))
 
         bar_height = 0.5
@@ -1417,10 +1407,10 @@ class DataCollection:
             # Plot all the blocks
             ax.broken_barh(bars.keys(),
                            (i, bar_height),
-                           color=["k" if x else "r" for x in bars.values()])
+                           color=["r" if x else "k" for x in bars.values()])
 
         # Set labels and ticks
-        tick_labels = [f"{src} ({len(tids) / n_trains * 100:.2f}%)"
+        tick_labels = [f"{src} ({save_pcts[src]:.2f}%)"
                   for i, (src, tids) in enumerate(flaky_sources.items())]
         ax.set_yticks(np.arange(len(flaky_sources)) + bar_height / 2,
                       labels=tick_labels, fontsize=8)
@@ -1431,7 +1421,14 @@ class DataCollection:
         run_meta = self.run_metadata()
         if "proposalNumber" in run_meta and "runNumber" in run_meta:
             title += f" in p{run_meta['proposalNumber']}, run {run_meta['runNumber']}"
-        ax.set_title(title)
+        ax.set_title(title, pad=25 + len(flaky_sources) * 0.25)
+
+        # Create legend
+        legend_elements = [Line2D([0], [0], marker='o', color='w', label=label,
+                                  markerfacecolor=c, markersize=6)
+                           for c, label in [("k", "Missing"), ("r", "Present")]]
+        ax.legend(handles=legend_elements, bbox_to_anchor=(0, 1.02, 1, 0.1), loc='lower center',
+                  ncols=2, borderaxespad=0)
 
         fig.tight_layout()
 
