@@ -11,7 +11,8 @@ from extra_data import (
 
 
 def test_with_aliases(mock_sa3_control_data, mock_sa3_control_aliases):
-    run = H5File(mock_sa3_control_data).with_aliases(mock_sa3_control_aliases)
+    run_without_aliases = H5File(mock_sa3_control_data)
+    run = run_without_aliases.with_aliases(mock_sa3_control_aliases)
 
     def assert_equal_keydata(kd1, kd2):
         assert isinstance(kd1, KeyData)
@@ -73,8 +74,9 @@ def test_with_aliases(mock_sa3_control_data, mock_sa3_control_aliases):
     run4 = run.drop_aliases()
     assert not run4._aliases
 
-    # Smoke test for __str__() and __repr__()
-    repr(run.alias)
+    # Smoke tests for __str__() and __repr__()
+    assert "Loaded aliases" in repr(run.alias)
+    assert "No aliases" in repr(run_without_aliases.alias)
     str(run.alias)
 
 
