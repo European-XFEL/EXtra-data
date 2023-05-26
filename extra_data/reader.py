@@ -1346,6 +1346,9 @@ class DataCollection:
         for src in self.all_sources:
             kds = { }
             if src.endswith(":xtdf"):
+                # If it's an XTDF source we need to check all the subsections
+                # (prioritizing image.* if the user doesn't want to check all of
+                # them) because each subsection has its own index.
                 keys = self[src].keys()
                 subsections = set(k.split(".")[0] for k in keys) if all_xtdf_subsections else { "image" }
                 keys_for_subsections = { sec: next(iter(k for k in keys if k.startswith(f"{sec}.")))
@@ -1355,6 +1358,7 @@ class DataCollection:
                 for subsection, key in keys_for_subsections.items():
                     kds[f"{src_name}, {subsection}.*"] = self[src, key]
             else:
+                # If it's a regular source then we pick a random key to look at
                 key = self[src].one_key()
                 kds[best_src_name(src)] = self[src, key]
 
