@@ -689,7 +689,7 @@ class DataCollection:
         Allows to define aliases for sources or source-key combinations
         that may be used instead of their literal names to retrieve
         :class:`SourceData` and :class:`KeyData` objects via
-        :property:`DataCollection.alias`.
+        :attr:`.DataCollection.alias`.
 
         Multiple alias definitions may be passed as positional arguments
         in different formats:
@@ -700,12 +700,14 @@ class DataCollection:
         2. Passing a string or PathLike pointing to a JSON, YAML (requires
            pyYAML installed) or TOML (requires Python 3.11 or with tomli
            installed) file containing the aliases. For unsupported formats,
-           an ImportError is raised.
+           an :class:`ImportError` is raised.
 
            The file should contain mappings from alias to sources as strings
            or source-key pairs as lists. In addition, source-key aliases may
            be defined by nested key-value pairs according to the respective
-           format, shown here in YAML::
+           format, shown here in YAML:
+
+           .. code-block:: yaml
 
              # Source alias.
              sa1-xgm: SA1_XTD2_XGM/XGM/DOOCS
@@ -713,7 +715,8 @@ class DataCollection:
              # Direct source key alias.
              sa1-intensity: [SA1_XTD2_XGM/XGM/DOOCS:output, data.intensityTD]
 
-             # Nested source key alias.
+             # Nested source key alias, useful if you want aliases for multiple
+             # keys of the same source.
              SA3_XTD10_MONO/MDL/PHOTON_ENERGY:
                mono-central-energy: actualEnergy
 
@@ -735,17 +738,17 @@ class DataCollection:
     def only_aliases(self, *alias_defs, strict=False, require_all=False):
         """Apply aliases and select only the aliased sources and keys.
 
-        A convenient function around :method:`DataCollection.with_aliases`
-        and :method:`DataCollection.select` applying both the aliases passed
-        as `alias_defs` to the former and then selecting down the
+        A convenient function around :meth:`DataCollection.with_aliases`
+        and :meth:`DataCollection.select` applying both the aliases passed
+        as ``alias_defs`` to the former and then selecting down the
         :class:`DataCollection` to any sources and/or their keys for which
         aliases exist.
 
-        By default and unlike :method:`DataCollection.select`, any sources
+        By default and unlike :meth:`DataCollection.select`, any sources
         or keys present in the alias definitions but not the data itself are
-        ignored. This can be changed via the optional argument `strict`.
+        ignored. This can be changed via the optional argument ``strict``.
 
-        The optional `require_all` argument restricts the trains to those for
+        The optional ``require_all`` argument restricts the trains to those for
         which all selected sources and keys have at least one data entry. By
         default, all trains remain selected.
 

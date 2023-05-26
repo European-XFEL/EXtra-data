@@ -163,9 +163,12 @@ class AliasIndexer:
 
     def select(self, seln_or_alias, key_glob='*', require_all=False,
                require_any=False):
-        """Select a subset of sources and keys from this using aliases.
+        """Select a subset of sources and keys from this data using aliases.
 
-        In contrast to :method:`DataCollection.select`, only a subset of
+        This method is only accessible through the :attr:`DataCollection.alias`
+        property.
+
+        In contrast to :meth:`DataCollection.select`, only a subset of
         ways to select data via aliases is supported:
 
         1. With a source alias and literal key glob pattern::
@@ -182,11 +185,11 @@ class AliasIndexer:
             # Select several aliases, may be both source and key aliases.
             sel = run.alias.select(['sa1-xgm', 'mono-hv'])
 
-            Data is included if it matches any of the aliases. Note that
-            this method does not support glob patterns for the source alias.
+           Data is included if it matches any of the aliases. Note that
+           this method does not support glob patterns for the source alias.
 
         3. With a dict of source aliases mapped to sets of key names
-            (or empty sets to get all keys)::
+           (or empty sets to get all keys)::
 
                 # Select image.data from an aliased AGIPD and all data
                 # from an aliased XGM.
@@ -207,6 +210,9 @@ class AliasIndexer:
 
     def deselect(self, seln_or_alias, key_glob='*'):
         """Select everything except the specified sources and keys using aliases.
+
+        This method is only accessible through the :attr:`DataCollection.alias`
+        property.
 
         This takes the same arguments as :meth:`select`, but the sources
         and keys you specify are dropped from the selection.
