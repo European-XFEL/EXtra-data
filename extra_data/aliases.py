@@ -84,6 +84,9 @@ class AliasIndexer:
             elif isinstance(alias_ident, str):
                 source_key_aliases[(alias, alias_ident)].extend([])
 
+        if len(source_key_aliases) == 0:
+            return "No aliases have been loaded."
+
         # Print the aliases
         output_lines = ["Loaded aliases:"]
         for source, alias_keys in source_key_aliases.items():
