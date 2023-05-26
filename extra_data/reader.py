@@ -1428,7 +1428,7 @@ class DataCollection:
                                   markerfacecolor=c, markersize=6)
                            for c, label in [("k", "Missing"), ("r", "Present")]]
         ax.legend(handles=legend_elements, bbox_to_anchor=(0, 1.02, 1, 0.1), loc='lower center',
-                  ncols=2, borderaxespad=0)
+                  ncol=2, borderaxespad=0)
 
         fig.tight_layout()
 
