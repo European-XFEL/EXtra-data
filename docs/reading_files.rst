@@ -213,7 +213,7 @@ like this::
 
    .. automethod:: train_from_index
 
-To work with multiple modules of the same detector, see :doc:`agipd_lpd_data`.
+To work with multiple modules of the same detector, see :ref:`multi-mod-components`.
 
 You can also get data by train for multiple sources and keys together from a run
 or file object.

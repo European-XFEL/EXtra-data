@@ -305,7 +305,7 @@ New features:
   ``numpy.s_[:10]``) or indices directly (:ghpull:`68`, :ghpull:`79`). This
   includes :meth:`~.DataCollection.select_trains`,
   :meth:`~.DataCollection.get_array` and various methods for multi-module
-  detectors, described in :doc:`agipd_lpd_data`.
+  detectors, described in :ref:`multi-mod-components`.
 - ``extra-data-make-virtual-cxi`` :option:`--fill-value` now accepts numbers in
   hexadecimal, octal & binary formats, e.g. ``0xfe`` (:ghpull:`73`).
 - Added an ``unstack`` parameter to the :meth:`~.LPD1M.get_array` method for
@@ -365,7 +365,7 @@ Fixes and improvements:
   schedulers, and with arrays comprising very large numbers of files
   (:ghpull:`63`).
 - The classes for accessing multi-module detector data (see
-  :doc:`agipd_lpd_data`) and writing virtual CXI files no longer assume that
+  :ref:`multi-mod-components`) and writing virtual CXI files no longer assume that
   the same number of frames are recorded in every train (:ghpull:`44`).
 - Fix validation where a file has no trains at all (:ghpull:`42`).
 - More testing of EuXFEL file format version 1.0 (:ghpull:`56`).

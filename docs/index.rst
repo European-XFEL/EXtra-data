@@ -72,7 +72,7 @@ Documentation contents
    :maxdepth: 2
 
    reading_files
-   agipd_lpd_data
+   components
    streaming
    validation
    cli

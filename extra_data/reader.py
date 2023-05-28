@@ -1187,7 +1187,7 @@ class DataCollection:
         This is *not* the same as `building virtual datasets to combine
         multi-module detector data
         <https://rtd.xfel.eu/docs/data-analysis-user-documentation/en/latest/datafiles.html#combining-detector-data-from-multiple-modules>`__.
-        See :doc:`agipd_lpd_data` for that.
+        See :ref:`multi-mod-components` for that.
 
         Creating and reading virtual datasets requires HDF5 version 1.10.
 

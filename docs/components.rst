@@ -1,5 +1,14 @@
+Components
+==========
+
+Some sources at XFEL store their data in complex ways and can be difficult to
+work with directly. That's where *components* come in: these are objects that
+abstract the source into something more easily usable.
+
+.. _multi-mod-components:
+
 Multi-module detector data
-==========================
+--------------------------
 
 .. module:: extra_data.components
 
