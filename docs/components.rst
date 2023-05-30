@@ -82,3 +82,34 @@ there is also another way to combine detector modules from AGIPD, DSSC or LPD:
 .. currentmodule:: extra_data
 
 .. autofunction:: stack_detector_data
+
+Other
+-----
+
+.. currentmodule:: extra_data.components
+
+.. autoclass:: Scantool
+
+   .. automethod:: __init__
+
+   .. autoattribute:: source_name
+
+   .. autoattribute:: source
+
+   .. autoattribute:: active
+
+   .. autoattribute:: scan_type
+
+   .. autoattribute:: acquisition_time
+
+   .. autoattribute:: motors
+
+   .. autoattribute:: motor_devices
+
+   .. autoattribute:: steps
+
+   .. autoattribute:: start_positions
+
+   .. autoattribute:: stop_positions
+
+   .. automethod:: format
