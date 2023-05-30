@@ -1385,7 +1385,7 @@ class DataCollection:
         # Plot missing data
         import matplotlib.pyplot as plt
         from matplotlib.lines import Line2D
-        fig, ax = plt.subplots(figsize=(9, max(2, len(flaky_sources) / 4)))
+        fig, ax = plt.subplots(figsize=(9, max(3, len(flaky_sources) / 3.5)))
 
         bar_height = 0.5
         for i, src in enumerate(flaky_sources):
@@ -1411,7 +1411,7 @@ class DataCollection:
             # Plot all the blocks
             ax.broken_barh(bars.keys(),
                            (i, bar_height),
-                           color=["r" if x else "k" for x in bars.values()])
+                           color=["deeppink" if x else "k" for x in bars.values()])
 
         # Set labels and ticks
         tick_labels = [f"{src} ({save_pcts[src]:.2f}%)"
@@ -1430,8 +1430,17 @@ class DataCollection:
         # Create legend
         legend_elements = [Line2D([0], [0], marker='o', color='w', label=label,
                                   markerfacecolor=c, markersize=6)
-                           for c, label in [("k", "Missing"), ("r", "Present")]]
-        ax.legend(handles=legend_elements, bbox_to_anchor=(0, 1.02, 1, 0.1), loc='lower center',
+                           for c, label in [("k", "Missing"), ("deeppink", "Present")]]
+
+        # bbox_factor is a variable that tries to scale down the bounding box of
+        # the legend as the height of the plot grows with more sources. It's
+        # necessary because the bounding box coordinates are relative to the
+        # plot size, so with a tall plot the figure/legend padding will be
+        # massive. 7000 is a magic number that seems to give good results.
+        bbox_factor = 1 - len(flaky_sources) / 7000
+        ax.legend(handles=legend_elements,
+                  bbox_to_anchor=(0, 1.02 * bbox_factor, 1, 0.1 * bbox_factor),
+                  loc='lower center',
                   ncol=2, borderaxespad=0)
 
         fig.tight_layout()
