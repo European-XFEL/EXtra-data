@@ -469,6 +469,11 @@ class FileAccess(metaclass=MetaFileAccess):
 
     def get_one_key(self, source):
         """Similar to get_keys(), except it returns only a single key for performance"""
+        if source in self._keys_cache:
+            return next(iter(self._keys_cache[source]))
+        elif source in self._known_keys:
+            return next(iter(self._known_keys[source]))
+
         if source in self.control_sources:
             group = '/CONTROL/' + source
         elif source in self.instrument_sources:
