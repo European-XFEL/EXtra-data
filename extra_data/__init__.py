@@ -43,6 +43,7 @@ from .keydata import KeyData
 from .reader import *
 from .sourcedata import SourceData
 from .stacking import *
+from .aliases import AliasIndexer
 
 
 __all__ = reader.__all__ + stacking.__all__ + [

@@ -73,6 +73,69 @@ to refer to all data associated with that 0.1 second window.
 
    .. automethod:: info
 
+   .. autoattribute:: alias
+
+   .. automethod:: with_aliases
+
+   .. automethod:: only_aliases
+
+   .. automethod:: drop_aliases
+
+.. _using-aliases:
+
+Using aliases
+-------------
+
+Because source and key names are often quite long and obtuse, it can be useful
+to define human-meaningful *aliases* for them. You can use
+:meth:`DataCollection.with_aliases` to add aliases to an existing
+:class:`.DataCollection`, but it is often easier to define a per-proposal
+*aliases file*. By default :meth:`open_run` will look for a file named
+``usr/extra-data-aliases.yml`` under the proposal directory and load the aliases
+in it, so by storing aliases in that file they will be loaded automatically
+whenever opening a run with :meth:`open_run`.
+
+.. warning::
+   Make sure that the aliases file is writable by everyone! Otherwise only the
+   person who creates the file will be able to edit it. You can set loose
+   permissions on it with this shell command::
+
+      chmod 666 extra-data-aliases.yml
+
+You can then access sources and keys by aliases through the
+:attr:`DataCollection.alias` property. For example, if this was in our
+``extra-data-aliases.yml`` file:
+
+.. code-block:: yaml
+
+   xgm: SA2_XTD1_XGM/XGM/DOOCS
+   MID_DET_AGIPD1M-1/DET/3CH0:xtdf:
+       agipd3-data: image.data
+       agipd3-mask: image.mask
+
+Then we would be able to run::
+
+   run.alias["xgm"]         # SourceData of the XGM
+   run.alias["agipd3-data"] # KeyData for image.data
+   run.alias["agipd3-mask"] # KeyData for image.mask
+
+Calling :func:`repr` on ``run.alias`` will show all of the loaded aliases, along
+with whether or not the aliases are actually present in the run. In practice
+that means you can enter ``run.alias`` in a Jupyter notebook cell and it
+will print something like this (note the ✗ for an invalid alias)::
+
+  Loaded aliases:
+  ✗ xgm: SA42_XTD1_XGM/XGM/DOOCS
+
+    MID_DET_AGIPD1M-1/DET/3CH0:xtdf:
+      agipd3-data: image.data
+      agipd3-mask: image.mask
+
+Aliases can be used for selections as well, see
+:meth:`DataCollection.AliasIndexer.select` for more details.
+
+
+
 .. _data-by-source-and-key:
 
 Getting data by source & key
@@ -245,7 +308,11 @@ data, so you use them like this::
 
    .. automethod:: select
 
+   .. automethod:: AliasIndexer.select
+
    .. automethod:: deselect
+
+   .. automethod:: AliasIndexer.deselect
 
    .. automethod:: select_trains
 
