@@ -471,7 +471,7 @@ class FileAccess(metaclass=MetaFileAccess):
         """Similar to get_keys(), except it returns only a single key for performance"""
         if source in self._keys_cache:
             return next(iter(self._keys_cache[source]))
-        elif source in self._known_keys:
+        elif self._known_keys[source]:
             return next(iter(self._known_keys[source]))
 
         if source in self.control_sources:
