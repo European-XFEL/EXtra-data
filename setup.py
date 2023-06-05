@@ -55,6 +55,7 @@ setup(name="EXtra-data",
           'packaging',
           'pandas',
           'xarray',
+          'matplotlib'
       ],
       extras_require={
           'bridge': [

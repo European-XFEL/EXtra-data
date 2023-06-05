@@ -190,6 +190,7 @@ def test_read_spb_proc_run(mock_spb_proc_run):
     assert 'u4' == data[device]['image.mask'].dtype
     assert 'f4' == data[device]['image.data'].dtype
     run.info() # Smoke test
+    run.plot_missing_data() # Smoke test
 
 
 def test_iterate_spb_raw_run(mock_spb_raw_run):

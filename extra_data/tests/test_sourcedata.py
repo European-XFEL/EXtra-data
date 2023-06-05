@@ -40,6 +40,17 @@ def test_keys(mock_spb_raw_run):
     assert 'beamPosition.ixPos.timestamp' not in xgm.keys(inc_timestamps=False)
     assert 'beamPosition.ixPos' in xgm.keys(inc_timestamps=False)
 
+    # Recreate the run and xgm objects so we can test one_key() when the
+    # FileAccess caches are empty.
+    run = RunDirectory(mock_spb_raw_run)
+    xgm = run["SPB_XTD9_XGM/DOOCS/MAIN"]
+
+    # Make sure that one_key() does indeed return a valid key for
+    # control/instrument sources.
+    assert xgm.one_key() in xgm.keys()
+    xgm_output = run['SPB_XTD9_XGM/DOOCS/MAIN:output']
+    assert xgm_output.one_key() in xgm_output.keys()
+
 
 def test_select_keys(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)

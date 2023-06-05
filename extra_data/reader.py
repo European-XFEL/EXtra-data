@@ -1318,6 +1318,130 @@ class DataCollection:
 
         print()
 
+    def plot_missing_data(self, min_saved_pct=95, expand_instrument=False):
+        """Plot sources that have missing data for some trains.
+
+        Parameters
+        ----------
+
+        min_saved_pct: int or float, optional
+            Only show sources with less than this percentage of trains saved.
+        expand_instrument: bool, optional
+            Show subsections within INSTRUMENT groups. These sections usually
+            have the same data missing, but it's possible for them to differ.
+        """
+        n_trains = len(self.train_ids)
+
+        # Helper function that returns an alias for a source if one is
+        # available, and the source name otherwise.
+        def best_src_name(src):
+            for alias, alias_ident in self._aliases.items():
+                if isinstance(alias_ident, str) and alias_ident == src:
+                    return alias
+
+            return src
+
+        # Check how much data is missing for each source
+        run_tids = np.array(self.train_ids)
+        start = time.time()
+        counts = { }
+        for src in self.all_sources:
+            srcdata = self[src]
+            if expand_instrument and srcdata.is_instrument:
+                for group in srcdata.index_groups:
+                    counts[f"{best_src_name(src)} {group}.*"] = \
+                        srcdata.data_counts(labelled=False, index_group=group)
+            else:
+                counts[best_src_name(src)] = srcdata.data_counts(labelled=False)
+
+            # Warn the user if the function will take longer than a couple seconds
+            if start is not None and (time.time() - start) > 2:
+                print(f"Checking sources in {len(self.files)} files, this may take a minute...")
+                # Set the start time to a dummy value so the message will
+                # never be printed again.
+                start = None
+
+        # Identify the sources with less than min_saved_pct% of trains
+        flaky_sources = {}
+        save_pcts = {}
+        for name, cnt in counts.items():
+            src_tids = run_tids[cnt > 0]
+            save_pct = len(src_tids) / n_trains * 100
+
+            if save_pct <= min_saved_pct:
+                flaky_sources[name] = src_tids
+                save_pcts[name] = save_pct
+
+        # Sort the flaky sources by decreasing order of how many trains they're missing
+        flaky_sources = dict(sorted(
+            flaky_sources.items(), key=lambda x: (len(x[1]), x[0]), reverse=True
+        ))
+
+        # Plot missing data
+        import matplotlib.pyplot as plt
+        from matplotlib.lines import Line2D
+        fig, ax = plt.subplots(figsize=(9, max(3, len(flaky_sources) / 3.5)))
+
+        bar_height = 0.5
+        for i, src in enumerate(flaky_sources):
+            # First find all the trains that are missing
+            save_line = np.zeros(n_trains).astype(bool)
+            save_line[np.intersect1d(self.train_ids, flaky_sources[src], return_indices=True)[1]] = True
+
+            # Loop over each train to find blocks of trains that are either
+            # present or missing.
+            bars = { }
+            block_start = 0
+            for idx in range(n_trains):
+                if save_line[idx] != save_line[block_start]:
+                    # If we find a train that doesn't match the save status of
+                    # the current block, create a new entry in `bars` to record
+                    # the start index, the block length, and the save status.
+                    bars[(block_start, idx - block_start)] = save_line[block_start]
+                    block_start = idx
+
+            # Add the last block
+            bars[(block_start, n_trains - block_start)] = save_line[block_start]
+
+            # Plot all the blocks
+            ax.broken_barh(bars.keys(),
+                           (i, bar_height),
+                           color=["deeppink" if x else "k" for x in bars.values()])
+
+        # Set labels and ticks
+        tick_labels = [f"{src} ({save_pcts[src]:.2f}%)"
+                  for i, (src, tids) in enumerate(flaky_sources.items())]
+        ax.set_yticks(np.arange(len(flaky_sources)) + bar_height / 2,
+                      labels=tick_labels, fontsize=8)
+        ax.set_xlabel("Train ID index")
+
+        # Set title
+        title = f"Sources with less than {min_saved_pct}% of trains saved"
+        run_meta = self.run_metadata()
+        if "proposalNumber" in run_meta and "runNumber" in run_meta:
+            title += f" in p{run_meta['proposalNumber']}, run {run_meta['runNumber']}"
+        ax.set_title(title, pad=25 + len(flaky_sources) * 0.25)
+
+        # Create legend
+        legend_elements = [Line2D([0], [0], marker='o', color='w', label=label,
+                                  markerfacecolor=c, markersize=6)
+                           for c, label in [("k", "Missing"), ("deeppink", "Present")]]
+
+        # bbox_factor is a variable that tries to scale down the bounding box of
+        # the legend as the height of the plot grows with more sources. It's
+        # necessary because the bounding box coordinates are relative to the
+        # plot size, so with a tall plot the figure/legend padding will be
+        # massive. 7000 is a magic number that seems to give good results.
+        bbox_factor = 1 - len(flaky_sources) / 7000
+        ax.legend(handles=legend_elements,
+                  bbox_to_anchor=(0, 1.02 * bbox_factor, 1, 0.1 * bbox_factor),
+                  loc='lower center',
+                  ncol=2, borderaxespad=0)
+
+        fig.tight_layout()
+
+        return ax
+
     def detector_info(self, source):
         """Get statistics about the detector data.
 

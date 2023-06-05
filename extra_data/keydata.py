@@ -29,6 +29,8 @@ class KeyData:
 
     def _find_chunks(self):
         """Find contiguous chunks of data for this key, in any order."""
+        all_tids_arr = np.array(self.train_ids)
+
         for file in self.files:
             if len(file.train_ids) == 0:
                 continue
@@ -36,7 +38,7 @@ class KeyData:
             firsts, counts = file.get_index(self.source, self.index_group)
 
             # Of trains in this file, which are in selection
-            include = np.isin(file.train_ids, self.train_ids)
+            include = np.isin(file.train_ids, all_tids_arr)
             if not self.inc_suspect_trains:
                 include &= file.validity_flag
 
@@ -126,8 +128,9 @@ class KeyData:
         return self.select_trains(item)
 
     def _only_tids(self, tids):
+        tids_arr = np.array(tids)
         files = [f for f in self.files
-                 if f.has_train_ids(tids, self.inc_suspect_trains)]
+                 if f.has_train_ids(tids_arr, self.inc_suspect_trains)]
 
         return KeyData(
             self.source,
@@ -187,14 +190,15 @@ class KeyData:
             import pandas as pd
             return pd.Series(counts, index=train_ids)
         else:
+            all_tids_arr = np.array(self.train_ids)
+            res = np.zeros(len(all_tids_arr), dtype=np.uint64)
+            tid_to_ix = np.intersect1d(all_tids_arr, train_ids, return_indices=True)[1]
+
             # We may be missing some train IDs, if they're not in any file
             # for this source, and they're sometimes out of order within chunks
             # (they shouldn't be, but we try not to fail too badly if they are).
-            assert np.isin(train_ids, self.train_ids).all()
-            tid_to_ix = {t: i for (i, t) in enumerate(self.train_ids)}
-            res = np.zeros(len(self.train_ids), dtype=np.uint64)
-            for tid, ct in zip(train_ids, counts):
-                res[tid_to_ix[tid]] = ct
+            assert len(tid_to_ix) == len(train_ids)
+            res[tid_to_ix] = counts
 
             return res
 

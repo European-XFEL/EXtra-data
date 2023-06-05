@@ -81,7 +81,7 @@ class SourceData:
         )
 
     def _get_first_source_file(self):
-        first_kd = self[next(iter(self.keys()))]
+        first_kd = self[self.one_key()]
 
         try:
             # This property is an empty list if no trains are selected.
@@ -138,6 +138,18 @@ class SourceData:
         # the same keys in all files that it appears in.
         for f in self.files:
             return f.get_keys(self.source)
+
+    def one_key(self):
+        """Get a single (random) key for this source
+
+        If you only need a single key, this can be much faster than calling
+        :meth:`keys`.
+        """
+        if self.sel_keys is not None:
+            return next(iter(self.sel_keys))
+
+        for f in self.files:
+            return f.get_one_key(self.source)
 
     @property
     def index_groups(self) -> set:
