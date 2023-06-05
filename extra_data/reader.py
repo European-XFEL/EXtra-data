@@ -1315,7 +1315,7 @@ class DataCollection:
 
         print()
 
-    def plot_missing_data(self, min_saved_pct=95, all_xtdf_subsections=False):
+    def plot_missing_data(self, min_saved_pct=95, expand_instrument=False):
         """Plot sources that have missing data for some trains.
 
         Parameters
@@ -1323,9 +1323,9 @@ class DataCollection:
 
         min_saved_pct: int or float, optional
             Only show sources with less than this percentage of trains saved.
-        all_xtdf_subsections: bool, optional
-            Control which subsections of XTDF sources are checked. By default
-            only the ``image`` subsection will be checked.
+        expand_instrument: bool, optional
+            Show subsections within INSTRUMENT groups. These sections usually
+            have the same data missing, but it's possible for them to differ.
         """
         n_trains = len(self.train_ids)
 
@@ -1338,49 +1338,41 @@ class DataCollection:
 
             return src
 
-        # Find sources with missing data
-        flaky_sources = { }
-        save_pcts = { }
-        run_tids = set(self.train_ids)
+        # Check how much data is missing for each source
+        run_tids = np.array(self.train_ids)
         start = time.time()
+        counts = { }
         for src in self.all_sources:
-            kds = { }
-            if src.endswith(":xtdf"):
-                # If it's an XTDF source we need to check all the subsections
-                # (prioritizing image.* if the user doesn't want to check all of
-                # them) because each subsection has its own index.
-                keys = self[src].keys()
-                subsections = set(k.split(".")[0] for k in keys) if all_xtdf_subsections else { "image" }
-                keys_for_subsections = { sec: next(iter(k for k in keys if k.startswith(f"{sec}.")))
-                                         for sec in subsections }
-
-                src_name = best_src_name(src)
-                for subsection, key in keys_for_subsections.items():
-                    kds[f"{src_name}, {subsection}.*"] = self[src, key]
+            srcdata = self[src]
+            if expand_instrument and srcdata.is_instrument:
+                for group in srcdata.index_groups:
+                    counts[f"{best_src_name(src)} {group}.*"] = \
+                        srcdata.data_counts(labelled=False, index_group=group)
             else:
-                # If it's a regular source then we pick a random key to look at
-                key = self[src].one_key()
-                kds[best_src_name(src)] = self[src, key]
+                counts[best_src_name(src)] = srcdata.data_counts(labelled=False)
 
-            for name, kd in kds.items():
-                kd_tids = kd.drop_empty_trains().train_ids
-                save_pct = len(kd_tids) / n_trains * 100
+            # Warn the user if the function will take longer than a couple seconds
+            if start is not None and (time.time() - start) > 2:
+                print(f"Checking sources in {len(self.files)} files, this may take a minute...")
+                # Set the start time to a dummy value so the message will
+                # never be printed again.
+                start = None
 
-                if set(kd_tids) != run_tids and save_pct <= min_saved_pct:
-                    flaky_sources[name] = kd_tids
-                    save_pcts[name] = save_pct
+        # Identify the sources with less than min_saved_pct% of trains
+        flaky_sources = {}
+        save_pcts = {}
+        for name, cnt in counts.items():
+            src_tids = run_tids[cnt > 0]
+            save_pct = len(src_tids) / n_trains * 100
 
-                # Warn the user if the function will take longer than a couple seconds
-                if start is not None and (time.time() - start) > 2:
-                    print(f"Checking sources in {len(self.files)} files, this may take a minute...")
-                    # Set the start time to a dummy value so the message will
-                    # never be printed again.
-                    start = None
+            if save_pct <= min_saved_pct:
+                flaky_sources[name] = src_tids
+                save_pcts[name] = save_pct
 
         # Sort the flaky sources by decreasing order of how many trains they're missing
-        flaky_sources = dict(sorted(flaky_sources.items(), key=lambda x: (len(x[1]), x[0]),
-                                    reverse=True)
-                             )
+        flaky_sources = dict(sorted(
+            flaky_sources.items(), key=lambda x: (len(x[1]), x[0]), reverse=True
+        ))
 
         # Plot missing data
         import matplotlib.pyplot as plt
