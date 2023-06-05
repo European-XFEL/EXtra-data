@@ -81,7 +81,7 @@ class SourceData:
         )
 
     def _get_first_source_file(self):
-        first_kd = self[next(iter(self.keys()))]
+        first_kd = self[self.one_key()]
 
         try:
             # This property is an empty list if no trains are selected.
