@@ -265,6 +265,21 @@ class FileAccess(metaclass=MetaFileAccess):
     def valid_train_ids(self):
         return self.train_ids[self.validity_flag]
 
+    @property
+    def origin_indices(self):
+        if self.format_version in ('0.5', '1.0', '1.1'):
+            # These format versions do not have origin indices yet, so
+            # construct it based on the validity flag.
+            # The origin index refers to the source in METADATA/dataSources
+            # from which a train originates, with "safe" trains indicated
+            # by the time server with virtual index -1.
+            origin_indices = np.zeros(len(self.train_ids), dtype=np.int8)
+            origin_indices[self.validity_flag] = -1
+        else:
+            origin_indices = self.file['INDEX/origin'][:len(self.train_ids)]
+
+        return origin_indices
+
     def has_train_ids(self, tids: np.ndarray, inc_suspect=False):
         f_tids = self.train_ids if inc_suspect else self.valid_train_ids
         return np.intersect1d(tids, f_tids).size > 0

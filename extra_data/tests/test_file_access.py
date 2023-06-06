@@ -62,13 +62,22 @@ def test_pickle(pickle_mod, mock_sa3_control_data):
     assert len(fa3.train_ids) == 500
 
 
+def test_origin_indices(mock_sa3_control_data):
+    fa = FileAccess(mock_sa3_control_data)
+
+    origins = fa.origin_indices
+    assert isinstance(origins, np.ndarray)
+    assert len(origins) == len(fa.train_ids)
+    np.testing.assert_equal(origins, -1)
+
+
 # Empty FileAccess cache entry to test behaviour without actually trying
 # to read a non-existing file in tests below.
 _empty_cache_info = dict(
     train_ids= np.zeros(0, dtype=np.uint64),
     control_sources=frozenset(),
     instrument_sources=frozenset(),
-    flag=np.zeros(0, dtype=np.int32)
+    flag=np.zeros(0, dtype=bool)
 )
 
 
