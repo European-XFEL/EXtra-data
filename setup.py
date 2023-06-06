@@ -50,12 +50,13 @@ setup(name="EXtra-data",
           ],
       },
       install_requires=[
+          'dask[array]',
           'h5py>=2.10',
+          'matplotlib',
           'numpy',
           'packaging',
           'pandas',
           'xarray',
-          'matplotlib'
       ],
       extras_require={
           'bridge': [
@@ -73,7 +74,6 @@ setup(name="EXtra-data",
           'test': [
               'cloudpickle',
               'coverage',
-              'dask[array]',
               'nbval',
               'pytest',
               'pytest-cov',
