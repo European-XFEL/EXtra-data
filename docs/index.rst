@@ -12,9 +12,18 @@ EXtra-data is available on our Anaconda installation on the Maxwell cluster::
     module load exfel exfel_anaconda3
 
 You can also install it `from PyPI <https://pypi.org/project/EXtra-data/>`__
-to use in other environments with Python 3.6 or later::
+to use in other environments with Python 3.7 or later::
 
     pip install extra_data
+
+This will install the `extra_data` package and the most commonly useful dependencies.
+Some large dependencies or dependencies only required for specific functionalities are
+not installed by default. You can use pip to install everything required for extra or
+all uses of `extra_data` (e.g. Dask Array, :ref:`cmd-serve-files`). This installs both
+`extra_data` and dependencies that are necessary::
+
+    pip install "extra_data[bridge]"    # install dependencies for karabo-bridge-like data streaming
+    pip install "extra_data[complete]"  # install dependencies for all features
 
 If you get a permissions error, add the ``--user`` flag to that command.
 
