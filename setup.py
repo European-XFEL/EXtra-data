@@ -50,7 +50,6 @@ setup(name="EXtra-data",
           ],
       },
       install_requires=[
-          'dask[array]',
           'h5py>=2.10',
           'matplotlib',
           'numpy',
@@ -63,24 +62,27 @@ setup(name="EXtra-data",
               'karabo-bridge >=0.6',
               'psutil',
           ],
+          'complete': [
+              'cloudpickle',
+              'dask[array]',
+              'extra_data[bridge]',
+              'pyyaml',
+              'tomli; python_version < "3.11"',
+          ],
           'docs': [
-              'sphinx',
-              'nbsphinx',
+              'extra_data[bridge]',  # For autodoc of ZMQStreamer
               'ipython',  # For nbsphinx syntax highlighting
+              'nbsphinx',
+              'sphinx',
               'sphinxcontrib_github_alt',
-              'karabo-bridge',  # For autodoc of ZMQStreamer
-              'psutil',
           ],
           'test': [
-              'cloudpickle',
               'coverage',
+              'extra_data[complete]',
               'nbval',
               'pytest',
               'pytest-cov',
               'testpath',
-              'psutil',
-              'pyyaml',
-              'tomli; python_version < "3.11"'
           ]
       },
       python_requires='>=3.6',
