@@ -589,6 +589,9 @@ class DataCollection:
         The order of the datasets doesn't matter. Any aliases defined on
         the collections are combined as well unless their values conflict.
 
+        Note that the trains for each source are unioned as well, such that
+        ``run.train_ids == run[src].train_ids``.
+
         Returns a new :class:`DataCollection` object.
         """
 
@@ -604,6 +607,10 @@ class DataCollection:
             [self._aliases] + [dc._aliases for dc in others])
 
         train_ids = sorted(set().union(*[sd.train_ids for sd in sources_data.values()]))
+        # Update the internal list of train IDs for the sources
+        for sd in sources_data.values():
+            sd.train_ids = train_ids
+
         files = set().union(*[sd.files for sd in sources_data.values()])
 
         return DataCollection(
