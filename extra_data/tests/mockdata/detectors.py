@@ -162,6 +162,15 @@ class LPDModule(DetectorModule):
     image_dims = (1, 256, 256)
     detector_data_size = 416
 
+class LPDMini(DetectorModule):
+    def __init__(self, device_id, frames_per_train=64, raw=True, modules=1):
+        if raw:
+            self.image_dims = (1, modules * 32, 256)
+        else:
+            # The 1 is removed in parent class
+            self.image_dims = (1, modules, 32, 256)
+        super().__init__(device_id, frames_per_train, raw)
+
 class DSSCModule(DetectorModule):
     image_dims = (1, 128, 512)
     detector_data_size = 416

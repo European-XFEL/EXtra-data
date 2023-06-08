@@ -22,7 +22,7 @@ def test_stack_detector_data(mock_fxe_raw_run):
 
 def test_stack_detector_data_missing(mock_fxe_raw_run):
     test_run = RunDirectory(mock_fxe_raw_run)
-    tid, data = test_run.train_from_id(10000, devices=[('*/DET/*', 'image.data')])
+    tid, data = test_run.train_from_id(10000, devices=[('*_LPD1M-1/DET/*', 'image.data')])
 
     # Three variants of missing data:
     # 1. Source missing
@@ -52,7 +52,7 @@ def test_stack_detector_data_missing(mock_fxe_raw_run):
 
 def test_stack_detector_data_stackview(mock_fxe_raw_run):
     test_run = RunDirectory(mock_fxe_raw_run)
-    tid, data = test_run.train_from_id(10000, devices=[('*/DET/*', 'image.data')])
+    tid, data = test_run.train_from_id(10000, devices=[('*_LPD1M-1/DET/*', 'image.data')])
 
     # Three variants of missing data:
     # 1. Source missing
@@ -126,7 +126,7 @@ def test_stack_detector_data_type_error(mock_fxe_raw_run):
 
 def test_stack_detector_data_extra_mods(mock_fxe_raw_run):
     test_run = RunDirectory(mock_fxe_raw_run)
-    tid, data = test_run.train_from_id(10000, devices=[('*/DET/*', 'image.data')])
+    tid, data = test_run.train_from_id(10000, devices=[('*_LPD1M-1/DET/*', 'image.data')])
 
     data.setdefault(
         'FXE_DET_LPD1M-1/DET/16CH0:xtdf',

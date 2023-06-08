@@ -178,14 +178,16 @@ class MultimodDetectorBase:
         return MultimodKeyData(self, item)
 
     @classmethod
-    def _find_detector_name(cls, data):
+    def _find_detector_name(cls, data, source_re=None):
         detector_names = set()
+        if source_re is None:
+            source_re = cls._source_re
         for source in data.instrument_sources:
-            m = cls._source_re.match(source)
+            m = source_re.match(source)
             if m:
                 detector_names.add(m.group('detname'))
         if not detector_names:
-            raise SourceNameError(cls._source_re.pattern)
+            raise SourceNameError(source_re.pattern)
         elif len(detector_names) > 1:
             raise ValueError(
                 "Multiple detectors found in the data: {}. "
@@ -1561,8 +1563,114 @@ class LPDMini(LPDBase, XtdfDetectorBase):
       repeat the pulse & cell IDs from the first 1/3 of each train, and add gain
       stage labels from 0 (high-gain) to 2 (low-gain).
     """
-    _source_re = re.compile(r'(?P<detname>.+_LPD_MINI.*)/DET/(?P<modno>\d+)CH')
-    module_shape = (256, 256)
+    # Some code uses cls._source_re, but when creating an instance we replace
+    # this with either the raw or corrected variant.
+    _source_re = re.compile(r'(?P<detname>.+_LPD_MINI.*)/(DET|CORR)/(?P<modno>\d+)CH')
+    _source_re_raw = re.compile(r'(?P<detname>.+_LPD_MINI.*)/DET/(?P<modno>\d+)CH')
+    _source_re_corr = re.compile(r'(?P<detname>.+_LPD_MINI.*)/CORR/(?P<modno>\d+)CH')
+    module_shape = (32, 256)
+
+    def __init__(self, data: DataCollection, detector_name=None, modules=None,
+                 *, corrected=True, parallel_gain=False):
+        self.corrected = corrected
+        self._source_re = self._source_re_corr if corrected else self._source_re_raw
+        if detector_name is None:
+            detector_name = self._find_detector_name(data, self._source_re)
+        super().__init__(data, detector_name, modules=[0], parallel_gain=parallel_gain)
+
+    def __getitem__(self, item):
+        if item.startswith('image.'):
+            return LPDMiniImageKey(self, item, corrected=self.corrected)
+        return super().__getitem__(item)
+
+
+class LPDMiniImageKey(XtdfImageMultimodKeyData):
+    def __init__(self, det: XtdfDetectorBase, key, pulse_sel=by_index[0:MAX_PULSES:1], modules=None, corrected=True):
+        super().__init__(det, key, pulse_sel)
+        if modules is None and self._has_modules:
+            eshape = self._eg_keydata.entry_shape
+            nmod = eshape[-3] if corrected else (eshape[-2] // 32)
+            modules = list(range(nmod))
+        self._modules = modules
+        self.corrected = corrected
+
+    @property
+    def _has_modules(self):
+        return (self._eg_keydata.ndim - self._extraneous_dim) > 1
+
+    @property
+    def ndim(self):
+        return super().ndim if self._has_modules else (super().ndim - 1)
+
+    @property
+    def dimensions(self):
+        ndim_inner = self.ndim - 1 - self._has_modules
+        if ndim_inner == 2:
+            # 2D pixel data
+            entry_dims = ['slow_scan', 'fast_scan']
+        else:
+            # Everything else seems to be 1D, but just in case
+            entry_dims = [f'dim_{i}' for i in range(ndim_inner)]
+
+        if self._has_modules:
+            return ['train_pulse', 'module'] + entry_dims
+        return ['train_pulse'] + entry_dims
+
+    @property
+    def modules(self):
+        return self._modules
+
+    def buffer_shape(self, module_gaps=False, roi=()):
+        """Get the array shape for this data
+
+        If *module_gaps* is True, include space for modules which are missing
+        from the data. *roi* may be a tuple of slices defining a region of
+        interest on the inner dimensions of the data.
+        """
+        if self._has_modules:
+            nframes_sel = len(self.train_id_coordinates())
+            module_dim = 8 if module_gaps else len(self.modules)
+
+            return (nframes_sel, module_dim) + roi_shape(self.det.module_shape, roi)
+        else:
+            return super().buffer_shape(module_gaps, roi)[1:]
+
+    # Used for .select_trains() and .split_trains()
+    def _with_selected_det(self, det_selected):
+        return LPDMiniImageKey(det_selected, self.key, self._pulse_sel, modules=self.modules, corrected=self.corrected)
+
+    def select_pulses(self, pulses):
+        pulses = _check_pulse_selection(pulses)
+
+        return LPDMiniImageKey(self.det, self.key, pulses, modules=self.modules, corrected=self.corrected)
+
+    def ndarray(self, *, fill_value=None, out=None, roi=(), astype=None, module_gaps=False):
+        """Get an array of per-pulse data (image.*) for xtdf detector"""
+        if roi or module_gaps:
+            raise NotImplementedError
+
+        # trains, modules, 32, 256
+        out_shape = self.buffer_shape(module_gaps=module_gaps, roi=roi)
+
+        if out is None:
+            dtype = self._eg_keydata.dtype if astype is None else np.dtype(astype)
+            out = _out_array(out_shape, dtype, fill_value=fill_value)
+        elif out.shape != out_shape:
+            raise ValueError(f'requires output array of shape {out_shape}')
+
+        reading_view = out.view()
+        if not self.corrected:
+            reading_view.shape = (
+                out_shape[:1]
+                + ((1,) if self._extraneous_dim else ())
+                + ((out_shape[1] * out_shape[2], out_shape[3]) if self._has_modules else ())
+            )
+
+        for _modno, kd in self.modno_to_keydata.items():
+            for chunk in kd._data_chunks:
+                self._read_chunk(chunk, reading_view, roi)
+
+        return out
 
 
 @multimod_detectors

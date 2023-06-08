@@ -179,12 +179,11 @@ def test_get_array_lpd_parallelgain(mock_lpd_parallelgain_run):
     np.testing.assert_array_equal(arr.coords['gain'], np.arange(3))
     np.testing.assert_array_equal(arr.coords['pulse'], np.arange(100))
 
-    run = RunDirectory(mock_lpd_parallelgain_run)
-    det = LPDMini(run.select_trains(by_index[:2]), parallel_gain=True)
+    det = LPDMini(run.select_trains(by_index[:2]), parallel_gain=True, corrected=False)
     assert det.detector_name == 'FXE_DET_LPD_MINI'
 
     arr = det.get_array('image.data')
-    assert arr.shape == (1, 2, 3, 100, 256, 256)
+    assert arr.shape == (2, 2, 3, 100, 32, 256)
     assert arr.dims == ('module', 'train', 'gain', 'pulse', 'slow_scan', 'fast_scan')
     np.testing.assert_array_equal(arr.coords['gain'], np.arange(3))
     np.testing.assert_array_equal(arr.coords['pulse'], np.arange(100))
@@ -206,18 +205,17 @@ def test_get_array_lpd_parallelgain_select_pulses(mock_lpd_parallelgain_run):
     assert arr.shape == (16, 2, 3, 5, 256, 256)
     np.testing.assert_array_equal(arr.coords['pulse'], np.arange(5))
 
-    run = RunDirectory(mock_lpd_parallelgain_run)
-    det = LPDMini(run.select_trains(by_index[:2]), parallel_gain=True)
+    det = LPDMini(run.select_trains(by_index[:2]), parallel_gain=True, corrected=False)
     assert det.detector_name == 'FXE_DET_LPD_MINI'
 
     arr = det.get_array('image.data', pulses=np.s_[:5])
-    assert arr.shape == (1, 2, 3, 5, 256, 256)
+    assert arr.shape == (2, 2, 3, 5, 32, 256)
     assert arr.dims == ('module', 'train', 'gain', 'pulse', 'slow_scan', 'fast_scan')
     np.testing.assert_array_equal(arr.coords['gain'], np.arange(3))
     np.testing.assert_array_equal(arr.coords['pulse'], np.arange(5))
 
     arr = det.get_array('image.data', pulses=by_id[:5])
-    assert arr.shape == (1, 2, 3, 5, 256, 256)
+    assert arr.shape == (2, 2, 3, 5, 32, 256)
     np.testing.assert_array_equal(arr.coords['pulse'], np.arange(5))
 
 

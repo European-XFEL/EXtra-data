@@ -10,7 +10,7 @@ from .mockdata.agipd import AGIPD1MFPGA, AGIPD1MPSC, AGIPD500KFPGA, AGIPDMDL
 from .mockdata.base import write_base_index
 from .mockdata.basler_camera import BaslerCamera as BaslerCam
 from .mockdata.dctrl import DCtrl
-from .mockdata.detectors import AGIPDModule, DSSCModule, LPDModule
+from .mockdata.detectors import AGIPDModule, DSSCModule, LPDModule, LPDMini
 from .mockdata.gauge import Gauge
 from .mockdata.gec_camera import GECCamera
 from .mockdata.imgfel import IMGFELCamera, IMGFELMotor
@@ -244,8 +244,8 @@ def make_fxe_run(dir_path, raw=True, format_version='0.5'):
 
     path = osp.join(dir_path, f'{prefix}-R0450-LPDMINI00-S00000.h5')
     write_file(path, [
-        LPDModule('FXE_DET_LPD_MINI/DET/0CH0', raw=raw, frames_per_train=128)
-        ], ntrains=480, chunksize=32, format_version=format_version)
+        LPDMini('FXE_DET_LPD_MINI/DET/0CH0', raw=raw, frames_per_train=128, modules=2)
+    ], ntrains=480, chunksize=32, format_version=format_version)
 
     if not raw:
         return
@@ -275,7 +275,7 @@ def make_lpd_parallelgain_run(dir_path, raw=True, format_version='0.5'):
 
     path = osp.join(dir_path, f'{prefix}-R0450-LPDMINI00-S00000.h5')
     write_file(path, [
-        LPDModule('FXE_DET_LPD_MINI/DET/0CH0', raw=raw, frames_per_train=300)
+        LPDMini('FXE_DET_LPD_MINI/DET/0CH0', raw=raw, frames_per_train=300, modules=2)
     ], ntrains=100, chunksize=32, format_version=format_version)
 
 def make_lpd_run_mini_missed_train(dir_path):
