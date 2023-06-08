@@ -1321,6 +1321,10 @@ class DataCollection:
     def plot_missing_data(self, min_saved_pct=95, expand_instrument=False):
         """Plot sources that have missing data for some trains.
 
+        Example output:
+
+        .. image:: _static/plot_missing_data.png
+
         Parameters
         ----------
 

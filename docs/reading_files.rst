@@ -365,6 +365,14 @@ Missing data does not necessarily mean that something has gone wrong:
 some devices send data at less than 10 Hz (the train rate), so they always
 have gaps between updates.
 
+You can use :meth:`DataCollection.plot_missing_data` to quickly visualize
+sources that have missing data:
+
+.. class:: DataCollection
+   :noindex:
+
+   .. automethod:: plot_missing_data
+
 Data problems
 -------------
 
