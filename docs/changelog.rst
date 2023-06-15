@@ -30,7 +30,7 @@ Release Notes
 - New method ``SourceData.one_key()`` to quickly find an arbitrary key for a
   source.
 - :meth:`~.DataCollection.select` now accepts a ``require_any=True`` parameter
-  to filter trains where any of the selected sources & keys have data,
+  to filter trains where at least one of the selected sources & keys has data,
   complementing ``require_all`` (:ghpull:`400`).
 - New property :attr:`KeyData.source_file_paths` to locate real data files even
   if the run was opened using a virtual overview file (:ghpull:`325`).
