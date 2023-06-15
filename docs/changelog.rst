@@ -1,6 +1,57 @@
 Release Notes
 =============
 
+1.13
+----
+
+2023-06-15
+
+- Support for aliases (:ghpull:`367`), to provide shorter, more meaningful names
+  for specific sources & keys, and support for loading a default set of aliases
+  for the proposal when using :func:`~.open_run` (:ghpull:`398`). See
+  :ref:`using-aliases` for more information.
+- New APIs for multi-module detector data to work more like regular sources and
+  keys, e.g. ``agipd['image.data'].ndarray()`` (:ghpull:`337`). These changes
+  also change how Dask arrays are created for multi-module detector data,
+  hopefully making them more efficient for typical use cases.
+- New method :meth:`~.DataCollection.plot_missing_data` to show where sources
+  are missing data for some trains (:ghpull:`402`).
+- Merging data with :meth:`~.union` now applies the same train IDs to all
+  included sources, whereas previously sources could have different train IDs
+  selected (:ghpull:`416`).
+- A new property ``run[src].device_class`` exposes the Karabo device class name
+  for control sources (:ghpull:`390`).
+- :class:`.JUNGFRAU` now accepts a ``first_modno`` for detectors where the first
+  module is named with e.g. ``JNGFR03`` (:ghpull:`379`).
+- ``run[src].is_control`` and ``.is_instrument`` properties (:ghpull:`403`).
+- :class:`.SourceData` objects now have ``.data_counts()``,
+  ``.drop_empty_trains()`` and ``.split_trains()`` methods like :class:`.KeyData`
+  (:ghpull:`404`, :ghpull:`405`, :ghpull:`407`).
+- New method ``SourceData.one_key()`` to quickly find an arbitrary key for a
+  source.
+- :meth:`~.DataCollection.select` now accepts a ``require_any=True`` parameter
+  to filter trains where any of the selected sources & keys have data,
+  complementing ``require_all`` (:ghpull:`400`).
+- New property :attr:`KeyData.source_file_paths` to locate real data files even
+  if the run was opened using a virtual overview file (:ghpull:`325`).
+- New :class:`.SourceData` properties ``storage_class``, ``data_category`` and
+  ``aggregator`` to extract details from the filename & folder path, for the
+  main folder structure on EuXFEL compute clusters (:ghpull:`399`).
+- It's now possible to ``pip install extra-data[complete]`` to install
+  EXtra-data along with all optional dependencies (:ghpull:`414`).
+- Fix for missing CONTROL data when
+  :ref:`accessing data by train <data-by-train>` (:ghpull:`359`).
+- Fix using ``with`` to open & close runs when a virtual overview file is found
+  (:ghpull:`375`).
+- Fix calling :func:`~.open_run` with ``data='all', parallelize=False``
+  (:ghpull:`338`).
+- Fix using :class:`.DataCollection` objects with multiprocessing and spawned
+  subprocesses (:ghpull:`348`).
+- Better error messages when files are missing ``INDEX`` or ``METADATA``
+  sections (:ghpull:`361`).
+- Fix creating virtual overview files with extended metadata when source files
+  are format version 1.1 or newer (:ghpull:`332`).
+
 1.12
 ----
 
@@ -240,9 +291,9 @@ Deprecations & potentially breaking changes:
 
 New features:
 
-- :meth:`.select` has a new option ``require_all=True`` to include only trains
+- :meth:`~.DataCollection.select` has a new option ``require_all=True`` to include only trains
   where all the selected sources & keys have data (:ghpull:`113`).
-- :meth:`.select` now accepts :class:`DataCollection` and :class:`KeyData`
+- :meth:`~.DataCollection.select` now accepts :class:`DataCollection` and :class:`KeyData`
   objects, making it easy to re-select the same sources in another run
   (:ghpull:`114`).
 - New classes for accessing data from :class:`.AGIPD500K` and :class:`.JUNGFRAU`
@@ -277,7 +328,7 @@ Deprecations & potentially breaking changes:
 
 Fixes and improvements
 
-- Prevent :meth:`~.select` from rediscovering things that had previously been
+- Prevent :meth:`~.DataCollection.select` from rediscovering things that had previously been
   excluded from the selection (:ghpull:`128`).
 - Fix default fill value for uint64 data in :func:`stack_detector_data`
   (:ghpull:`103`).
