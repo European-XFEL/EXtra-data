@@ -742,21 +742,36 @@ def test_train_timestamps_nat(mock_fxe_control_data):
 def test_union(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
 
-    sel1 = run.select('SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos')
-    sel2 = run.select('SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.iyPos')
+    xgm = "SPB_XTD9_XGM/DOOCS/MAIN"
+    camera = "FXE_XAD_GEC/CAM/CAMERA"
+
+    # Test union of different sources
+    sel1 = run.select(xgm, 'beamPosition.ixPos')
+    sel2 = run.select(xgm, 'beamPosition.iyPos')
     joined = sel1.union(sel2)
-    assert joined.control_sources == {'SPB_XTD9_XGM/DOOCS/MAIN'}
+    assert joined.control_sources == { xgm }
     assert joined.selection == {
-        'SPB_XTD9_XGM/DOOCS/MAIN': {
+        xgm: {
             'beamPosition.ixPos.value',
             'beamPosition.iyPos.value',
         }
     }
 
+    # Test union of different train selections
     sel1 = run.select_trains(by_id[10200:10220])
     sel2 = run.select_trains(by_index[:10])
     joined = sel1.union(sel2)
     assert joined.train_ids == list(range(10000, 10010)) + list(range(10200, 10220))
+
+    # Test union of different sources in different train selections
+    sel1 = run.select(xgm).select_trains(by_index[:5])
+    sel2 = run.select(camera).select_trains(by_index[-5:])
+    joined = sel1.union(sel2)
+    expected_tids = run.train_ids[:5] + run.train_ids[-5:]
+
+    assert joined.train_ids == expected_tids
+    assert joined[xgm].train_ids == expected_tids
+    assert joined[camera].train_ids == expected_tids
 
 
 def test_union_raw_proc(mock_spb_raw_run, mock_spb_proc_run):
