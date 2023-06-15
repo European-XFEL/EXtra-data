@@ -11,7 +11,7 @@ from karabo_bridge import Client
 
 
 def test_merge_detector(mock_fxe_raw_run, mock_fxe_control_data, mock_spb_proc_run):
-    with RunDirectory(mock_fxe_raw_run, include="*LPD[!MINI]*") as run:
+    with RunDirectory(mock_fxe_raw_run) as run:
         for tid, data in _iter_trains(run, merge_detector=True):
             assert 'FXE_DET_LPD1M-1/DET/APPEND' in data
             assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' not in data
