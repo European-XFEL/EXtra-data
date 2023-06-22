@@ -4,7 +4,7 @@ h5py<3.10.0
 karabo-bridge==0.6.2
 msgpack==1.0.5
 msgpack-numpy==0.4.8
-numpy<1.25.0
+numpy<1.26.0
 pandas<2.1.0
 Pillow==9.5.0
 psutil==5.9.5
