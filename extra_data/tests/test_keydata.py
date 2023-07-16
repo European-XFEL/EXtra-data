@@ -34,6 +34,9 @@ def test_get_keydata(mock_spb_raw_run):
         'RAW-R0238-DA01-S00000.h5', 'RAW-R0238-DA01-S00001.h5'
     }
 
+    data = xgm_beam_x.ndarray()
+    assert xgm_beam_x.nbytes == data.nbytes
+
 def test_select_trains(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
     xgm_beam_x = run['SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value']

@@ -177,6 +177,12 @@ below, e.g.::
 
    .. automethod:: data_counts
 
+   .. autoattribute:: nbytes
+
+   .. autoattribute:: size_mb
+
+   .. autoattribute:: size_gb
+
    .. automethod:: ndarray
 
    .. automethod:: series

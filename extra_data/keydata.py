@@ -92,6 +92,21 @@ class KeyData:
         return (sum(c.total_count for c in self._data_chunks),) + self.entry_shape
 
     @property
+    def nbytes(self):
+        """The number of bytes this data would take up in memory."""
+        return self.dtype.itemsize * np.prod(self.shape)
+
+    @property
+    def size_mb(self):
+        """The size of the data in memory in megabytes."""
+        return self.nbytes / 1e6
+
+    @property
+    def size_gb(self):
+        """The size of the data in memory in gigabytes."""
+        return self.nbytes / 1e9
+
+    @property
     def source_file_paths(self):
         paths = []
         for chunk in self._data_chunks:
