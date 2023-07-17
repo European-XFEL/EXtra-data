@@ -149,7 +149,6 @@ def test_get_array_gap(mock_lpd_mini_gap_run):
     np.testing.assert_array_equal(arr[1, :, 0, 0, 0], [1, 2, 0, 3, 4])
 
 
-
 def test_get_array_roi(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run.select_trains(by_index[:3]))
@@ -166,6 +165,18 @@ def test_get_array_roi_dssc(mock_scs_run):
 
     arr = det.get_array('image.data', roi=np.s_[20:25, 40:52])
     assert arr.shape == (1, 128, 64, 5, 12)
+
+
+def test_ndarray_module_gaps(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    det = LPD1M(run, modules=[2]).select_trains(np.s_[:3])
+    det_data = det['image.data']
+    assert det_data.shape == (1, 128 * 3, 256, 256)
+    assert det_data.ndarray().shape == (1, 128 * 3, 256, 256)
+
+    arr_w_gaps = det_data.ndarray(module_gaps=True, fill_value=7)
+    assert arr_w_gaps.shape == (16, 128 * 3, 256, 256)
+    assert arr_w_gaps[:, 0, 0, 0].tolist() == ([7] * 2) + [0] + ([7] * 13)
 
 
 def test_get_array_lpd_parallelgain(mock_lpd_parallelgain_run):
