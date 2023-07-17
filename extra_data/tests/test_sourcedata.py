@@ -231,3 +231,49 @@ def test_drop_empty_trains(mock_reduced_spb_proc_run):
 
     with pytest.raises(ValueError):
         am0.drop_empty_trains(index_group='preamble')
+
+
+def test_train_id_coordinates(mock_reduced_spb_proc_run):
+    run = RunDirectory(mock_reduced_spb_proc_run)
+
+
+    # control data.
+    xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
+
+    np.testing.assert_equal(
+        xgm.train_id_coordinates(),
+        xgm.train_id_coordinates(''))
+    np.testing.assert_equal(
+        xgm.train_id_coordinates(),
+        xgm['pulseEnergy.conversion'].train_id_coordinates())
+
+    with pytest.raises(ValueError):
+        xgm.train_id_coordinates('data')
+
+    # instrument data.
+    camera = run['SPB_IRU_CAM/CAM/SIDEMIC:daqOutput']
+
+    np.testing.assert_equal(
+        camera.train_id_coordinates(),
+        camera.train_id_coordinates('data'))
+    np.testing.assert_equal(
+        camera.train_id_coordinates(),
+        camera['data.image.pixels'].train_id_coordinates())
+
+    with pytest.raises(ValueError):
+        camera.train_id_coordinates('image')
+
+    # xtdf data.
+    am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf']
+
+    np.testing.assert_equal(
+        am0.train_id_coordinates('header'),
+        am0['header.pulseCount'].train_id_coordinates())
+
+    np.testing.assert_equal(
+        am0.train_id_coordinates('image'),
+        am0['image.data'].train_id_coordinates())
+
+    # Should fail due to multiple index groups with differing counts.
+    with pytest.raises(ValueError):
+        am0.train_id_coordinates()
