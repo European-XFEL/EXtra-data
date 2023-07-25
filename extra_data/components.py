@@ -998,7 +998,8 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             # dim in raw data (except AGIPD, where it is data/gain)
             roi = np.index_exp[:] + roi
 
-        for mod_ix, (modno, kd) in enumerate(sorted(self.modno_to_keydata.items())):
+        for i, (modno, kd) in enumerate(sorted(self.modno_to_keydata.items())):
+            mod_ix = (modno - self.det._modnos_start_at) if module_gaps else i
             for chunk in kd._data_chunks:
                 self._read_chunk(chunk, reading_view[mod_ix], roi)
 
