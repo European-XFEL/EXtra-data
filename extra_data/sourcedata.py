@@ -91,6 +91,17 @@ class SourceData:
 
         return FileAccess(sample_path)
 
+    def _get_index_group_sample(self, index_group):
+        if self.is_control and not index_group:
+            # Shortcut for CONTROL data.
+            return self.one_key()
+
+        for key in self.keys():
+            if self[key].index_group == index_group:
+                return key
+
+        raise ValueError(f'{index_group} not an index group of this source')
+
     @property
     def storage_class(self):
         if self._first_source_file is ...:
@@ -312,12 +323,12 @@ class SourceData:
         """
 
         if index_group is None:
-            sample_keys = dict(zip(
-                [self[key].index_group for key in self.keys()], self.keys()))
-
+            # Collect data counts for a sample key per index group.
             data_counts = {
-                prefix: self[key].data_counts(labelled=labelled)
-                for prefix, key in sample_keys.items()
+                index_group: self[
+                    self._get_index_group_sample(index_group)
+                ].data_counts(labelled=labelled)
+                for index_group in self.index_groups
             }
 
             if labelled:
@@ -327,14 +338,36 @@ class SourceData:
                 return np.stack(list(data_counts.values())).max(axis=0)
 
         else:
-            for key in self.keys():
-                if self[key].index_group == index_group:
-                    break
-            else:
-                raise ValueError(f'{index_group} not an index group of this '
-                                 f'source')
+            return self[self._get_index_group_sample(index_group)] \
+                .data_counts(labelled=labelled)
 
-            return self[key].data_counts(labelled=labelled)
+    def train_id_coordinates(self, index_group=None):
+        """Make an array of train IDs to use alongside data this source.
+
+        If *index_group* is omitted, the shared train ID coordinates
+        across all index groups is returned if there is one. Unlike for
+        ``.data_counts()``, an exception is raised if the train ID
+        coordinates (and thus data counts) differ among the index groups.
+        """
+
+        if index_group is None:
+            if len(self.index_groups) > 1:
+                # Verify that a common train ID coordinate exists for
+                # multiple index groups. The reads necessary for this
+                # operation are identical to those for the train ID
+                # coordinates themselves.
+                counts_per_group = np.stack([
+                    self.data_counts(labelled=False, index_group=index_group)
+                    for index_group in self.index_groups])
+
+                if (counts_per_group != counts_per_group[0]).any():
+                    raise ValueError('source has index groups with differing '
+                                     'data counts')
+
+            index_group = self.index_groups.pop()
+
+        return self[self._get_index_group_sample(index_group)] \
+            .train_id_coordinates()
 
     def run_metadata(self) -> Dict:
         """Get a dictionary of metadata about the run
