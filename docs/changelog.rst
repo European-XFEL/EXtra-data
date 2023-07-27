@@ -1,6 +1,18 @@
 Release Notes
 =============
 
+1.14
+----
+
+2023-07-27
+
+-  New ``train_id_coordinates`` method for source data, like the one for
+   key data (:ghpull:`431`).
+-  New attributes ``.nbytes``, ``.size_mb`` and ``.size_gb`` to
+   conveniently see how much data is present for a given source & key
+   (:ghpull:`430`).
+-  Fix ``.ndarray(module_gaps=True)`` for xtdf detector data (:ghpull:`432`).
+
 1.13
 ----
 
