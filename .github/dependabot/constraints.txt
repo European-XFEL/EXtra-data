@@ -2,7 +2,7 @@ cloudpickle==2.2.1
 coverage==6.2
 h5py<3.10.0
 karabo-bridge==0.7.0
-msgpack<=1.0.6
+msgpack<=1.0.7
 msgpack-numpy==0.4.8
 numpy<1.27.0
 pandas<2.2.0
