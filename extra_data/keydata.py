@@ -107,6 +107,28 @@ class KeyData:
         return self.nbytes / 1e9
 
     @property
+    def units(self):
+        dset = self.files[0].file[self.hdf5_data_path]
+        base_unit = dset.attrs.get('unitSymbol', None)
+        if base_unit is None:
+            return None
+
+        prefix = dset.attrs.get('metricPrefixSymbol', '')
+        if prefix == 'u':
+            prefix = 'μ'  # We are not afraid of unicode
+        return prefix + base_unit
+
+    @property
+    def units_name(self):
+        dset = self.files[0].file[self.hdf5_data_path]
+        base_unit = dset.attrs.get('unitName', None)
+        if base_unit is None:
+            return None
+
+        prefix = dset.attrs.get('metricPrefixName', '')
+        return prefix + base_unit
+
+    @property
     def source_file_paths(self):
         paths = []
         for chunk in self._data_chunks:
@@ -144,8 +166,11 @@ class KeyData:
 
     def _only_tids(self, tids):
         tids_arr = np.array(tids)
-        files = [f for f in self.files
-                 if f.has_train_ids(tids_arr, self.inc_suspect_trains)]
+        # Keep 1 file, even if 0 trains selected.
+        files = [
+            f for f in self.files
+            if f.has_train_ids(tids_arr, self.inc_suspect_trains)
+        ] or [self.files[0]]
 
         return KeyData(
             self.source,

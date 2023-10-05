@@ -339,3 +339,14 @@ def test_file_no_trains(run_with_file_no_trains):
     run = RunDirectory(run_with_file_no_trains)
     xpos = run['SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos'].ndarray()
     assert xpos.shape == (64,)
+
+
+def test_units(mock_sa3_control_data):
+    run = H5File(mock_sa3_control_data)
+    xgm_intensity = run['SA3_XTD10_XGM/XGM/DOOCS:output', 'data.intensityTD']
+
+    assert xgm_intensity.units == 'μJ'
+    assert xgm_intensity.units_name == 'microjoule'
+
+    # Check that it still works after selecting 0 trains
+    assert xgm_intensity.select_trains(np.s_[:0]).units == 'μJ'
