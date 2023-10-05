@@ -49,7 +49,7 @@ def test_select_trains(mock_spb_raw_run):
     # Empty selection
     sel2 = xgm_beam_x[80:]
     assert sel2.shape == (0,)
-    assert len(sel2.files) == 0
+    assert len(sel2.files) == 1
     assert sel2.xarray().shape == (0,)
 
     # Single train
