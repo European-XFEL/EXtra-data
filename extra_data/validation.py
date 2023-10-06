@@ -1,4 +1,4 @@
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from multiprocessing import Pool
 from functools import partial
 import numpy as np
@@ -8,7 +8,7 @@ from shutil import get_terminal_size
 from signal import signal, SIGINT, SIG_IGN
 import sys
 
-from .reader import H5File, FileAccess
+from .reader import H5File, FileAccess, RunDirectory
 from .run_files_map import RunFilesMap
 
 
@@ -212,10 +212,10 @@ def check_index_contiguous(firsts, counts, record):
         ))
 
 
-def progress_bar(done, total, suffix=' '):
-    line = f'Progress: {done}/{total}{suffix}[{{}}]'
+def progress_bar(done):
+    line = f'Progress: {done * 100:.2f}% [{{}}]'
     length = min(get_terminal_size().columns - len(line), 50)
-    filled = int(length * done // total)
+    filled = int(length * done)
     bar = '#' * filled + ' ' * (length - filled)
     return line.format(bar)
 
@@ -239,12 +239,14 @@ def _check_file(args):
 
 
 class RunValidator:
-    def __init__(self, run_dir: str, term_progress=False):
+    def __init__(self, run_dir: str, missing_data_threshold: float, term_progress=False):
         self.run_dir = run_dir
+        self.missing_data_threshold = missing_data_threshold
         self.term_progress = term_progress
         self.filenames = [f for f in os.listdir(run_dir) if f.endswith('.h5')]
         self.file_accesses = []
         self.problems = []
+        self.progress_stages = 2
 
     def validate(self):
         problems = self.run_checks()
@@ -253,17 +255,18 @@ class RunValidator:
 
     def run_checks(self):
         self.problems = []
-        self.check_files()
+        self.check_files(progress_stage=1)
         self.check_files_map()
+        self.check_missing_sources(progress_stage=2)
         return self.problems
 
-    def progress(self, done, total, nproblems, badfiles):
+    def progress(self, stage_done, stage_total, stage, badfiles=None):
         """Show progress information"""
         if not self.term_progress:
             return
 
-        lines = progress_bar(done, total)
-        lines += f'\n{nproblems} problems'
+        lines = progress_bar((stage_done / stage_total + stage - 1) / self.progress_stages)
+        lines += f'\n{len(self.problems)} problems'
         if badfiles:
             lines += f' in {len(badfiles)} files (last: {badfiles[-1]})'
         if sys.stderr.isatty():
@@ -273,7 +276,7 @@ class RunValidator:
         else:
             print(lines, file=sys.stderr)
 
-    def check_files(self):
+    def check_files(self, progress_stage):
         self.file_accesses = []
 
         def initializer():
@@ -283,7 +286,7 @@ class RunValidator:
         filepaths = [(self.run_dir, fn) for fn in sorted(self.filenames)]
         nfiles = len(self.filenames)
         badfiles = []
-        self.progress(0, nfiles, 0, badfiles)
+        self.progress(0, nfiles, progress_stage, badfiles)
 
         with Pool(initializer=initializer) as pool:
             iterator = pool.imap_unordered(_check_file, filepaths)
@@ -293,7 +296,7 @@ class RunValidator:
                     badfiles.append(fname)
                 if fa is not None:
                     self.file_accesses.append(fa)
-                self.progress(done, nfiles, len(self.problems), badfiles)
+                self.progress(done, nfiles, progress_stage, badfiles)
 
         if not self.file_accesses:
             self.problems.append(
@@ -322,19 +325,58 @@ class RunValidator:
 
             f_access.close()
 
+    def check_missing_sources(self, progress_stage):
+        run = RunDirectory(self.run_dir)
+        run_tid_count = len(run.train_ids)
+        sources = sorted(run.all_sources)
+
+        for done, source in enumerate(sources, start=1):
+            bad_keys = []
+
+            # Look through all keys for missing data
+            for key in sorted(run[source].keys()):
+                counts = run[source, key].data_counts(labelled=False)
+                missing_data_ratio = (run_tid_count - np.count_nonzero(counts)) / run_tid_count
+
+                # If the missing data ratio is above the threshold, record it
+                # for printing.
+                if missing_data_ratio > self.missing_data_threshold:
+                    missing_percentage = missing_data_ratio * 100
+                    missing_count = run_tid_count - np.count_nonzero(counts)
+                    bad_keys.append((key, missing_percentage, missing_count))
+
+            # Often a source will be missing data for all of its keys, so to be
+            # less spammy we record a single problem per-source instead of
+            # per-key.
+            if len(bad_keys) > 0:
+                msg = f"{source} is missing data for the following keys:"
+                for key, missing_percentage, missing_count in bad_keys:
+                    msg += f"\n  - {key} is missing from {missing_percentage:.2f}% ({missing_count}/{run_tid_count}) of trains"
+
+                self.problems.append(dict(msg=msg, directory=self.run_dir))
+
+            self.progress(done, len(sources), progress_stage)
+
+
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
 
-    ap = ArgumentParser(prog='extra-data-validate')
+    ap = ArgumentParser(prog='extra-data-validate',
+                        formatter_class=ArgumentDefaultsHelpFormatter)
     ap.add_argument('path', help="HDF5 file or run directory of HDF5 files.")
+    ap.add_argument('--missing-data-threshold', help="Threshold from 0-1 for the ratio of trains with missing data for a "
+                                                     "source. For example, a threshold of 0.1 means report an error for all "
+                                                     "sources missing from more than 10%% of trains for the run. "
+                                                     "Only applicable to runs, not individual files.",
+                    type=float, default=0.05)
     args = ap.parse_args(argv)
 
     path = args.path
     if os.path.isdir(path):
         print("Checking run directory:", path)
         print()
-        validator = RunValidator(path, term_progress=True)
+        validator = RunValidator(path, args.missing_data_threshold, term_progress=True)
     else:
         print("Checking file:", path)
         validator = FileValidator(H5File(path).files[0])

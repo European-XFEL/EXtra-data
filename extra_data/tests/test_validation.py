@@ -29,7 +29,7 @@ def data_aggregator_file():
 
 
 def test_validate_run(mock_fxe_raw_run):
-    rv = RunValidator(mock_fxe_raw_run)
+    rv = RunValidator(mock_fxe_raw_run, 1)
     rv.validate()
 
 
@@ -37,10 +37,25 @@ def test_file_error(mock_fxe_raw_run):
     not_readable = Path(mock_fxe_raw_run) / 'notReadable.h5'
     not_readable.touch(mode=0o066)
 
-    problems = RunValidator(mock_fxe_raw_run).run_checks()
+    problems = RunValidator(mock_fxe_raw_run, 1).run_checks()
     assert len(problems) == 1
     assert problems[0]['msg'] == 'Could not open file'
     assert problems[0]['file'] == str(not_readable)
+
+
+def test_missing_sources(mock_fxe_raw_half_missing_run):
+    # Validating with a missing_data_threshold of 0.6 should pass, since only
+    # 50% of the camera data is missing.
+    rv = RunValidator(mock_fxe_raw_half_missing_run, missing_data_threshold=0.6)
+    rv.validate()
+
+    # But with a threshold of 0.4, the camera with half its data missing should
+    # be reported.
+    rv = RunValidator(mock_fxe_raw_half_missing_run, missing_data_threshold=0.4)
+    problems = rv.run_checks()
+    assert len(problems) == 1
+    assert "CAMERA_NODATA" in problems[0]['msg']
+    assert "50.00%" in problems[0]['msg']
 
 
 def test_zeros_in_train_ids(agipd_file):
