@@ -1,5 +1,6 @@
 from typing import List, Optional, Tuple
 
+import h5py
 import numpy as np
 
 from .exceptions import TrainIDError, NoDataError
@@ -108,24 +109,24 @@ class KeyData:
 
     @property
     def units(self):
-        dset = self.files[0].file[self.hdf5_data_path]
-        base_unit = dset.attrs.get('unitSymbol', None)
+        attrs = self.attributes()
+        base_unit = attrs.get('unitSymbol', None)
         if base_unit is None:
             return None
 
-        prefix = dset.attrs.get('metricPrefixSymbol', '')
+        prefix = attrs.get('metricPrefixSymbol', '')
         if prefix == 'u':
             prefix = 'μ'  # We are not afraid of unicode
         return prefix + base_unit
 
     @property
     def units_name(self):
-        dset = self.files[0].file[self.hdf5_data_path]
-        base_unit = dset.attrs.get('unitName', None)
+        attrs = self.attributes()
+        base_unit = attrs.get('unitName', None)
         if base_unit is None:
             return None
 
-        prefix = dset.attrs.get('metricPrefixName', '')
+        prefix = attrs.get('metricPrefixName', '')
         return prefix + base_unit
 
     @property
@@ -150,6 +151,18 @@ class KeyData:
 
         from pathlib import Path
         return [Path(p) for p in paths]
+
+    def attributes(self):
+        dset = self.files[0].file[self.hdf5_data_path]
+        if len(dset.attrs) == 0 and dset.is_virtual:
+            # Virtual datasets were initially created without these attributes.
+            # Find a source file. Not using source_file_paths as it can give [].
+            _, filename, _, _ = dset.virtual_sources()[0]
+            # Not using FileAccess: no need for train or source lists.
+            f = h5py.File(filename, 'r')
+            dset = f[self.hdf5_data_path]
+
+        return dict(dset.attrs)
 
     def select_trains(self, trains):
         """Select a subset of trains in this data as a new :class:`KeyData` object.

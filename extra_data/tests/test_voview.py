@@ -63,6 +63,8 @@ def test_use_voview(mock_spb_raw_run, tmp_path):
     assert {p.name for p in xgm_intens[:30].source_file_paths} == {
         'RAW-R0238-DA01-S00000.h5'
     }
+    assert xgm_intens.units == 'μJ'
+    assert xgm_intens.units_name == 'microjoule'
 
 
 

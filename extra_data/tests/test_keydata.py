@@ -341,6 +341,16 @@ def test_file_no_trains(run_with_file_no_trains):
     assert xpos.shape == (64,)
 
 
+def test_attributes(mock_sa3_control_data):
+    run = H5File(mock_sa3_control_data)
+    xgm_intensity = run['SA3_XTD10_XGM/XGM/DOOCS:output', 'data.intensityTD']
+    attrs = xgm_intensity.attributes()
+
+    assert isinstance(attrs, dict)
+    assert attrs['metricPrefixName'] == 'micro'
+    assert attrs['unitSymbol'] == 'J'
+
+
 def test_units(mock_sa3_control_data):
     run = H5File(mock_sa3_control_data)
     xgm_intensity = run['SA3_XTD10_XGM/XGM/DOOCS:output', 'data.intensityTD']
