@@ -1,3 +1,5 @@
+import numpy as np
+
 from .base import DeviceBase
 
 class XGM(DeviceBase):
@@ -53,3 +55,16 @@ class XGM(DeviceBase):
         ('xTD', 'f4', (1000,)),
         ('yTD', 'f4', (1000,)),
     ]
+
+    def write_instrument(self, f):
+        super().write_instrument(f)
+
+        # Annotate intensityTD with some units to test retrieving them
+        # Karabo stores ASCII strings, assigning bytes is a shortcut to mimic that
+        ds = f[f'INSTRUMENT/{self.device_id}:output/data/intensityTD']
+        ds.attrs['metricPrefixEnum']= np.array([14], dtype=np.int32)
+        ds.attrs['metricPrefixName'] = b'micro'
+        ds.attrs['metricPrefixSymbol'] = b'u'
+        ds.attrs['unitEnum'] = np.array([15], dtype=np.int32)
+        ds.attrs['unitName'] = b'joule'
+        ds.attrs['unitSymbol'] = b'J'

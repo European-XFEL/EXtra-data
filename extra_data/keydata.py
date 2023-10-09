@@ -1,5 +1,6 @@
 from typing import List, Optional, Tuple
 
+import h5py
 import numpy as np
 
 from .exceptions import TrainIDError, NoDataError
@@ -107,6 +108,30 @@ class KeyData:
         return self.nbytes / 1e9
 
     @property
+    def units(self):
+        """The units symbol for this data, e.g. 'μJ', or None if not found"""
+        attrs = self.attributes()
+        base_unit = attrs.get('unitSymbol', None)
+        if base_unit is None:
+            return None
+
+        prefix = attrs.get('metricPrefixSymbol', '')
+        if prefix == 'u':
+            prefix = 'μ'  # We are not afraid of unicode
+        return prefix + base_unit
+
+    @property
+    def units_name(self):
+        """The units name for this data, e.g. 'microjoule', or None if not found"""
+        attrs = self.attributes()
+        base_unit = attrs.get('unitName', None)
+        if base_unit is None:
+            return None
+
+        prefix = attrs.get('metricPrefixName', '')
+        return prefix + base_unit
+
+    @property
     def source_file_paths(self):
         paths = []
         for chunk in self._data_chunks:
@@ -129,6 +154,24 @@ class KeyData:
         from pathlib import Path
         return [Path(p) for p in paths]
 
+    def attributes(self):
+        """Get a dict of all attributes stored with this data
+
+        This may be awkward to use. See .units and .units_name for more
+        convenient forms.
+        """
+        dset = self.files[0].file[self.hdf5_data_path]
+        attrs = dict(dset.attrs)
+        if (not attrs) and dset.is_virtual:
+            # Virtual datasets were initially created without these attributes.
+            # Find a source file. Not using source_file_paths as it can give [].
+            _, filename, _, _ = dset.virtual_sources()[0]
+            # Not using FileAccess: no need for train or source lists.
+            with h5py.File(filename, 'r') as f:
+                attrs = dict(f[self.hdf5_data_path].attrs)
+
+        return attrs
+
     def select_trains(self, trains):
         """Select a subset of trains in this data as a new :class:`KeyData` object.
 
@@ -144,8 +187,11 @@ class KeyData:
 
     def _only_tids(self, tids):
         tids_arr = np.array(tids)
-        files = [f for f in self.files
-                 if f.has_train_ids(tids_arr, self.inc_suspect_trains)]
+        # Keep 1 file, even if 0 trains selected.
+        files = [
+            f for f in self.files
+            if f.has_train_ids(tids_arr, self.inc_suspect_trains)
+        ] or [self.files[0]]
 
         return KeyData(
             self.source,
