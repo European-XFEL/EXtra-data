@@ -153,14 +153,20 @@ class KeyData:
         return [Path(p) for p in paths]
 
     def attributes(self):
+        """Get a dict of all attributes stored with this data
+
+        This may be awkward to use. See .units and .units_name for more
+        convenient forms.
+        """
         dset = self.files[0].file[self.hdf5_data_path]
-        if len(dset.attrs) == 0 and dset.is_virtual:
+        attrs = dict(dset.attrs)
+        if (not attrs) and dset.is_virtual:
             # Virtual datasets were initially created without these attributes.
             # Find a source file. Not using source_file_paths as it can give [].
             _, filename, _, _ = dset.virtual_sources()[0]
             # Not using FileAccess: no need for train or source lists.
-            f = h5py.File(filename, 'r')
-            dset = f[self.hdf5_data_path]
+            with h5py.File(filename, 'r') as f:
+                attrs = dict(f[self.hdf5_data_path].attrs)
 
         return dict(dset.attrs)
 
