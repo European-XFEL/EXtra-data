@@ -170,7 +170,7 @@ class KeyData:
             with h5py.File(filename, 'r') as f:
                 attrs = dict(f[self.hdf5_data_path].attrs)
 
-        return dict(dset.attrs)
+        return attrs
 
     def select_trains(self, trains):
         """Select a subset of trains in this data as a new :class:`KeyData` object.
