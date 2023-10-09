@@ -221,6 +221,10 @@ below, e.g.::
    
       .. versionadded:: 1.9
 
+   .. autoattribute:: units
+
+   .. autoattribute:: units_name
+
 
 The run or file object (a :class:`DataCollection`) also has methods to load
 data by sources and keys. :meth:`get_array`, :meth:`get_dask_array` and

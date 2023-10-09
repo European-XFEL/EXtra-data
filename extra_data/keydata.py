@@ -109,6 +109,7 @@ class KeyData:
 
     @property
     def units(self):
+        """The units symbol for this data, e.g. 'μJ', or None if not found"""
         attrs = self.attributes()
         base_unit = attrs.get('unitSymbol', None)
         if base_unit is None:
@@ -121,6 +122,7 @@ class KeyData:
 
     @property
     def units_name(self):
+        """The units name for this data, e.g. 'microjoule', or None if not found"""
         attrs = self.attributes()
         base_unit = attrs.get('unitName', None)
         if base_unit is None:
