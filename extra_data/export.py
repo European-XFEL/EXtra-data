@@ -189,7 +189,7 @@ def serve_data(data, port, append_detector_modules=False,
         count += 1
         new_time = time.monotonic()
         if count % 5 == 0:
-            rate = len(deque) / (new_time - sent_times[0])
+            rate = len(sent_times) / (new_time - sent_times[0])
             print(f'Sent {count}/{ntrains} trains - Train ID {tid} - {rate:.1f} Hz', end='\r')
         sent_times.append(new_time)
 
