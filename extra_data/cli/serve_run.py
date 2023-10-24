@@ -21,6 +21,10 @@ def main(argv=None):
         action='append'
     )
     ap.add_argument(
+        "--allow-partial", help="Send trains where some sources are missing",
+        action='store_true'
+    )
+    ap.add_argument(
         "--append-detector-modules", help="combine multiple module sources"
         " into one (will only work for AGIPD data currently).",
         action='store_true'
@@ -65,7 +69,10 @@ def main(argv=None):
             # Source pattern only
             include.append(pat)
 
-    sel = run.select(include)
+    if args.allow_partial:
+        sel = run.select(include, require_any=True)
+    else:
+        sel = run.select(include, require_all=True)
 
     try:
         serve_data(
