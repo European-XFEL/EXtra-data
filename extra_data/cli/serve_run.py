@@ -76,7 +76,7 @@ def main(argv=None):
 
     try:
         serve_data(
-            sel, source_glob=args.source, key_glob=args.key,
+            sel, args.port,
             append_detector_modules=args.append_detector_modules,
             dummy_timestamps=args.dummy_timestamps,
             use_infiniband=args.use_infiniband, sock=args.socket_type
