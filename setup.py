@@ -44,6 +44,7 @@ setup(name="EXtra-data",
           "console_scripts": [
               "lsxfel = extra_data.lsxfel:main",
               "karabo-bridge-serve-files = extra_data.cli.serve_files:main",
+              "karabo-bridge-serve-run = extra_data.cli.serve_run:main",
               "extra-data-validate = extra_data.validation:main",
               "extra-data-make-virtual-cxi = extra_data.cli.make_virtual_cxi:main",
               "extra-data-locality = extra_data.locality:main",
