@@ -180,18 +180,22 @@ def serve_data(data, port, append_detector_modules=False,
     sender = Sender(endpt, sock=sock, dummy_timestamps=dummy_timestamps)
     print(f'Streamer started on: {sender.endpoint}')
     ntrains = len(data.train_ids)
-    print(f'Sending {ntrains} trains')
 
     sent_times = deque([time.monotonic()], 10)
     count = 0
+    new_time = 0.
+    def print_update(end='\r'):
+        print(f'Sent {count}/{ntrains} trains - Train ID {tid} - {rate:.1f} Hz', end=end)
+
     for tid, data in _iter_trains(data, merge_detector=append_detector_modules):
         sender.send(data)
         count += 1
         new_time = time.monotonic()
         if count % 5 == 0:
             rate = len(sent_times) / (new_time - sent_times[0])
-            print(f'Sent {count}/{ntrains} trains - Train ID {tid} - {rate:.1f} Hz', end='\r')
+            print_update()
         sent_times.append(new_time)
+    print_update(end='\n')
 
     # The karabo-bridge code sets linger to 0 so that it doesn't get stuck if
     # the client goes away. But this would also mean that we close the socket
