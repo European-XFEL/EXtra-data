@@ -1197,14 +1197,6 @@ class DataCollection:
             span_txt = '{}.{}'.format(datetime.timedelta(seconds=seconds),
                                       int(deciseconds))
 
-        detector_modules = {}
-        for source in self.detector_sources:
-            name, modno = DETECTOR_SOURCE_RE.match(source).groups((1, 2))
-            detector_modules[(name, modno)] = source
-
-        # A run should only have one detector, but if that changes, don't hide it
-        detector_name = ','.join(sorted(set(k[0] for k in detector_modules)))
-
         # disp
         print('# of trains:   ', train_count)
         print('Duration:      ', span_txt)
@@ -1212,22 +1204,34 @@ class DataCollection:
         print('Last train ID: ', last_train)
         print()
 
-        print("{} detector modules ({})".format(
-            len(self.detector_sources), detector_name
-        ))
-        if len(detector_modules) > 0:
-            # Show detail on the first module (the others should be similar)
-            mod_key = sorted(detector_modules)[0]
-            mod_source = detector_modules[mod_key]
-            dinfo = self.detector_info(mod_source)
-            module = ' '.join(mod_key)
-            dims = ' x '.join(str(d) for d in dinfo['dims'])
-            print("  e.g. module {} : {} pixels".format(module, dims))
-            print("  {}".format(mod_source))
-            print("  {} frames per train, up to {} frames total".format(
-                dinfo['frames_per_train'], dinfo['total_frames']
+        if not details_for_sources:
+            # Include summary section for multi-module detectors unless
+            # source details are enabled.
+
+            detector_modules = {}
+            for source in self.detector_sources:
+                name, modno = DETECTOR_SOURCE_RE.match(source).groups((1, 2))
+                detector_modules[(name, modno)] = source
+
+            # A run should only have one detector, but if that changes, don't hide it
+            detector_name = ','.join(sorted(set(k[0] for k in detector_modules)))
+
+            print("{} XTDF detector modules ({})".format(
+                len(self.detector_sources), detector_name
             ))
-        print()
+            if len(detector_modules) > 0:
+                # Show detail on the first module (the others should be similar)
+                mod_key = sorted(detector_modules)[0]
+                mod_source = detector_modules[mod_key]
+                dinfo = self.detector_info(mod_source)
+                module = ' '.join(mod_key)
+                dims = ' x '.join(str(d) for d in dinfo['dims'])
+                print("  e.g. module {} : {} pixels".format(module, dims))
+                print("  {}".format(mod_source))
+                print("  {} frames per train, up to {} frames total".format(
+                    dinfo['frames_per_train'], dinfo['total_frames']
+                ))
+            print()
 
         # Invert aliases for faster lookup.
         src_aliases = defaultdict(set)
@@ -1274,9 +1278,16 @@ class DataCollection:
 
                 print(f"{prefix}{k}{alias_str}\t[{dt}{entry_info}]")
 
-        non_detector_inst_srcs = self.instrument_sources - self.detector_sources
-        print(len(non_detector_inst_srcs), 'instrument sources (excluding detectors):')
-        for s in sorted(non_detector_inst_srcs):
+        if details_for_sources:
+            # All instrument sources with details enabled.
+            displayed_inst_srcs = self.instrument_sources
+            print(len(displayed_inst_srcs), 'instrument sources:')
+        else:
+            # Only non-XTDF instrument sources without details enabled.
+            displayed_inst_srcs = self.instrument_sources - self.detector_sources
+            print(len(displayed_inst_srcs), 'instrument sources (excluding XTDF detectors):')
+
+        for s in sorted(displayed_inst_srcs):
             print('  -', s, src_alias_list(s))
             if not any(p.match(s) for p in details_sources_re):
                 continue
