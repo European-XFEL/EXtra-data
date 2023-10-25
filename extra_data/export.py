@@ -183,7 +183,7 @@ def serve_data(data, port, append_detector_modules=False,
 
     sent_times = deque([time.monotonic()], 10)
     count = 0
-    new_time = 0.
+    tid, rate = 0, 0.
     def print_update(end='\r'):
         print(f'Sent {count}/{ntrains} trains - Train ID {tid} - {rate:.1f} Hz', end=end)
 
