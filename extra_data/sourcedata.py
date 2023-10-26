@@ -262,16 +262,19 @@ class SourceData:
         """
         return self._only_tids(select_train_ids(self.train_ids, trains))
 
-    def _only_tids(self, tids) -> 'SourceData':
+    def _only_tids(self, tids, files=None) -> 'SourceData':
+        if files is None:
+            files = [
+                f for f in self.files
+                if f.has_train_ids(tids, self.inc_suspect_trains)
+            ] or [self.files[0]]
+            # Keep 1 file, even if 0 trains selected, to get keys, dtypes, etc.
+
         return SourceData(
             self.source,
             sel_keys=self.sel_keys,
             train_ids=tids,
-            # Keep 1 file, even if 0 trains selected, to get keys, dtypes, etc.
-            files=[
-                f for f in self.files
-                if f.has_train_ids(tids, self.inc_suspect_trains)
-            ] or [self.files[0]],
+            files=files,
             section=self.section,
             is_single_run=self.is_single_run,
             inc_suspect_trains=self.inc_suspect_trains
@@ -309,8 +312,22 @@ class SourceData:
             A maximum number of trains in each part. Parts will often have
             fewer trains than this.
         """
-        for s in split_trains(len(self.train_ids), parts, trains_per_part):
-            yield self.select_trains(s)
+        # tids_files points to the file for each train.
+        # This avoids checking all files for each chunk, which can be slow.
+        tids_files = [None] * len(self.train_ids)
+        tid_to_ix = {t: i for i, t in enumerate(self.train_ids)}
+        for file in self.files:
+            f_tids = file.train_ids if self.inc_suspect_trains else file.valid_train_ids
+            for tid in f_tids:
+                ix = tid_to_ix.get(tid, None)
+                if ix is not None:
+                    tids_files[ix] = file
+
+        for sl in split_trains(len(self.train_ids), parts, trains_per_part):
+            tids = self.train_ids[sl]
+            files = set(tids_files[sl]) - {None}
+            files = sorted(files, key=lambda f: f.filename)
+            yield self._only_tids(tids, files=files)
 
     def data_counts(self, labelled=True, index_group=None):
         """Get a count of data entries in each train.
