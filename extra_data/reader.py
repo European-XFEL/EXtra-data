@@ -1013,12 +1013,11 @@ class DataCollection:
                     else:  # require_any
                         train_ids = np.union1d(train_ids, source_tids)
 
+            train_ids = list(train_ids)  # Convert back to a list.
             sources_data = {
                 src: srcdata._only_tids(train_ids)
                 for src, srcdata in sources_data.items()
             }
-
-            train_ids = list(train_ids)  # Convert back to a list.
 
         else:
             train_ids = self.train_ids
