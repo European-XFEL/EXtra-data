@@ -267,8 +267,10 @@ class SourceData:
             files = [
                 f for f in self.files
                 if f.has_train_ids(tids, self.inc_suspect_trains)
-            ] or [self.files[0]]
+            ]
+        if not files:
             # Keep 1 file, even if 0 trains selected, to get keys, dtypes, etc.
+            files = [self.files[0]]
 
         return SourceData(
             self.source,

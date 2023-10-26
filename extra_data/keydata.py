@@ -188,11 +188,13 @@ class KeyData:
     def _only_tids(self, tids, files=None):
         tids_arr = np.array(tids)
         if files is None:
-            # Keep 1 file, even if 0 trains selected.
             files = [
                 f for f in self.files
                 if f.has_train_ids(tids_arr, self.inc_suspect_trains)
-            ] or [self.files[0]]
+            ]
+        if not files:
+            # Keep 1 file, even if 0 trains selected.
+            files = [self.files[0]]
 
         return KeyData(
             self.source,
