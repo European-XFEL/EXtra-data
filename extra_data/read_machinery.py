@@ -271,3 +271,22 @@ def same_run(*args) -> bool:
 
 
 glob_wildcards_re = re.compile(r'([*?[])')
+
+
+# Based on _alloc function in pasha
+def zeros_shared(shape, dtype):
+    # Allocate shared memory via mmap.
+    import mmap
+
+    n_elements = 1
+    for _s in shape:
+        n_elements *= _s
+
+    n_bytes = n_elements * np.dtype(dtype).itemsize
+    n_pages = n_bytes // mmap.PAGESIZE + 1
+
+    buf = mmap.mmap(-1, n_pages * mmap.PAGESIZE,
+                    flags=mmap.MAP_SHARED | mmap.MAP_ANONYMOUS,
+                    prot=mmap.PROT_READ | mmap.PROT_WRITE)
+
+    return np.frombuffer(memoryview(buf)[:n_bytes], dtype=dtype).reshape(shape)
