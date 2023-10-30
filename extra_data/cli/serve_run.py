@@ -14,7 +14,9 @@ def main(argv=None):
     ap = ArgumentParser(prog="karabo-bridge-serve-run")
     ap.add_argument("proposal", help="Proposal number")
     ap.add_argument("run", help="Run number")
-    ap.add_argument("port", help="TCP port or ZMQ endpoint to send data on")
+    ap.add_argument(
+        "--port", default="0", help="TCP port or ZMQ endpoint to send data on. "
+                                    "Selects a random TCP port by default.")
     ap.add_argument(
         "--include", help="Select matching sources (and optionally keys) to "
                           "include in streamed data",
