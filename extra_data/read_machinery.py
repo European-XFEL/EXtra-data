@@ -152,6 +152,18 @@ def split_trains(n_trains, parts=None, trains_per_part=None) -> [slice]:
         for i in range(n_parts)
     ]
 
+def trains_files_index(train_ids, files, inc_suspect_trains=True) -> list:
+    """Make a list of which FileAccess contains each train, used in splitting"""
+    tids_files = [None] * len(train_ids)
+    tid_to_ix = {t: i for i, t in enumerate(train_ids)}
+    for file in files:
+        f_tids = file.train_ids if inc_suspect_trains else file.valid_train_ids
+        for tid in f_tids:
+            ix = tid_to_ix.get(tid, None)
+            if ix is not None:
+                tids_files[ix] = file
+    return tids_files
+
 class DataChunk:
     """Reference to a contiguous chunk of data for one or more trains."""
     def __init__(self, file, dataset_path, first, train_ids, counts):

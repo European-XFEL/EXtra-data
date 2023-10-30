@@ -8,7 +8,9 @@ import h5py
 from .exceptions import MultiRunError, PropertyNameError, NoDataError
 from .file_access import FileAccess
 from .keydata import KeyData
-from .read_machinery import glob_wildcards_re, same_run, select_train_ids, split_trains
+from .read_machinery import (
+    glob_wildcards_re, same_run, select_train_ids, split_trains, trains_files_index
+)
 
 
 class SourceData:
@@ -316,15 +318,9 @@ class SourceData:
         """
         # tids_files points to the file for each train.
         # This avoids checking all files for each chunk, which can be slow.
-        tids_files = [None] * len(self.train_ids)
-        tid_to_ix = {t: i for i, t in enumerate(self.train_ids)}
-        for file in self.files:
-            f_tids = file.train_ids if self.inc_suspect_trains else file.valid_train_ids
-            for tid in f_tids:
-                ix = tid_to_ix.get(tid, None)
-                if ix is not None:
-                    tids_files[ix] = file
-
+        tids_files = trains_files_index(
+            self.train_ids, self.files, self.inc_suspect_trains
+        )
         for sl in split_trains(len(self.train_ids), parts, trains_per_part):
             tids = self.train_ids[sl]
             files = set(tids_files[sl]) - {None}
