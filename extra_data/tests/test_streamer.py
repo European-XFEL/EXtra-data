@@ -77,30 +77,22 @@ def test_serve_files(mock_fxe_raw_run, tmp_path):
 @pytest.mark.skipif(os.name != 'posix', reason="Test uses Unix socket")
 def test_serve_run(mock_spb_raw_and_proc_run, tmp_path):
     mock_data_root, _, _ = mock_spb_raw_and_proc_run
+    zmq_endpoint = f'ipc://{tmp_path}/socket'
     xgm_src = 'SPB_XTD9_XGM/DOOCS/MAIN'
     agipd_m0_src = 'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf'
     args = ['karabo-bridge-serve-run', '2012', '238',
-            '--port', f'ipc://{tmp_path}/socket',
+            '--port', zmq_endpoint,
             '--include', f'{xgm_src}[beamPosition.i*Pos]',
             '--include', '*AGIPD1M-1/DET/0CH0:xtdf'
            ]
-    interface = None
 
-    p = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE,
-               env=dict(os.environ,
-                        PYTHONUNBUFFERED='1',
-                        EXTRA_DATA_DATA_ROOT=mock_data_root))
+    p = Popen(args, env=dict(
+        os.environ,
+        PYTHONUNBUFFERED='1',
+        EXTRA_DATA_DATA_ROOT=mock_data_root
+    ))
     try:
-        for line in p.stdout:
-            line = line.decode('utf-8')
-            if line.startswith('Streamer started on:'):
-                interface = line.partition(':')[2].strip()
-                break
-
-        print('interface:', interface)
-        assert interface is not None, p.stderr.read().decode()
-
-        with Client(interface, timeout=30) as c:
+        with Client(zmq_endpoint, timeout=30) as c:
             data, meta = c.next()
 
         tid = next(m['timestamp.tid'] for m in meta.values())
