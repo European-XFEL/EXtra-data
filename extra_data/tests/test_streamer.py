@@ -1,10 +1,11 @@
 """Test streaming data with ZMQ interface."""
 
 import os
+import signal
+from subprocess import PIPE, Popen, TimeoutExpired
 
 import numpy as np
 import pytest
-from subprocess import PIPE, Popen
 
 from extra_data import by_id, H5File, RunDirectory
 from extra_data.export import _iter_trains, ZMQStreamer
@@ -42,6 +43,19 @@ def test_merge_detector(mock_fxe_raw_run, mock_fxe_control_data, mock_spb_proc_r
             break
 
 
+def cleanup_proc(p: Popen):
+    if p.poll() is None:
+        p.send_signal(signal.SIGINT)
+        try:
+            p.wait(timeout=2)
+        except TimeoutExpired:
+            pass
+    if p.poll() is None:
+        p.kill()
+        rc = p.wait(timeout=2)
+        assert rc == -9  # process terminated by kill signal
+
+
 @pytest.mark.skipif(os.name != 'posix', reason="Test uses Unix socket")
 def test_serve_files(mock_fxe_raw_run, tmp_path):
     src = 'FXE_XAD_GEC/CAM/CAMERA:daqOutput'
@@ -68,10 +82,7 @@ def test_serve_files(mock_fxe_raw_run, tmp_path):
         assert tid == 10000
         assert set(data) == {src}
     finally:
-        if p.poll() is None:
-            p.kill()
-            rc = p.wait(timeout=2)
-            assert rc == -9  # process terminated by kill signal
+        cleanup_proc(p)
 
 
 @pytest.mark.skipif(os.name != 'posix', reason="Test uses Unix socket")
@@ -102,10 +113,7 @@ def test_serve_run(mock_spb_raw_and_proc_run, tmp_path):
                {f'beamPosition.i{xy}Pos.value' for xy in 'xy'} | {'metadata'}
         assert data[agipd_m0_src]['image.data'].dtype == np.float32
     finally:
-        if p.poll() is None:
-            p.kill()
-            rc = p.wait(timeout=2)
-            assert rc == -9  # process terminated by kill signal
+        cleanup_proc(p)
 
 
 def test_deprecated_server():
