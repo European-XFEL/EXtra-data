@@ -140,7 +140,7 @@ def mock_spb_raw_run(format_version):
         yield td
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def mock_spb_raw_and_proc_run():
     with TemporaryDirectory() as td:
         prop_dir = osp.join(str(td), 'SPB', '201830', 'p002012')
