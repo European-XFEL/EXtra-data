@@ -4,6 +4,7 @@ The public API is in extra_data.reader; this is internal code.
 """
 import logging
 import math
+import os
 import os.path as osp
 import re
 import time
@@ -17,7 +18,7 @@ log = logging.getLogger(__name__)
 DETECTOR_NAMES = {'AGIPD', 'DSSC', 'LPD'}
 DETECTOR_SOURCE_RE = re.compile(r'(.+)/DET/(\d+)CH')
 
-DATA_ROOT_DIR = '/gpfs/exfel/exp'
+DATA_ROOT_DIR = os.environ.get('EXTRA_DATA_DATA_ROOT', '/gpfs/exfel/exp')
 
 
 class _SliceConstructor(type):
