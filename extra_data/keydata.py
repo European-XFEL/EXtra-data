@@ -6,7 +6,8 @@ import numpy as np
 from .exceptions import TrainIDError, NoDataError
 from .file_access import FileAccess
 from .read_machinery import (
-    contiguous_regions, DataChunk, select_train_ids, split_trains, roi_shape
+    contiguous_regions, DataChunk, select_train_ids, split_trains, roi_shape,
+    trains_files_index,
 )
 
 class KeyData:
@@ -185,13 +186,16 @@ class KeyData:
     def __getitem__(self, item):
         return self.select_trains(item)
 
-    def _only_tids(self, tids):
+    def _only_tids(self, tids, files=None):
         tids_arr = np.array(tids)
-        # Keep 1 file, even if 0 trains selected.
-        files = [
-            f for f in self.files
-            if f.has_train_ids(tids_arr, self.inc_suspect_trains)
-        ] or [self.files[0]]
+        if files is None:
+            files = [
+                f for f in self.files
+                if f.has_train_ids(tids_arr, self.inc_suspect_trains)
+            ]
+        if not files:
+            # Keep 1 file, even if 0 trains selected.
+            files = [self.files[0]]
 
         return KeyData(
             self.source,
@@ -232,8 +236,16 @@ class KeyData:
             A maximum number of trains in each part. Parts will often have
             fewer trains than this.
         """
-        for s in split_trains(len(self.train_ids), parts, trains_per_part):
-            yield self.select_trains(s)
+        # tids_files points to the file for each train.
+        # This avoids checking all files for each chunk, which can be slow.
+        tids_files = trains_files_index(
+            self.train_ids, self.files, self.inc_suspect_trains
+        )
+        for sl in split_trains(len(self.train_ids), parts, trains_per_part):
+            tids = self.train_ids[sl]
+            files = set(tids_files[sl]) - {None}
+            files = sorted(files, key=lambda f: f.filename)
+            yield self._only_tids(tids, files=files)
 
     def data_counts(self, labelled=True):
         """Get a count of data entries in each train.

@@ -1013,12 +1013,11 @@ class DataCollection:
                     else:  # require_any
                         train_ids = np.union1d(train_ids, source_tids)
 
+            train_ids = list(train_ids)  # Convert back to a list.
             sources_data = {
                 src: srcdata._only_tids(train_ids)
                 for src, srcdata in sources_data.items()
             }
-
-            train_ids = list(train_ids)  # Convert back to a list.
 
         else:
             train_ids = self.train_ids
@@ -1123,8 +1122,28 @@ class DataCollection:
             A maximum number of trains in each part. Parts will often have
             fewer trains than this.
         """
-        for s in split_trains(len(self.train_ids), parts, trains_per_part):
-            yield self.select_trains(s)
+        for source in self._sources_data.values():
+            assert source.train_ids == self.train_ids
+
+        def dict_zip(iter_d):
+            while True:
+                try:
+                    yield {k: next(v) for (k, v) in iter_d.items()}
+                except StopIteration:
+                    return
+
+        for sources_data_part in dict_zip({
+            n: s.split_trains(parts=parts, trains_per_part=trains_per_part)
+            for (n, s) in self._sources_data.items()
+        }):
+            files = set().union(*[sd.files for sd in sources_data_part.values()])
+            train_ids = list(sources_data_part.values())[0].train_ids
+
+            yield DataCollection(
+                files, sources_data=sources_data_part, train_ids=train_ids,
+                aliases=self._aliases, inc_suspect_trains=self.inc_suspect_trains,
+                is_single_run=self.is_single_run,
+            )
 
     def _check_source_conflicts(self):
         """Check for data with the same source and train ID in different files.

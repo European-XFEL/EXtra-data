@@ -702,6 +702,8 @@ def test_split_trains(mock_fxe_raw_run):
     chunks = list(run.split_trains(3))
     assert len(chunks) == 3
     assert {len(c.train_ids) for c in chunks} == {160}
+    arr = chunks[0]['FXE_XAD_GEC/CAM/CAMERA:daqOutput', 'data.image.dims'].ndarray()
+    assert arr.shape == (160, 2)
 
     chunks = list(run.split_trains(4, trains_per_part=100))
     assert len(chunks) == 5

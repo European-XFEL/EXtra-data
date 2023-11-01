@@ -8,7 +8,9 @@ import h5py
 from .exceptions import MultiRunError, PropertyNameError, NoDataError
 from .file_access import FileAccess
 from .keydata import KeyData
-from .read_machinery import glob_wildcards_re, same_run, select_train_ids, split_trains
+from .read_machinery import (
+    glob_wildcards_re, same_run, select_train_ids, split_trains, trains_files_index
+)
 
 
 class SourceData:
@@ -262,16 +264,21 @@ class SourceData:
         """
         return self._only_tids(select_train_ids(self.train_ids, trains))
 
-    def _only_tids(self, tids) -> 'SourceData':
+    def _only_tids(self, tids, files=None) -> 'SourceData':
+        if files is None:
+            files = [
+                f for f in self.files
+                if f.has_train_ids(tids, self.inc_suspect_trains)
+            ]
+        if not files:
+            # Keep 1 file, even if 0 trains selected, to get keys, dtypes, etc.
+            files = [self.files[0]]
+
         return SourceData(
             self.source,
             sel_keys=self.sel_keys,
             train_ids=tids,
-            # Keep 1 file, even if 0 trains selected, to get keys, dtypes, etc.
-            files=[
-                f for f in self.files
-                if f.has_train_ids(tids, self.inc_suspect_trains)
-            ] or [self.files[0]],
+            files=files,
             section=self.section,
             is_single_run=self.is_single_run,
             inc_suspect_trains=self.inc_suspect_trains
@@ -309,8 +316,16 @@ class SourceData:
             A maximum number of trains in each part. Parts will often have
             fewer trains than this.
         """
-        for s in split_trains(len(self.train_ids), parts, trains_per_part):
-            yield self.select_trains(s)
+        # tids_files points to the file for each train.
+        # This avoids checking all files for each chunk, which can be slow.
+        tids_files = trains_files_index(
+            self.train_ids, self.files, self.inc_suspect_trains
+        )
+        for sl in split_trains(len(self.train_ids), parts, trains_per_part):
+            tids = self.train_ids[sl]
+            files = set(tids_files[sl]) - {None}
+            files = sorted(files, key=lambda f: f.filename)
+            yield self._only_tids(tids, files=files)
 
     def data_counts(self, labelled=True, index_group=None):
         """Get a count of data entries in each train.

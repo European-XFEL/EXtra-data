@@ -111,6 +111,8 @@ def test_split_trains(mock_spb_raw_run):
     chunks = list(xgm.split_trains(3))
     assert len(chunks) == 3
     assert {len(c.train_ids) for c in chunks} == {21, 22}
+    # The middle chunk spans across 2 files
+    assert [len(c.files) for c in chunks] == [1, 2, 1]
 
     chunks = list(xgm.split_trains(3, trains_per_part=20))
     assert len(chunks) == 4
