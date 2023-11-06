@@ -1,6 +1,19 @@
 Release Notes
 =============
 
+1.15
+----
+
+2023-11-06
+
+-  New properties :attr:`~.KeyData.units` and :attr:`~.KeyData.units_name` on
+   ``KeyData`` objects to retrieve units metadata written by Karabo (:ghpull:`449`).
+-  New command :ref:`cmd-serve-run` to more conveniently stream
+   data from a saved run in Karabo Bridge format (:ghpull:`458`).
+-  Fix :meth:`~.DataCollection.split_trains` being very slow when splitting a
+   long run into  many pieces (:ghpull:`459`).
+-  Include XTDF sources in :ref:`cmd-lsxfel` when details are enabled (:ghpull:`440`).
+
 1.14
 ----
 
