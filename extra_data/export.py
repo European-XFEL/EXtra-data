@@ -11,6 +11,8 @@ program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 """
 
 import os.path as osp
+import time
+from collections import deque
 from socket import AF_INET
 from warnings import warn
 
@@ -107,9 +109,7 @@ def _iter_trains(data, merge_detector=False):
         yield tid, train_data
 
 
-def serve_files(path, port, source_glob='*', key_glob='*',
-                append_detector_modules=False, dummy_timestamps=False,
-                use_infiniband=False, sock='REP'):
+def serve_files(path, port, source_glob='*', key_glob='*', **kwargs):
     """Stream data from files through a TCP socket.
 
     Parameters
@@ -144,15 +144,58 @@ def serve_files(path, port, source_glob='*', key_glob='*',
         data = H5File(path)
 
     data = data.select(source_glob, key_glob)
+    serve_data(data, port, **kwargs)
 
+
+def serve_data(data, port, append_detector_modules=False,
+                dummy_timestamps=False, use_infiniband=False, sock='REP'):
+    """Stream data from files through a TCP socket.
+
+    Parameters
+    ----------
+    data: DataCollection
+        The data to be streamed; should already have sources & keys selected.
+    port: str or int
+        A ZMQ endpoint (e.g. 'tcp://*:44444') or a TCP port to bind the socket
+        to. Integers or strings of all digits are treated as port numbers.
+    append_detector_modules: bool
+        Combine multi-module detector data in a single data source (sources for
+        individual modules are removed). The last section of the source name is
+        replaces with 'APPEND', example:
+            'SPB_DET_AGIPD1M-1/DET/#CH0:xtdf' -> 'SPB_DET_AGIPD1M-1/DET/APPEND'
+
+        Supported detectors: AGIPD, DSSC, LPD
+    dummy_timestamps: bool
+        Whether to add mock timestamps if the metadata lacks them.
+    use_infiniband: bool
+        Use infiniband interface if available (if port specifies a TCP port)
+    sock: str
+        socket type - supported: REP, PUB, PUSH (default REP).
+    """
     if isinstance(port, int) or port.isdigit():
         endpt = f'tcp://{find_infiniband_ip() if use_infiniband else "*"}:{port}'
     else:
         endpt = port
+
     sender = Sender(endpt, sock=sock, dummy_timestamps=dummy_timestamps)
     print(f'Streamer started on: {sender.endpoint}')
+    ntrains = len(data.train_ids)
+
+    sent_times = deque([time.monotonic()], 10)
+    count = 0
+    tid, rate = 0, 0.
+    def print_update(end='\r'):
+        print(f'Sent {count}/{ntrains} trains - Train ID {tid} - {rate:.1f} Hz', end=end)
+
     for tid, data in _iter_trains(data, merge_detector=append_detector_modules):
         sender.send(data)
+        count += 1
+        new_time = time.monotonic()
+        if count % 5 == 0:
+            rate = len(sent_times) / (new_time - sent_times[0])
+            print_update()
+        sent_times.append(new_time)
+    print_update(end='\n')
 
     # The karabo-bridge code sets linger to 0 so that it doesn't get stuck if
     # the client goes away. But this would also mean that we close the socket

@@ -6,14 +6,20 @@ socket. The ``extra_data`` Python package can stream data from files using the s
 protocol. You can use this to test code which expects to receive data from
 Karabo Bridge, or use the same code for analysing live data and stored data.
 
-To stream the data from a file or run unmodified, use the command::
+To stream data from a saved run, use the ``karabo-bridge-serve-run`` command:
 
-    karabo-bridge-serve-files /gpfs/exfel/exp/SPB/201830/p900022/raw/r0034 4545
+.. code-block:: shell
 
-The number (4545) must be an unused TCP port above 1024. It will bind to
-this and stream the data to any connected clients.
+   #                     Proposal run
+   karabo-bridge-serve-run 700000 40 --port 4545 \
+        --include 'SPB_IRDA_JF4M/DET/JNGFR*:daqOutput' \
+        --include '*/MOTOR/*[*Position]'
+
+The port number (4545 above) must be an unused TCP port above 1024.
+Clients will need this port and the IP address of the sender to connect.
+For clients running on the same node, use the IP address ``127.0.0.1``.
 Command-line options are explained on the
-:ref:`command reference <cmd-serve-files>` page.
+:ref:`command reference <cmd-serve-run>` page.
 
 .. note::
 
