@@ -1,6 +1,14 @@
 Release Notes
 =============
 
+1.15.1
+------
+
+2023-11-17
+
+- :class:`~.JUNGFRAU` recognises some additional naming patterns seen in new
+  detector instances (:ghpull:`464`).
+
 1.15
 ----
 
