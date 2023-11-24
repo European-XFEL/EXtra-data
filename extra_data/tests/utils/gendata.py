@@ -4,6 +4,20 @@ from pathlib import Path
 
 import h5py
 
+from ..utils import progress_bar
+
+
+def progress(processed, total, *, show=True):
+    """Show progress information"""
+    if not show:
+        return
+
+    pbar = progress_bar(processed, total)
+    if sys.stderr.isatty():
+        # "\x1b[2K": delete whole line, "\x1b[1A": move up cursor
+        print("\x1b[2K\x1b[1A\x1b[2K\x1b[1A", file=sys.stderr)
+    print(pbar, file=sys.stderr)
+
 
 def clone_file_structure(h5file: Path, output: Path) -> None:
     clone = h5py.File(output / h5file.name, "w")
@@ -17,17 +31,17 @@ def clone_file_structure(h5file: Path, output: Path) -> None:
                 or name.startswith("CONTROL")
                 or name.startswith("RUN")
             ):
-                clone.create_dataset_like(obj)
+                clone.create_dataset_like(name, obj)
             else:
-                clone.create_dataset_like(obj, data=obj[()])
+                clone.create_dataset_like(name, obj, data=obj[()])
 
     original = h5py.File(h5file)
     original.visititems(visitor)
 
 
-def clone(input: Path, output: Path) -> None:
+def clone(input: Path, output: Path, *, term_progress=False) -> None:
     """Clone EuXFEL HDF5 file structure without any of its data.
-    
+
     Clone the input file or files present the input directory.
     The cloned files will be writen to output.
     """
@@ -42,10 +56,12 @@ def clone(input: Path, output: Path) -> None:
         if output == input:
             raise ValueError("Input and output must be different directories.")
         # clone all hdf5 file present in the given directory
-        for file_ in input.glob("*"):
-            if not h5py.is_hdf5(file_):
-                continue
+        h5files = [f for f in input.glob("*") if h5py.is_hdf5(f)]
+
+        progress(0, len(h5files), show=term_progress)
+        for n, file_ in enumerate(h5files, start=1):
             clone_file_structure(file_, output)
+            progress(n, len(h5files), show=term_progress)
     else:
         raise ValueError(f"invalid input: {input}")
 
@@ -62,7 +78,9 @@ def main(argv=None):
     path_in = Path(args.input).expanduser()
     path_out = Path(args.output).expanduser()
 
-    clone(path_in, path_out)
+    print(f"Cloning file(s) structure:\ninput: {path_in}\nOutput: {path_out}\n")
+    clone(path_in, path_out, term_progress=True)
+    print("Done.")
 
 
 if __name__ == "__main__":
