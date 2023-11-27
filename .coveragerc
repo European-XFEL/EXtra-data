@@ -1,3 +1,6 @@
 [run]
 omit = */tests/*
 concurrency = multiprocessing
+
+[coverage:run]
+parallel = true
