@@ -24,22 +24,36 @@ def progress(processed, total, *, show=True):
 def _clone_file_structure(
     h5file: Path, output: Path, *, run_data=False, control_data=False
 ) -> None:
+    original = h5py.File(h5file)
     clone = h5py.File(output / h5file.name, "w")
 
     def visitor(name, obj):
+        link = original.get(name, getlink=True)
+        if isinstance(link, h5py.SoftLink):
+            clone[name] = h5py.SoftLink(link.path)
+            return
+
         if isinstance(obj, h5py.Group):
-            clone.create_group(name)
+            clone_obj = clone.create_group(name)
         elif isinstance(obj, h5py.Dataset):
             if (
                 name.startswith("INSTRUMENT")
                 or (name.startswith("CONTROL") and not control_data)
                 or (name.startswith("RUN") and not run_data)
             ):
-                clone.create_dataset_like(name, obj)
+                clone_obj = clone.create_dataset_like(name, obj)
             else:
-                clone.create_dataset_like(name, obj, data=obj[()])
+                # note: consider using h5py.File.copy once a bug causing
+                # segfault for dataset with attributes is fixed,
+                # see: https://github.com/HDFGroup/hdf5/issues/2414
+                clone_obj = clone.create_dataset_like(name, obj, data=obj[()])
+        else:
+            return
 
-    original = h5py.File(h5file)
+        # copy attributes
+        for key, value in obj.attrs.items():
+            clone_obj.attrs.create(key, value)
+
     original.visititems(visitor)
 
 
@@ -104,7 +118,7 @@ def main(argv=None):
         "-cc",
         action="store_true",
         default=False,
-        help="Copy dara present in the CONTROL group.",
+        help="Copy data present in the CONTROL group.",
     )
 
     args = ap.parse_args()
