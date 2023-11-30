@@ -120,7 +120,9 @@ class MultimodDetectorBase:
     """Base class for detectors made of several modules as separate data sources
     """
 
-    _source_re = re.compile(r'(?P<detname>.+)/DET/(\d+)CH')
+    _det_name_pat = r'([^/]+)'
+    _source_raw_pat = r'/DET/(?P<modno>\d+)CH'
+    _source_corr_pat = r'/CORR/(?P<modno>\d+)CH'
     # Override in subclass
     _main_data_key = ''  # Key to use for checking data counts match
     _mask_data_key = ''
@@ -130,7 +132,7 @@ class MultimodDetectorBase:
     n_modules = 0
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
-                 *, min_modules=1):
+                 *, min_modules=1, raw=None):
         if detector_name is None:
             detector_name = self._find_detector_name(data)
         if min_modules <= 0:
@@ -221,31 +223,69 @@ class MultimodDetectorBase:
         return res
 
     @classmethod
-    def _find_detector_name(cls, data):
+    def _find_detector_names(cls, data):
+        # Find sources matching the pattern for this detector type
+        source_re = re.compile(
+            f'({cls._det_name_pat})(?{cls._source_raw_pat}|{cls._source_corr_pat})'
+        )
         detector_names = set()
         for source in data.instrument_sources:
-            m = cls._source_re.match(source)
+            m = source_re.match(source)
             if m:
-                detector_names.add(m.group('detname'))
+                detector_names.add(m.group(0))
+        return detector_names
+
+    @classmethod
+    def _find_detector_name(cls, data):
+        detector_names = cls._find_detector_names(data)
+        # We want exactly 1 source
         if not detector_names:
-            raise SourceNameError(cls._source_re.pattern)
+            raise SourceNameError(source_re.pattern)
         elif len(detector_names) > 1:
+            names_s = ', '.join(repr(n) for n in sorted(detector_names))
             raise ValueError(
-                "Multiple detectors found in the data: {}. "
-                "Pass a name to data.detector() to pick one.".format(
-                    ', '.join(repr(n) for n in detector_names)
-                )
+                f"Multiple detectors found in the data: {names_s}. "
+                f"Pass detector_name to {cls.__name__}() to pick one."
             )
         return detector_names.pop()
 
-    def _source_matches(self, data, detector_name):
+    @staticmethod
+    def _source_matches(data, pat):
+        source_re = re.compile(pat)
         for source in data.instrument_sources:
-            m = self._source_re.match(source)
-            if m and m.group('detname') == detector_name:
+            m = source_re.match(source)
+            if m:
                 yield source, int(m.group('modno'))
 
-    def _identify_sources(self, data, detector_name, modules=None):
-        source_to_modno = dict(self._source_matches(data, detector_name))
+    @classmethod
+    def _data_is_raw(cls, data, source: str):
+        # As of November 2023, raw data is uint16 & corrected is float32
+        # Override this method if that changes
+        kd = data[source, cls._main_data_key]
+        return np.issubdtype(kd.dtype, np.integer)
+
+    @classmethod
+    def _identify_sources(cls, data, detector_name, modules=None, raw=None):
+        if raw is True:
+            pat = re.escape(detector_name) + cls._source_raw_pat
+            source_to_modno = dict(cls._source_matches(data, pat))
+            if not all(cls._data_is_raw(data, s) for s in source_to_modno):
+                # Older corrected data used the same names as raw
+                raise Exception("Raw data was requested, but only proc data was found")
+
+        else:
+            # Prefer corrected data
+            pat = re.escape(detector_name) + cls._source_corr_pat
+            source_to_modno = dict(cls._source_matches(data, pat))
+
+            if not source_to_modno:
+                # Data named like raw may also be proc
+                pat = re.escape(detector_name) + cls._source_raw_pat
+                source_to_modno = dict(cls._source_matches(data, pat))
+
+                if (raw is False) and any(cls._data_is_raw(data, s) for s in source_to_modno):
+                    raise Exception("Corrected data was requested, but only raw data was found")
+                # raw=None -> legacy behaviour: prefer corrected but allow raw
 
         if modules is not None:
             source_to_modno = {s: n for (s, n) in source_to_modno.items()
@@ -516,10 +556,6 @@ class XtdfDetectorBase(MultimodDetectorBase):
     n_modules = 16
     _main_data_key = 'image.data'
     _mask_data_key = 'image.mask'
-
-    def __init__(self, data: DataCollection, detector_name=None, modules=None,
-                 *, min_modules=1):
-        super().__init__(data, detector_name, modules, min_modules=min_modules)
 
     def __getitem__(self, item):
         if item.startswith('image.'):
@@ -1575,7 +1611,9 @@ class AGIPD1M(XtdfDetectorBase):
     min_modules: int
       Include trains where at least n modules have data. Default is 1.
     """
-    _source_re = re.compile(r'(?P<detname>.+_AGIPD1M.*)/DET/(?P<modno>\d+)CH')
+    _det_name_pat = r'[^/]+_AGIPD1M[^/]*'
+    _source_raw_pat = r'/DET/(?P<modno>\d+)CH'
+    _source_corr_pat = r'/CORR/(?P<modno>\d+)CH'
     module_shape = (512, 128)
 
 
@@ -1586,7 +1624,9 @@ class AGIPD500K(XtdfDetectorBase):
     Detector names are like 'HED_DET_AGIPD500K2G', otherwise this is identical
     to :class:`AGIPD1M`.
     """
-    _source_re = re.compile(r'(?P<detname>.+_AGIPD500K.*)/DET/(?P<modno>\d+)CH')
+    _det_name_pat = r'[^/]+AGIPD500K[^/]*'
+    _source_raw_pat = r'/DET/(?P<modno>\d+)CH'
+    _source_corr_pat = r'/CORR/(?P<modno>\d+)CH'
     module_shape = (512, 128)
     n_modules = 8
 
@@ -1608,7 +1648,9 @@ class DSSC1M(XtdfDetectorBase):
     min_modules: int
       Include trains where at least n modules have data. Default is 1.
     """
-    _source_re = re.compile(r'(?P<detname>.+_DSSC1M.*)/DET/(?P<modno>\d+)CH')
+    _det_name_pat = r'[^/]+_DSSC1M[^/]*'
+    _source_raw_pat = r'/DET/(?P<modno>\d+)CH'
+    _source_corr_pat = r'/CORR/(?P<modno>\d+)CH'
     module_shape = (128, 512)
 
 
@@ -1634,7 +1676,9 @@ class LPD1M(XtdfDetectorBase):
       repeat the pulse & cell IDs from the first 1/3 of each train, and add gain
       stage labels from 0 (high-gain) to 2 (low-gain).
     """
-    _source_re = re.compile(r'(?P<detname>.+_LPD1M.*)/DET/(?P<modno>\d+)CH')
+    _det_name_pat = r'[^/]+_LPD1M[^/]*'
+    _source_raw_pat = r'/DET/(?P<modno>\d+)CH'
+    _source_corr_pat = r'/CORR/(?P<modno>\d+)CH'
     module_shape = (256, 256)
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
@@ -1752,10 +1796,9 @@ class JUNGFRAU(MultimodDetectorBase):
     # FXE_XAD_JF500K/DET/JNGFR03:daqOutput    (e.g. in p 2478, r 52)
     # HED_IA1_JF500K1/DET/JNGFR01:daqOutput    (e.g. in p 2656, r 230)
     # FXE_XAD_JF1M/DET/RECEIVER-1
-    _source_re = re.compile(
-        r'(?P<detname>.+_(JNGFR|JF[14]M|JUNGF|JF|JF500K\d?))/DET/'
-        r'(MODULE_|RECEIVER-|JNGFR)(?P<modno>\d+)'
-    )
+    _det_name_pat = r'[^/]+_(JNGFR|JF[14]M|JUNGF|JF|JF500K\d?)'
+    _source_raw_pat = r'/DET/(MODULE_|RECEIVER-|JNGFR)(?P<modno>\d+)'
+    _source_corr_pat = r'/CORR/(MODULE_|RECEIVER-|JNGFR)(?P<modno>\d+)'
     _main_data_key = 'data.adc'
     _mask_data_key = 'data.mask'
     _modnos_start_at = 1
@@ -1768,19 +1811,14 @@ class JUNGFRAU(MultimodDetectorBase):
         self.modno_to_source = {}
         # Overwrite modno based on given starting module number and update
         # source_to_modno and modno_to_source.
-        for source in self.source_to_modno.keys():
-            # JUNGFRAU modno is expected (e.g. extra_geom) to start with 1.
-            modno = int(self._source_re.search(source)['modno']) - first_modno + 1
-            self.source_to_modno[source] = modno
-            self.modno_to_source[modno] = source
+        # JUNGFRAU modno is expected (e.g. extra_geom) to start with 1.
+        self.source_to_modno = {s: (m - first_modno + 1)
+                                for (s, m) in self.source_to_modno.items()}
 
         if n_modules is not None:
             self.n_modules = int(n_modules)
         else:
-            # For JUNGFRAU modules are indexed from 1
-            self.n_modules = max(modno - first_modno + 1 for (_, modno) in self._source_matches(
-                data, self.detector_name
-            ))
+            self.n_modules = max(self.modno_to_source)
 
         # In burst mode, JUNGFRAU can have 16 frames per train
         src = next(iter(self.source_to_modno))
@@ -1921,12 +1959,8 @@ def identify_multimod_detectors(
 
     res = set()
     for cls in clses:
-        for source in data.instrument_sources:
-            m = cls._source_re.match(source)
-            if m:
-                name = m.group('detname')
-                if (detector_name is None) or (name == detector_name):
-                    res.add((name, cls))
+        for name in cls._find_detector_names(data):
+            res.add((name, cls))
 
     if single:
         if len(res) < 1:
