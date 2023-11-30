@@ -165,7 +165,7 @@ def main(argv=None):
         help="Copy data present in the CONTROL group.",
     )
 
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     print(f"Cloning file(s) structure:\ninput: {args.input}\nOutput: {args.output}\n")
     copy_structure(
