@@ -1807,12 +1807,12 @@ class JUNGFRAU(MultimodDetectorBase):
                  *, min_modules=1, n_modules=None, first_modno=1):
         super().__init__(data, detector_name, modules, min_modules=min_modules)
 
-        self.modno_to_source = {}
         # Overwrite modno based on given starting module number and update
         # source_to_modno and modno_to_source.
         # JUNGFRAU modno is expected (e.g. extra_geom) to start with 1.
         self.source_to_modno = {s: (m - first_modno + 1)
                                 for (s, m) in self.source_to_modno.items()}
+        self.modno_to_source = {m: s for (s, m) in self.source_to_modno.items()}
 
         if n_modules is not None:
             self.n_modules = int(n_modules)
