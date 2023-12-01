@@ -239,7 +239,7 @@ class MultimodDetectorBase:
         detector_names = cls._find_detector_names(data)
         # We want exactly 1 source
         if not detector_names:
-            raise SourceNameError(source_re.pattern)
+            raise SourceNameError(f'{cls._det_name_pat}({cls._source_raw_pat}|{cls._source_corr_pat})')
         elif len(detector_names) > 1:
             names_s = ', '.join(repr(n) for n in sorted(detector_names))
             raise ValueError(
