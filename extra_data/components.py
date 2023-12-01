@@ -827,7 +827,7 @@ class MultimodKeyData:
         from dask.array import concatenate, from_delayed
 
         entry_size = (self.dtype.itemsize *
-            len(self.modno_to_keydata) * np.product(self._eg_keydata.entry_shape)
+            len(self.modno_to_keydata) * np.prod(self._eg_keydata.entry_shape)
         )
         # Aim for 1GB chunks, with an arbitrary maximum of 256 trains
         split = self.split_trains(frames_per_part=min(1024 ** 3 / entry_size, 256))
@@ -1035,7 +1035,7 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         from dask.array import concatenate, from_delayed
 
         entry_size = (self.dtype.itemsize *
-            len(self.modno_to_keydata) * np.product(self._eg_keydata.entry_shape)
+            len(self.modno_to_keydata) * np.prod(self._eg_keydata.entry_shape)
         )
         if frames_per_chunk is None:
             # Aim for 2GB chunks, with an arbitrary maximum of 1024 frames
