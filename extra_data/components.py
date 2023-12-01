@@ -1804,8 +1804,8 @@ class JUNGFRAU(MultimodDetectorBase):
     module_shape = (512, 1024)
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
-                 *, min_modules=1, n_modules=None, first_modno=1):
-        super().__init__(data, detector_name, modules, min_modules=min_modules)
+                 *, min_modules=1, n_modules=None, first_modno=1, raw=None):
+        super().__init__(data, detector_name, modules, min_modules=min_modules, raw=raw)
 
         # Overwrite modno based on given starting module number and update
         # source_to_modno and modno_to_source.
@@ -1817,7 +1817,10 @@ class JUNGFRAU(MultimodDetectorBase):
         if n_modules is not None:
             self.n_modules = int(n_modules)
         else:
-            self.n_modules = max(self.modno_to_source)
+            # Re-scan sources without modules= selection to find largest number
+            self.n_modules = max(
+                self._identify_sources(data, self.detector_name, raw=raw).values()
+            ) - first_modno + 1
 
         # In burst mode, JUNGFRAU can have 16 frames per train
         src = next(iter(self.source_to_modno))
