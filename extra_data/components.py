@@ -231,7 +231,7 @@ class MultimodDetectorBase:
         for source in data.instrument_sources:
             m = raw_re.match(source) or corr_re.match(source)
             if m:
-                detector_names.add(m.group(0))
+                detector_names.add(m.group(1))
         return detector_names
 
     @classmethod
