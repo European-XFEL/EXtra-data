@@ -224,13 +224,12 @@ class MultimodDetectorBase:
 
     @classmethod
     def _find_detector_names(cls, data):
-        # Find sources matching the pattern for this detector type
-        source_re = re.compile(
-            f'({cls._det_name_pat})({cls._source_raw_pat}|{cls._source_corr_pat})'
-        )
+        # Find sources matching the pattern (raw or proc) for this detector type
+        raw_re  = re.compile(f'({cls._det_name_pat}){cls._source_raw_pat}')
+        corr_re = re.compile(f'({cls._det_name_pat}){cls._source_corr_pat}')
         detector_names = set()
         for source in data.instrument_sources:
-            m = source_re.match(source)
+            m = raw_re.match(source) or corr_re.match(source)
             if m:
                 detector_names.add(m.group(0))
         return detector_names
