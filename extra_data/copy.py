@@ -79,7 +79,7 @@ class Cloner:
             for name, child in obj.items():
                 if child.file != obj.file:
                     # external link
-                    output[name] = obj.get(name, getlink=True)
+                    output[f'{obj.name}/{name}'] = obj.get(name, getlink=True)
                 else:
                     self.visit(child, output)
         else:

@@ -20,26 +20,26 @@ def test_copy_structure(tmp_path, mock_sa3_control_data):
         ds = f[xgm_flux]
         ds[:] = np.ones(ds.shape, ds.dtype)
         # add softlink
-        f["SOFTLINKED"] = h5py.SoftLink(f"/{xgm_intensity}")
+        f["group/SOFTLINKED"] = h5py.SoftLink(f"/{xgm_intensity}")
         # add hardlink
-        f['HARDLINKED'] = ds
+        f['group/HARDLINKED'] = ds
         # add external link
         with h5py.File(Path(mock_sa3_control_data).parent / ext_file, 'w') as g:
             g[ext_path] = [1]
-        f['EXTLINK'] = h5py.ExternalLink(ext_file, ext_path)
+        f['group/EXTLINK'] = h5py.ExternalLink(ext_file, ext_path)
 
     copy_structure(mock_sa3_control_data, tmp_path, control_data=True)
 
     inp = h5py.File(mock_sa3_control_data)
     out = h5py.File(tmp_path / mock_sa3_control_data.rpartition("/")[-1])
-    slink = out.get("SOFTLINKED", getlink=True)
-    extlink = out.get('EXTLINK', getlink=True)
+    slink = out.get("group/SOFTLINKED", getlink=True)
+    extlink = out.get('group/EXTLINK', getlink=True)
 
     # softlinks are copied
     assert isinstance(slink, h5py.SoftLink)
     assert slink.path == f"/{xgm_intensity}"
     # hardlink
-    assert out['HARDLINKED'] == out[xgm_flux]
+    assert out['group/HARDLINKED'] == out[xgm_flux]
     # external link
     assert extlink.filename == ext_file
     assert extlink.path == ext_path
