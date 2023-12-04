@@ -41,13 +41,9 @@ class Cloner:
         if obj.name != "/":
             link = obj.file.get(obj.name, getlink=True)
             if isinstance(link, h5py.SoftLink):
-                output[obj.name] = h5py.SoftLink(link.path)
-                return
-            elif isinstance(link, h5py.ExternalLink):
-                # TODO do we want to support external links?
-                # this *might* work, but external softlinks may point to non reacheable data
-                # with h5py.File(link.filename) as ext:
-                #     Cloner(ext[link.path], output[obj.name], run_data=self.run_data, control_data=self.control_data)
+                # note this works only for SoftLinks. ExternalLink object's
+                # name is not the name of the path, but the targeted file's path
+                output[obj.name] = link
                 return
 
         obj_id = h5py.h5o.get_info(obj.id).addr
@@ -80,8 +76,12 @@ class Cloner:
                 output_obj = output.create_group(obj.name)
             self._copy_attrs(obj, output_obj)
 
-            for child in obj.values():
-                self.visit(child, output)
+            for name, child in obj.items():
+                if child.file != obj.file:
+                    # external link
+                    output[name] = obj.get(name, getlink=True)
+                else:
+                    self.visit(child, output)
         else:
             # unknown type
             return

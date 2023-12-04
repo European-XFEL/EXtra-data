@@ -10,6 +10,9 @@ def test_copy_structure(tmp_path, mock_sa3_control_data):
     xgm = "SA3_XTD10_XGM/XGM/DOOCS"
     xgm_intensity = f"INSTRUMENT/{xgm}:output/data/intensityTD"
     xgm_flux = f"CONTROL/{xgm}/pulseEnergy/photonFlux/value"
+
+    ext_file = 'ext-data.h5'
+    ext_path = 'some/data'
     with h5py.File(mock_sa3_control_data, "a") as f:
         # add some data
         ds = f[xgm_intensity]
@@ -20,18 +23,26 @@ def test_copy_structure(tmp_path, mock_sa3_control_data):
         f["SOFTLINKED"] = h5py.SoftLink(f"/{xgm_intensity}")
         # add hardlink
         f['HARDLINKED'] = ds
+        # add external link
+        with h5py.File(Path(mock_sa3_control_data).parent / ext_file, 'w') as g:
+            g[ext_path] = [1]
+        f['EXTLINK'] = h5py.ExternalLink(ext_file, ext_path)
 
     copy_structure(mock_sa3_control_data, tmp_path, control_data=True)
 
     inp = h5py.File(mock_sa3_control_data)
     out = h5py.File(tmp_path / mock_sa3_control_data.rpartition("/")[-1])
     slink = out.get("SOFTLINKED", getlink=True)
+    extlink = out.get('EXTLINK', getlink=True)
 
     # softlinks are copied
     assert isinstance(slink, h5py.SoftLink)
     assert slink.path == f"/{xgm_intensity}"
     # hardlink
     assert out['HARDLINKED'] == out[xgm_flux]
+    # external link
+    assert extlink.filename == ext_file
+    assert extlink.path == ext_path
     # data is not copied
     assert out[xgm_intensity].shape == inp[xgm_intensity].shape
     assert out[xgm_intensity].dtype == inp[xgm_intensity].dtype
