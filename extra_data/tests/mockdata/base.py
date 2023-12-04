@@ -162,7 +162,7 @@ def write_metadata(h5file, data_sources, chunksize=16, format_version='0.5'):
 
     if format_version != '0.5':
         h5file['METADATA/dataFormatVersion'] = [format_version.encode('ascii')]
-        now = datetime.utcnow().replace(microsecond=0)
+        now = datetime.now(timezone.utc).replace(microsecond=0)
         updated_time = now + timedelta(minutes=5)
         h5file['METADATA/creationDate'] = [
             now.strftime('%Y%m%dT%H%M%SZ').encode('ascii')

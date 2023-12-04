@@ -1042,7 +1042,7 @@ def test_inspect_key_no_trains(mock_jungfrau_run):
     # INSTRUMENT
     jf_m1_data = sel['SPB_IRDA_JF4M/DET/JNGFR01:daqOutput', 'data.adc']
     assert jf_m1_data.shape == (0, 16, 512, 1024)
-    assert jf_m1_data.dtype == np.dtype(np.uint16)
+    assert jf_m1_data.dtype == np.dtype(np.float32)
 
 
 def test_run_metadata(mock_spb_raw_run):

@@ -3,14 +3,23 @@ from .base import DeviceBase
 class JUNGFRAUModule(DeviceBase):
     output_channels = ('daqOutput/data',)
 
-    instrument_keys = [
-        ('adc', 'u2', (16, 512, 1024)),
-        ('frameNumber', 'u8', (16,)),
-        ('gain', 'u1', (16, 512, 1024)),
-        ('mask', 'u2', (16, 512, 1024)),
-        ('memoryCell', 'u1', (16,)),
-        ('timestamp', 'f8', (16,)),
-    ]
+    def __init__(self, device_id, nsamples=None, raw=False):
+        super().__init__(device_id, nsamples)
+        self.raw = raw
+
+    @property
+    def instrument_keys(self):
+        return [
+            ('frameNumber', 'u8', (16,)),
+            ('gain', 'u1', (16, 512, 1024)),
+            ('memoryCell', 'u1', (16,)),
+            ('timestamp', 'f8', (16,)),
+        ] + ([
+            ('adc', 'u2', (16, 512, 1024)),
+        ] if self.raw else [
+            ('adc', 'f4', (16, 512, 1024)),
+            ('mask', 'u4', (16, 512, 1024)),
+        ])
 
 class JUNGFRAUControl(DeviceBase):
     control_keys = [

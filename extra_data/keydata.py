@@ -481,7 +481,7 @@ class KeyData:
             # affect speed dramatically - but this could depend on many factors.
             # TODO: optional user control of chunking
             limit = 2 * 1024 ** 3
-            while np.product(chunk_shape) * itemsize > limit and chunk_dim0 > 1:
+            while np.prod(chunk_shape) * itemsize > limit and chunk_dim0 > 1:
                 chunk_dim0 //= 2
                 chunk_shape = (chunk_dim0,) + chunk.dataset.shape[1:]
 
