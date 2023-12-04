@@ -1,3 +1,8 @@
 [run]
 omit = */tests/*
 concurrency = multiprocessing
+
+[paths]
+source =
+    extra_data/
+    */site-packages/extra_data/
