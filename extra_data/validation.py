@@ -4,13 +4,12 @@ from functools import partial
 import numpy as np
 import os
 import os.path as osp
-from shutil import get_terminal_size
 from signal import signal, SIGINT, SIG_IGN
 import sys
 
 from .reader import H5File, FileAccess
 from .run_files_map import RunFilesMap
-
+from .utils import progress_bar
 
 class ValidationError(Exception):
     def __init__(self, problems):
@@ -210,14 +209,6 @@ def check_index_contiguous(firsts, counts, record):
         record("Overlaps ({}) in index, e.g. at {} ({} + {} > {})".format(
             overlap_ixs.size, pos, firsts[pos], counts[pos], firsts[pos + 1]
         ))
-
-
-def progress_bar(done, total, suffix=' '):
-    line = f'Progress: {done}/{total}{suffix}[{{}}]'
-    length = min(get_terminal_size().columns - len(line), 50)
-    filled = int(length * done // total)
-    bar = '#' * filled + ' ' * (length - filled)
-    return line.format(bar)
 
 
 def _check_file(args):
