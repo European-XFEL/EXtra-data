@@ -211,10 +211,7 @@ def check_index_contiguous(firsts, counts, record):
         ))
 
 
-def _check_file(args):
-    runpath, filename = args
-    filepath = osp.join(runpath, filename)
-    problems = []
+def _open_file(filepath):
     try:
         fa = FileAccess(filepath)
     except Exception as e:
@@ -224,15 +221,20 @@ def _check_file(args):
         except OSError as e2:
             # Filesystem issue, e.g. dCache node down. HDF5 errors can be
             # confusing, so record the OS error instead.
-            problems.append(
-                dict(msg="Could not access file", file=filepath, error=e2)
-            )
+            pb = dict(msg="Could not access file", file=filepath, error=e2)
         else:
-            problems.append(
-                dict(msg="Could not open HDF5 file", file=filepath, error=e)
-            )
-        return filename, None, problems
+            # HDF5 file corrupted or missing expected information
+            pb = dict(msg="Could not open HDF5 file", file=filepath, error=e)
+        return None, [pb]
     else:
+        return fa, []
+
+
+def _check_file(args):
+    runpath, filename = args
+    filepath = osp.join(runpath, filename)
+    fa, problems = _open_file(filepath)
+    if fa is not None:
         fv = FileValidator(fa)
         problems.extend(fv.run_checks())
         fa.close()
@@ -338,7 +340,7 @@ def main(argv=None):
         validator = RunValidator(path, term_progress=True)
     else:
         print("Checking file:", path)
-        _, fa, problems = _check_file(os.path.split(path))
+        fa, problems = _open_file(path)
         if problems:
             print(str(ValidationError(problems)))
             return 1
