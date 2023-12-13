@@ -39,7 +39,7 @@ def test_file_error(mock_fxe_raw_run):
 
     problems = RunValidator(mock_fxe_raw_run).run_checks()
     assert len(problems) == 1
-    assert problems[0]['msg'] == 'Could not open file'
+    assert problems[0]['msg'] == 'Could not access file'
     assert problems[0]['file'] == str(not_readable)
 
 
