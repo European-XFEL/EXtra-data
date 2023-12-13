@@ -6,7 +6,7 @@ import numpy as np
 from pytest import fixture, raises
 from tempfile import TemporaryDirectory
 
-from extra_data.validation import FileAccess, FileValidator, RunValidator, ValidationError
+from extra_data.validation import FileAccess, FileValidator, RunValidator, ValidationError, main
 from . import make_examples
 
 
@@ -170,3 +170,12 @@ def test_control_data_timestamps(data_aggregator_file):
     assert problem['msg'] == 'Timestamp is decreasing, e.g. at 10 (5 < 10)'
     assert problem['dataset'] == 'CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/pulseEnergy/photonFlux/timestamp'
     assert 'RAW-R0450-DA01-S00001.h5' in problem['file']
+
+
+def test_main_file_non_h5(tmp_path, capsys):
+    not_h5 = tmp_path / 'notHDF5.h5'
+    not_h5.write_text("Accessible file, not HDF5")
+
+    status = main([str(not_h5)])
+    assert status == 1
+    assert 'Could not open HDF5 file' in capsys.readouterr().out
