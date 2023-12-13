@@ -218,9 +218,19 @@ def _check_file(args):
     try:
         fa = FileAccess(filepath)
     except Exception as e:
-        problems.append(
-            dict(msg="Could not open file", file=filepath, error=e)
-        )
+        try:
+            with open(filepath, "rb") as f:
+                f.read(16)
+        except OSError as e2:
+            # Filesystem issue, e.g. dCache node down. HDF5 errors can be
+            # confusing, so record the OS error instead.
+            problems.append(
+                dict(msg="Could not access file", file=filepath, error=e2)
+            )
+        else:
+            problems.append(
+                dict(msg="Could not open HDF5 file", file=filepath, error=e)
+            )
         return filename, None, problems
     else:
         fv = FileValidator(fa)
@@ -328,7 +338,12 @@ def main(argv=None):
         validator = RunValidator(path, term_progress=True)
     else:
         print("Checking file:", path)
-        validator = FileValidator(H5File(path).files[0])
+        _, fa, problems = _check_file(os.path.split(path))
+        if problems:
+            print(str(ValidationError(problems)))
+            return 1
+
+        validator = FileValidator(fa)
 
     try:
         validator.run_checks()
