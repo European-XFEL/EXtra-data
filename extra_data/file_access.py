@@ -146,6 +146,8 @@ class FileAccess(metaclass=MetaFileAccess):
             self.train_ids = _cache_info['train_ids']
             self.control_sources = _cache_info['control_sources']
             self.instrument_sources = _cache_info['instrument_sources']
+            self.reduction_data = _cache_info['reduction_data']
+            self.errata = _cache_info['errata']
             self.validity_flag = _cache_info.get('flag', None)
         else:
             try:
@@ -155,7 +157,8 @@ class FileAccess(metaclass=MetaFileAccess):
 
             self.train_ids = tid_data[tid_data != 0]
 
-            self.control_sources, self.instrument_sources = self._read_data_sources()
+            (self.control_sources, self.instrument_sources,
+                self.reduction_data, self.errata) = self._read_data_sources()
 
             self.validity_flag = None
 
@@ -295,6 +298,7 @@ class FileAccess(metaclass=MetaFileAccess):
 
     def _read_data_sources(self):
         control_sources, instrument_sources = set(), set()
+        reduction_info, errata = set(), set()
 
         # The list of data sources moved in file format 1.0
         if self.format_version == '0.5':
@@ -320,6 +324,10 @@ class FileAccess(metaclass=MetaFileAccess):
                 # TODO: Do something with groups?
             elif category == 'CONTROL':
                 control_sources.add(h5_source)
+            elif category == 'REDUCTION':
+                reduction_info.add(h5_source)
+            elif category == 'ERRATA':
+                errata.add(h5_source)
             elif category == 'Karabo_TimerServer':
                 # Ignore virtual data source used only in file format
                 # version 1.1 / pclayer-1.10.3-2.10.5.
@@ -327,7 +335,8 @@ class FileAccess(metaclass=MetaFileAccess):
             else:
                 raise ValueError("Unknown data category %r" % category)
 
-        return frozenset(control_sources), frozenset(instrument_sources)
+        return (frozenset(control_sources), frozenset(instrument_sources),
+                frozenset(reduction_info), frozenset(errata))
 
     def _guess_valid_trains(self):
         # File format version 1.0 includes a flag which is 0 if a train ID
@@ -418,6 +427,10 @@ class FileAccess(metaclass=MetaFileAccess):
             return {''}
         elif source in self.instrument_sources:
             return set(self.file[f'/INDEX/{source}'].keys())
+        elif source in self.reduction_data:
+            return set(self.file[f'/INDEX/{source}'].keys())
+        elif source in self.errata:
+            return set(self.file[f'/INDEX/{source}'].keys())
         else:
             raise SourceNameError(source)
 
@@ -454,6 +467,10 @@ class FileAccess(metaclass=MetaFileAccess):
             group = '/CONTROL/' + source
         elif source in self.instrument_sources:
             group = '/INSTRUMENT/' + source
+        elif source in self.reduction_data:
+            group = '/REDUCTION/' + source
+        elif source in self.errata:
+            group = '/ERRATA/' + source
         else:
             raise SourceNameError(source)
 
@@ -478,6 +495,10 @@ class FileAccess(metaclass=MetaFileAccess):
             group = '/CONTROL/' + source
         elif source in self.instrument_sources:
             group = '/INSTRUMENT/' + source
+        elif source in self.reduction_data:
+            group = '/REDUCTION/' + source
+        elif source in self.errata:
+            group = '/ERRATA/' + source
         else:
             raise SourceNameError(source)
 
@@ -527,6 +548,10 @@ class FileAccess(metaclass=MetaFileAccess):
             path = '/CONTROL/{}/{}'.format(source, key.replace('.', '/'))
         elif source in self.instrument_sources:
             path = '/INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
+        elif source in self.reduction_data:
+            path = '/REDUCTION/{}/{}'.format(source, key.replace('.', '/'))
+        elif source in self.errata:
+            path = '/ERRATA/{}/{}'.format(source, key.replace('.', '/'))
         else:
             raise SourceNameError(source)
 

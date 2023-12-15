@@ -101,6 +101,10 @@ class DataCollection:
                     files_by_sources[source, 'CONTROL'].append(f)
                 for source in f.instrument_sources:
                     files_by_sources[source, 'INSTRUMENT'].append(f)
+                for source in f.reduction_data:
+                    files_by_sources[source, 'REDUCTION'].append(f)
+                for source in f.errata:
+                    files_by_sources[source, 'ERRATA'].append(f)
             sources_data = {
                 src: SourceData(src,
                     sel_keys=None,
@@ -126,6 +130,14 @@ class DataCollection:
         self.instrument_sources = frozenset({
             name for (name, sd) in self._sources_data.items()
             if sd.section == 'INSTRUMENT'
+        })
+        self.reduction_data = frozenset({
+            name for (name, sd) in self._sources_data.items()
+            if sd.section == 'REDUCTION'
+        })
+        self.errata = frozenset({
+            name for (name, sd) in self._sources_data.items()
+            if sd.section == 'ERRATA'
         })
 
     @staticmethod
@@ -401,26 +413,27 @@ class DataCollection:
                 path = '/CONTROL/{}/{}'.format(source, key.replace('.', '/'))
                 source_data[key] = file.file[path][first]
 
-        for source in self.instrument_sources:
-            source_data = res[source] = {
-                'metadata': {'source': source, 'timestamp.tid': train_id}
-            }
-            file, pos = self._find_data(source, train_id)
-            if file is None:
-                continue
-
-            for key in self.keys_for_source(source):
-                group = key.partition('.')[0]
-                firsts, counts = file.get_index(source, group)
-                first, count = firsts[pos], counts[pos]
-                if not count:
+        for prefix, category in (("INSTRUMENT", self.instrument_sources), ("REDUCTION", self.reduction_data), ("ERRATA", self.errata)):
+            for source in category:
+                source_data = res[source] = {
+                    'metadata': {'source': source, 'timestamp.tid': train_id}
+                }
+                file, pos = self._find_data(source, train_id)
+                if file is None:
                     continue
 
-                path = '/INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
-                if count == 1 and not keep_dims:
-                    source_data[key] = file.file[path][first]
-                else:
-                    source_data[key] = file.file[path][first : first + count]
+                for key in self.keys_for_source(source):
+                    group = key.partition('.')[0]
+                    firsts, counts = file.get_index(source, group)
+                    first, count = firsts[pos], counts[pos]
+                    if not count:
+                        continue
+
+                    path = '/{}/{}/{}'.format(prefix, source, key.replace('.', '/'))
+                    if count == 1 and not keep_dims:
+                        source_data[key] = file.file[path][first]
+                    else:
+                        source_data[key] = file.file[path][first : first + count]
 
         if flat_keys:
             # {src: {key: data}} -> {(src, key): data}

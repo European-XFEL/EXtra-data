@@ -132,7 +132,9 @@ class RunFilesMap:
             res = {
                 'train_ids': np.array(d['train_ids'], dtype=np.uint64),
                 'control_sources': frozenset(d['control_sources']),
-                'instrument_sources': frozenset(d['instrument_sources'])
+                'instrument_sources': frozenset(d['instrument_sources']),
+                'reduction_data': frozenset(d.get('reduction_data', set())),
+                'errata': frozenset(d.get('errata', set()))
             }
             # Older cache files don't contain info on 'suspect' trains.
             if 'suspect_train_indices' in d:
@@ -182,6 +184,8 @@ class RunFilesMap:
                     'train_ids': [int(t) for t in file_access.train_ids],
                     'control_sources': sorted(file_access.control_sources),
                     'instrument_sources': sorted(file_access.instrument_sources),
+                    'reduction_data': sorted(file_access.reduction_data),
+                    'errata': sorted(file_access.errata),
                     'suspect_train_indices': [
                         int(i) for i in (~file_access.validity_flag).nonzero()[0]
                     ],
