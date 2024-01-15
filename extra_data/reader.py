@@ -1962,6 +1962,6 @@ def open_run(
 
     if aliases is not None:
         dc = dc.with_aliases(aliases)
-        print(f"Loading {len(dc._aliases)} aliases from: {aliases}", flush=True, file=sys.stderr)
+        log.info("Loading %d aliases from: %s", len(dc._aliases), aliases)
 
     return dc
