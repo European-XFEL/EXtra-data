@@ -1213,8 +1213,12 @@ class DataCollection:
             first_train = self.train_ids[0]
             last_train = self.train_ids[-1]
             seconds, deciseconds = divmod((last_train - first_train + 1), 10)
-            span_txt = '{}.{}'.format(datetime.timedelta(seconds=seconds),
-                                      int(deciseconds))
+            try:
+                td = datetime.timedelta(seconds=seconds)
+            except OverflowError:  # Can occur if a train ID is corrupted
+                span_txt = "OverflowError"
+            else:
+                span_txt = f'{td}.{int(deciseconds)}'
 
         # disp
         print('# of trains:   ', train_count)
