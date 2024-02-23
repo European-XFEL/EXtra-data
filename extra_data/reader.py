@@ -1216,7 +1216,7 @@ class DataCollection:
             try:
                 td = datetime.timedelta(seconds=seconds)
             except OverflowError:  # Can occur if a train ID is corrupted
-                span_txt = "OverflowError"
+                span_txt = "OverflowError (one or more train IDs are probably wrong)"
             else:
                 span_txt = f'{td}.{int(deciseconds)}'
 
