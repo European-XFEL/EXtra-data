@@ -1928,7 +1928,7 @@ def open_run(
                 dc.is_single_run = True
             else:
                 # If raw is a subset of proc, just use proc.
-                dc = proc_dc
+                dc = proc_dc.with_aliases(dc._aliases)
 
         return dc
 
