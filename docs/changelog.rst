@@ -1,6 +1,21 @@
 Release Notes
 =============
 
+1.16
+----
+
+2024-02-26
+
+-  Fix loading aliases for old proposals (:ghpull:`490`).
+-  Hide the message about proposal aliases when opening a run. (:ghpull:`478`).
+-  ``extra-data-validate`` gives clearer messages for filesystem errors
+   (:ghpull:`472`).
+-  Fix OverflowError in lsxfel & run.info() with some corrupted train IDs
+   (:ghpull:`489`).
+-  Fix a selection of deprecation warnings (:ghpull:`469`).
+-  Add a development tool to copy the structure of EuXFEL data files
+   without the data (:ghpull:`467`).
+
 1.15.1
 ------
 
