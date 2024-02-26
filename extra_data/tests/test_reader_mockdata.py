@@ -924,6 +924,15 @@ def test_open_run(mock_spb_raw_and_proc_run):
         run = open_run(2012, 238)
         assert "xgm" in run.alias
 
+        # Check that aliases are loaded for old proposals where proc contains
+        # all sources from raw too. Necessary because the aliases are only
+        # loaded once for the raw data but the proc DataCollection will be used
+        # if all sources exist in proc.
+        shutil.rmtree(proc_run_dir)
+        shutil.copytree(raw_run_dir, proc_run_dir)
+        run = open_run(2012, 238, data="all")
+        assert "xgm" in run.alias
+
 def test_open_file(mock_sa3_control_data):
     f = H5File(mock_sa3_control_data)
     file_access = f.files[0]
