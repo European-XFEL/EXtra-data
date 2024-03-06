@@ -617,6 +617,17 @@ def test_select_require_all(mock_sa3_control_data, select_str):
     assert all([isinstance(x, np.uint64) for x in subrun.train_ids])
 
 
+def test_select_require_all_empty(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    with pytest.warns(match=r"(\d+)/\1 \(100%\) trains dropped"):
+        sel = run.select([
+            "*_XGM/DOOCS/MAIN:output",
+            "FXE_XAD_GEC/CAM/CAMERA_NODATA:daqOutput"
+        ], require_all=True)
+
+    assert sel.train_ids == []
+
+
 def test_select_require_any(mock_sa3_control_data):
     run = H5File(mock_sa3_control_data)
 

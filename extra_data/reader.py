@@ -921,7 +921,7 @@ class DataCollection:
         return matched
 
     def select(self, seln_or_source_glob, key_glob='*', require_all=False,
-               require_any=False):
+               require_any=False, *, warn_drop_trains_frac=1.):
         """Select a subset of sources and keys from this data.
 
         There are four possible ways to select data:
@@ -961,6 +961,11 @@ class DataCollection:
         trains to those for which all or at least one selected sources and
         keys have at least one data entry. By default, all trains remain selected.
 
+        With `require_all=True`, a warning will be shown if there are no trains
+        with all the required data. Setting `warn_drop_trains_frac` can show the
+        same warning if there are a few remaining trains. This is a number 0-1
+        representing the fraction of trains dropped for one source (default 1).
+
         Returns a new :class:`DataCollection` object for the selected data.
 
         .. note::
@@ -994,6 +999,7 @@ class DataCollection:
                 train_ids = np.empty(0, dtype=np.uint64)
 
             for source, srcdata in sources_data.items():
+                n_trains_prev = len(train_ids)
                 for group in srcdata.index_groups:
                     source_tids = np.empty(0, dtype=np.uint64)
 
@@ -1012,6 +1018,11 @@ class DataCollection:
                         train_ids = np.intersect1d(train_ids, source_tids)
                     else:  # require_any
                         train_ids = np.union1d(train_ids, source_tids)
+
+                n_drop = n_trains_prev - len(train_ids)
+                if n_trains_prev and (n_drop / n_trains_prev) >= warn_drop_trains_frac:
+                    warn(f"{n_drop}/{n_trains_prev} ({n_drop / n_trains_prev :.0%})"
+                         f" trains dropped when filtering by {source}")
 
             train_ids = list(train_ids)  # Convert back to a list.
             sources_data = {
