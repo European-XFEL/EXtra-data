@@ -68,3 +68,18 @@ class XGM(DeviceBase):
         ds.attrs['unitEnum'] = np.array([15], dtype=np.int32)
         ds.attrs['unitName'] = b'joule'
         ds.attrs['unitSymbol'] = b'J'
+
+        # Also annotate a CONTROL key, where attributes are split across
+        # the parent key group and the value dataset.
+        # (The timestamp dataset has its own, but distinct attributes)
+        # Specific examples taken from p5696, r32
+        grp = f[f'CONTROL/{self.device_id}/beamPosition/ixPos']
+        grp.attrs['alias'] = b'IX.POS'
+        grp.attrs['description'] = b'Calculated X position [mm]'
+        grp.attrs['daqPolicy'] = np.array([-1], dtype=np.int32)
+
+        # daqPolicy is intentionally different, the correct schema value
+        # is -1 as above!
+        ds = grp['value']
+        ds.attrs['alias'] = b'IX.POS'
+        ds.attrs['daqPolicy'] = np.array([1], dtype=np.int32)

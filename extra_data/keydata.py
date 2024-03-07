@@ -165,6 +165,19 @@ class KeyData:
         from pathlib import Path
         return [Path(p) for p in paths]
 
+    def _find_attributes(self, dset):
+        """Find Karabo attributes belonging to a dataset."""
+        attrs = dict(dset.attrs)
+
+        if self.is_control and self.key.endswith('.value'):
+            # For CONTROL sources, most of the attributes are saved on
+            # the parent group rather than the .value dataset. In the
+            # case of duplicated keys, the parent value appears to be
+            # the correct one.
+            attrs.update(dict(dset.parent.attrs))
+
+        return attrs
+
     def attributes(self):
         """Get a dict of all attributes stored with this data
 
@@ -172,14 +185,14 @@ class KeyData:
         convenient forms.
         """
         dset = self.files[0].file[self.hdf5_data_path]
-        attrs = dict(dset.attrs)
+        attrs = self._find_attributes(dset)
         if (not attrs) and dset.is_virtual:
             # Virtual datasets were initially created without these attributes.
             # Find a source file. Not using source_file_paths as it can give [].
             _, filename, _, _ = dset.virtual_sources()[0]
             # Not using FileAccess: no need for train or source lists.
             with h5py.File(filename, 'r') as f:
-                attrs = dict(f[self.hdf5_data_path].attrs)
+                attrs = self._find_attributes(f[self.hdf5_data_path])
 
         return attrs
 

@@ -345,12 +345,23 @@ def test_file_no_trains(run_with_file_no_trains):
 
 def test_attributes(mock_sa3_control_data):
     run = H5File(mock_sa3_control_data)
+
+    # INSTRUMENT key.
     xgm_intensity = run['SA3_XTD10_XGM/XGM/DOOCS:output', 'data.intensityTD']
     attrs = xgm_intensity.attributes()
 
     assert isinstance(attrs, dict)
     assert attrs['metricPrefixName'] == 'micro'
     assert attrs['unitSymbol'] == 'J'
+
+    # CONTROL key.
+    xgm_beampos_x = run['SA3_XTD10_XGM/XGM/DOOCS', 'beamPosition.ixPos']
+    attrs = xgm_beampos_x.attributes()
+
+    assert isinstance(attrs, dict)
+    assert attrs['alias'] == 'IX.POS'
+    assert attrs['description'] == 'Calculated X position [mm]'
+    assert attrs['daqPolicy'][0] == -1
 
 
 def test_units(mock_sa3_control_data):
