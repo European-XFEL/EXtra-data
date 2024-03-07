@@ -73,6 +73,16 @@ class KeyData:
                f"for {len(self.train_ids)} trains>"
 
     @property
+    def is_control(self):
+        """Whether this key belongs to a control source."""
+        return self.section == 'CONTROL'
+
+    @property
+    def is_instrument(self):
+        """Whether this key belongs to an instrument source."""
+        return self.section == 'INSTRUMENT'
+
+    @property
     def index_group(self):
         """The part of the key needed to look up index data"""
         if self.section == 'INSTRUMENT':
