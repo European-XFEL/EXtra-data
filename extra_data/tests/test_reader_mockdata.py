@@ -595,6 +595,18 @@ def test_select(mock_fxe_raw_run):
     assert sel_by_dc.instrument_sources == sel.instrument_sources
     assert sel_by_dc.train_ids == sel.train_ids
 
+    # Select by SourceData.
+    sd = run['SPB_XTD9_XGM/DOOCS/MAIN'].select_keys('beamPosition.*')
+    sel_by_sd = run.select(sd)
+    assert sel_by_sd.control_sources == {sd.source}
+    assert sel_by_sd.keys_for_source(sd.source) == sd.keys()
+
+    # Select by KeyData.
+    kd = run['SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos']
+    sel_by_kd = run.select(kd)
+    assert sel_by_kd.control_sources == {kd.source}
+    assert sel_by_kd.keys_for_source(kd.source) == {kd.key}
+
 
 @pytest.mark.parametrize(
     'select_str',
