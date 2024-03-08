@@ -851,49 +851,6 @@ def test_open_run(mock_spb_raw_and_proc_run):
         for path in proc_paths:
             assert '/raw/' not in path
 
-        # All folders
-        all_run = open_run(proposal=2012, run=238, data='all')
-
-        # Raw contains all sources.
-        assert run.all_sources == all_run.all_sources
-
-        # Proc is a true subset.
-        assert proc_run.all_sources < all_run.all_sources
-
-        for source, srcdata in all_run._sources_data.items():
-            for file in srcdata.files:
-                if '/DET/' in source:
-                    # AGIPD data is in proc.
-                    assert '/raw/' not in file.filename
-                else:
-                    # Non-AGIPD data is in raw.
-                    # (CAM, XGM)
-                    assert '/proc/' not in file.filename
-
-        # Delete the proc data
-        shutil.rmtree(proc_run_dir)
-        assert not os.path.isdir(proc_run_dir)
-
-        with catch_warnings(record=True) as w:
-            # Opening a run with 'all', with no proc data
-            all_run = open_run(proposal=2012, run=238, data='all')
-
-            # Attempting to open the proc data should raise a warning
-            assert len(w) == 1
-
-        # It should have opened at least the raw data
-        assert run.all_sources == all_run.all_sources
-
-        # Run that doesn't exist
-        with pytest.raises(Exception):
-            open_run(proposal=2012, run=999)
-
-        # run directory exists but contains no data
-        os.makedirs(proc_run_dir)
-        with catch_warnings(record=True) as w:
-            open_run(proposal=2012, run=238, data='all')
-            assert len(w) == 1
-
         # Helper function to write an alias file at a specific path
         def write_aliases(path):
             aliases_path.parent.mkdir(parents=True, exist_ok=True)
@@ -932,6 +889,62 @@ def test_open_run(mock_spb_raw_and_proc_run):
         shutil.copytree(raw_run_dir, proc_run_dir)
         run = open_run(2012, 238, data="all")
         assert "xgm" in run.alias
+
+
+
+@pytest.mark.parametrize('location', ['all', ['raw', 'proc']],
+                         ids=['all', 'list'])
+def test_open_run_multiple(mock_spb_raw_and_proc_run, location):
+    mock_data_root, raw_run_dir, proc_run_dir = mock_spb_raw_and_proc_run
+
+    with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', mock_data_root):
+        # Separate folders
+        run = open_run(proposal=2012, run=238)
+        proc_run = open_run(proposal=2012, run=238, data='proc')
+
+        # All folders
+        all_run = open_run(proposal=2012, run=238, data=location)
+
+        # Raw contains all sources.
+        assert run.all_sources == all_run.all_sources
+
+        # Proc is a true subset.
+        assert proc_run.all_sources < all_run.all_sources
+
+        for source, srcdata in all_run._sources_data.items():
+            for file in srcdata.files:
+                if '/DET/' in source:
+                    # AGIPD data is in proc.
+                    assert '/raw/' not in file.filename
+                else:
+                    # Non-AGIPD data is in raw.
+                    # (CAM, XGM)
+                    assert '/proc/' not in file.filename
+
+        # Delete the proc data
+        shutil.rmtree(proc_run_dir)
+        assert not os.path.isdir(proc_run_dir)
+
+        with catch_warnings(record=True) as w:
+            # Opening a run with 'all', with no proc data
+            all_run = open_run(proposal=2012, run=238, data=location)
+
+            # Attempting to open the proc data should raise a warning
+            assert len(w) == 1
+
+        # It should have opened at least the raw data
+        assert run.all_sources == all_run.all_sources
+
+        # Run that doesn't exist
+        with pytest.raises(Exception):
+            open_run(proposal=2012, run=999)
+
+        # run directory exists but contains no data
+        os.makedirs(proc_run_dir)
+        with catch_warnings(record=True) as w:
+            open_run(proposal=2012, run=238, data=location)
+            assert len(w) == 1
+
 
 def test_open_file(mock_sa3_control_data):
     f = H5File(mock_sa3_control_data)

@@ -21,7 +21,7 @@ import sys
 import tempfile
 import time
 from collections import defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from itertools import groupby
 from multiprocessing import Pool
 from operator import index
@@ -1874,10 +1874,12 @@ def open_run(
         '/gpfs/exfel/exp/SPB/201701/p002012'.
     run: str, int
         A run number such as 243, '243' or 'r0243'.
-    data: str
-        'raw', 'proc' (processed) or 'all' (both 'raw' and 'proc') to access
-        data from either or both of those folders. If 'all' is used, sources
-        present in 'proc' overwrite those in 'raw'. The default is 'raw'.
+    data: str or Sequence of str
+        'raw', 'proc' (processed), or any other location relative to the
+        proposal path with data per run to access. May also be 'all'
+        (both 'raw' and 'proc') or a sequence of strings to load data from
+        several locations, with later locations overwriting sources present
+        in earlier ones.
     include: str
         Wildcard string to filter data files.
     file_filter: callable
@@ -1901,36 +1903,43 @@ def open_run(
         ``{}/usr/extra-data-aliases.yml``.
     """
     if data == 'all':
+        data = ['raw', 'proc']
+
+    if isinstance(data, Sequence) and not isinstance(data, str):
         common_args = dict(
             proposal=proposal, run=run, include=include,
             file_filter=file_filter, inc_suspect_trains=inc_suspect_trains,
             parallelize=parallelize)
 
         # Open the raw data
-        dc = open_run(**common_args, data='raw', aliases=aliases)
+        base_dc = open_run(**common_args, data=data[0], aliases=aliases)
 
-        try:
-            # Attempt to open proc data, but this may not exist. Note that we
-            # explicitly disable loading aliases again because this will print
-            # out an extra 'aliases loaded' message.
-            proc_dc = open_run(**common_args, data='proc', aliases=None)
-        except FileNotFoundError:
-            warn("Proc data is not available for this run")
-        else:
-            # Deselect to those raw sources not present in proc.
-            raw_extra = dc.deselect(
-                [(src, '*') for src in dc.all_sources & proc_dc.all_sources])
-
-            if raw_extra.files:
-                # If raw is not a subset of proc, merge the "extra" raw
-                # sources into proc sources and re-enable is_single_run.
-                dc = proc_dc.union(raw_extra)
-                dc.is_single_run = True
+        for origin in data[1:]:
+            try:
+                # Attempt to open data at this origin, but this may not
+                # exist.
+                origin_dc = open_run(**common_args, data=origin, aliases=aliases)
+            except FileNotFoundError:
+                warn(f'No data available for this run at origin {origin}')
             else:
-                # If raw is a subset of proc, just use proc.
-                dc = proc_dc.with_aliases(dc._aliases)
+                # Deselect to those sources in the base not present in
+                # this origin.
+                base_extra = base_dc.deselect(
+                    [(src, '*') for src
+                    in base_dc.all_sources & origin_dc.all_sources])
 
-        return dc
+                if base_extra.files:
+                    # If base is not a subset of this origin, merge the
+                    # "extra" base sources into the origin sources and
+                    # re-enable is_single_run flag.
+                    base_dc = origin_dc.union(base_extra)
+                    base_dc.is_single_run = True
+                else:
+                    # If the sources we previously found are a subset of those
+                    # in the latest origin, discard the previous data.
+                    base_dc = origin_dc
+
+        return base_dc
 
     if isinstance(proposal, str):
         if ('/' not in proposal) and not proposal.startswith('p'):
