@@ -872,6 +872,8 @@ class DataCollection:
                     for src, src_datas in sources_data_multi.items()}
         elif isinstance(selection, DataCollection):
             return self._expand_selection(selection.selection)
+        elif isinstance(selection, SourceData):
+            return {selection.source: selection}
         elif isinstance(selection, KeyData):
             src = selection.source
             return {src: self._sources_data[src].select_keys({selection.key})}
@@ -952,7 +954,7 @@ class DataCollection:
            It's a more precise but less convenient option for code that knows
            exactly what sources and keys it needs.
 
-        4. With an existing DataCollection or KeyData object::
+        4. With an existing DataCollection, SourceData or KeyData object::
 
              # Select the same data contained in another DataCollection
              prev_run.select(sel)
