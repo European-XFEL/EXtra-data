@@ -572,11 +572,20 @@ class KeyData:
         """
         return self.train_from_id(self.train_ids[i], keep_dims=keep_dims)
 
-    def trains(self, keep_dims=False):
+    def trains(self, keep_dims=False, include_empty=False):
         """Iterate through trains containing data for this key
 
-        Yields pairs of (train ID, array). Skips trains where data is missing.
+        Yields pairs of (train ID, array). Train axis is removed in case
+        of single elements unless *keep_dims* is set. Skips trains where
+        data is missing unless *include_empty* is set, returning None or
+        zero-length array with *keep_dims*.
         """
+        if keep_dims and include_empty:
+            empty_result = np.zeros(shape=(0,) + self.entry_shape,
+                                    dtype=self.dtype)
+        else:
+            empty_result = None
+
         for chunk in self._data_chunks_nonempty:
             start = chunk.first
             ds = chunk.dataset
@@ -585,5 +594,7 @@ class KeyData:
                     yield tid, ds[start: start+count]
                 elif count == 1:
                     yield tid, ds[start]
+                elif include_empty:
+                    yield tid, empty_result
 
                 start += count
