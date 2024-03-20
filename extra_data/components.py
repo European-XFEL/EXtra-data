@@ -752,7 +752,7 @@ class MultimodKeyData:
         return self.det.train_ids
 
     def train_id_coordinates(self):
-        return self.det.train_ids
+        return np.array(self.det.train_ids)
 
     @property
     def modules(self):
@@ -768,7 +768,7 @@ class MultimodKeyData:
 
     @property
     def shape(self):
-        return ((len(self.modno_to_keydata), len(self.train_id_coordinates()))
+        return ((len(self.modno_to_keydata), len(self.det.train_ids))
                 + self._eg_keydata.entry_shape)
 
     @property
@@ -889,6 +889,8 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         # Only allocate sel_frames array if we need it:
         if not self._all_pulses():
             a = a[self._sel_frames]
+        else:
+            a = a.copy()  # So you can't accidentally modify the internal array
         return a
 
     @property
