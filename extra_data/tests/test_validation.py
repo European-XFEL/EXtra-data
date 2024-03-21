@@ -165,11 +165,16 @@ def test_control_data_timestamps(data_aggregator_file):
         ts[10] = 5
 
     with raises(ValidationError) as excinfo:
-        FileValidator(FileAccess(data_aggregator_file)).validate()
+        FileValidator(FileAccess(data_aggregator_file), timestamps_should_increase=True).validate()
     problem = excinfo.value.problems.pop()
     assert problem['msg'] == 'Timestamp is decreasing, e.g. at 10 (5 < 10)'
     assert problem['dataset'] == 'CONTROL/SA1_XTD2_XGM/DOOCS/MAIN/pulseEnergy/photonFlux/timestamp'
     assert 'RAW-R0450-DA01-S00001.h5' in problem['file']
+
+    # second, and default case, timestamp order doesn't matter
+    validator = FileValidator(FileAccess(data_aggregator_file))
+    validator.validate()
+    assert len(validator.problems) == 0
 
 
 def test_main_file_non_h5(tmp_path, capsys):
