@@ -286,14 +286,15 @@ class RunValidator:
             # prevent child processes from receiving KeyboardInterrupt
             signal(SIGINT, SIG_IGN)
 
-        filepaths = [(self.run_dir, fn) for fn in sorted(self.filenames)]
+        check_args = [(self.run_dir, fn, self.timestamps_should_increase) 
+                       for fn in sorted(self.filenames)]
         nfiles = len(self.filenames)
         badfiles = []
         self.progress(0, nfiles, 0, badfiles)
 
         with Pool(initializer=initializer) as pool:
             iterator = pool.imap_unordered(
-                _check_file, filepaths, self.timestamps_should_increase)
+                _check_file, check_args)
             for done, (fname, fa, problems) in enumerate(iterator, start=1):
                 if problems:
                     self.problems.extend(problems)
