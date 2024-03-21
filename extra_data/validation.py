@@ -27,9 +27,10 @@ class ValidationError(Exception):
 
 
 class FileValidator:
-    def __init__(self, file: FileAccess):
+    def __init__(self, file: FileAccess, timestamps_should_increase: bool = False):
         self.file = file
         self.filename = file.filename
+        self.timestamps_should_increase = timestamps_should_increase
         self.problems = []
 
     def validate(self):
@@ -41,7 +42,8 @@ class FileValidator:
         self.problems = []
         self.check_indices()
         self.check_trainids()
-        self.check_timestamps()
+        if self.timestamps_should_increase:
+            self.check_timestamps()
 
         return self.problems
 
@@ -231,20 +233,21 @@ def _open_file(filepath):
 
 
 def _check_file(args):
-    runpath, filename = args
+    runpath, filename, timestamps_should_increase = args
     filepath = osp.join(runpath, filename)
     fa, problems = _open_file(filepath)
     if fa is not None:
-        fv = FileValidator(fa)
+        fv = FileValidator(fa, timestamps_should_increase=timestamps_should_increase)
         problems.extend(fv.run_checks())
         fa.close()
     return filename, fa, problems
 
 
 class RunValidator:
-    def __init__(self, run_dir: str, term_progress=False):
+    def __init__(self, run_dir: str, term_progress=False, timestamps_should_increase=False):
         self.run_dir = run_dir
         self.term_progress = term_progress
+        self.timestamps_should_increase = timestamps_should_increase
         self.filenames = [f for f in os.listdir(run_dir) if f.endswith('.h5')]
         self.file_accesses = []
         self.problems = []
@@ -289,7 +292,8 @@ class RunValidator:
         self.progress(0, nfiles, 0, badfiles)
 
         with Pool(initializer=initializer) as pool:
-            iterator = pool.imap_unordered(_check_file, filepaths)
+            iterator = pool.imap_unordered(
+                _check_file, filepaths, self.timestamps_should_increase)
             for done, (fname, fa, problems) in enumerate(iterator, start=1):
                 if problems:
                     self.problems.extend(problems)
@@ -331,13 +335,18 @@ def main(argv=None):
 
     ap = ArgumentParser(prog='extra-data-validate')
     ap.add_argument('path', help="HDF5 file or run directory of HDF5 files.")
+    ap.add_argument('-ti', '--timestamps-increase',
+                    help="Expect monotonically increasing timestamps.",
+                    action="store_true")
     args = ap.parse_args(argv)
 
     path = args.path
+    timestamps_increase = args.timestamps_increase
     if os.path.isdir(path):
         print("Checking run directory:", path)
         print()
-        validator = RunValidator(path, term_progress=True)
+        validator = RunValidator(path, term_progress=True,
+                                 timestamps_should_increase=timestamps_increase)
     else:
         print("Checking file:", path)
         fa, problems = _open_file(path)
