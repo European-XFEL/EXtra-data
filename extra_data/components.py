@@ -766,10 +766,22 @@ class MultimodKeyData:
     def ndim(self):
         return self._eg_keydata.ndim + 1
 
+    def buffer_shape(self, module_gaps=False, roi=()):
+        """Get the array shape for this data
+
+        If *module_gaps* is True, include space for modules which are missing
+        from the data. *roi* may be a tuple of slices defining a region of
+        interest on the inner dimensions of the data.
+        """
+        module_dim = self.det.n_modules if module_gaps else len(self.modno_to_keydata)
+
+        return ((module_dim, len(self.train_ids))
+                # Shape of 1 frame for 1 module with the ROI applied:
+                + roi_shape(self._eg_keydata.entry_shape, roi))
+
     @property
     def shape(self):
-        return ((len(self.modno_to_keydata), len(self.det.train_ids))
-                + self._eg_keydata.entry_shape)
+        return self.buffer_shape()
 
     @property
     def dimensions(self):
@@ -796,9 +808,7 @@ class MultimodKeyData:
 
         module_dim = self.det.n_modules if module_gaps else len(self.modno_to_keydata)
 
-        out_shape = ((module_dim, len(train_ids))
-                     # Shape of 1 frame for 1 module with the ROI applied:
-                     + roi_shape(self._eg_keydata.entry_shape, roi))
+        out_shape = self.buffer_shape(module_gaps, roi)
 
         if out is None:
             dtype = self._eg_keydata.dtype if astype is None else np.dtype(astype)
