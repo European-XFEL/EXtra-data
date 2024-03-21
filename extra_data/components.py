@@ -881,7 +881,12 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         interest on the inner dimensions of the data.
         """
         module_dim = self.det.n_modules if module_gaps else len(self.modno_to_keydata)
-        nframes_sel = len(self.train_id_coordinates())
+
+        # len(self.train_id_coordinates()), but avoids allocating extra arrays
+        if self._all_pulses():
+            nframes_sel = len(self.det.train_ids_perframe)
+        else:
+            nframes_sel = int(self._sel_frames.sum())
 
         entry_shape = self._eg_keydata.entry_shape
         if self._extraneous_dim:
