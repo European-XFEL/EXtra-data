@@ -114,6 +114,25 @@ def test_iter_trains_keep_dims(mock_jungfrau_run):
         assert v.shape == (1, 16, 512, 1024)
 
 
+def test_iter_trains_include_empty(mock_sa3_control_data):
+    f = H5File(mock_sa3_control_data)
+    beamview = f['SA3_XTD10_IMGFEL/CAM/BEAMVIEW2:daqOutput', 'data.image.dims']
+
+    for expected_tid, (data1_tid, data1), (data2_tid, data2) in zip(
+        beamview.train_ids,
+        beamview.trains(include_empty=True),
+        beamview.trains(include_empty=True, keep_dims=True)
+    ):
+        assert expected_tid == data1_tid == data2_tid
+
+        if (expected_tid % 2) == 0:
+            assert data1 is None
+        else:
+            assert data1.shape == (2,)
+
+        assert data2.shape == (expected_tid % 2, 2)
+
+
 def test_get_train(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
     xgm_beam_x = run['SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value']
