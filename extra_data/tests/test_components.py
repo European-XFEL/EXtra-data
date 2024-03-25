@@ -220,6 +220,11 @@ def test_get_array_jungfrau(mock_jungfrau_run):
     arr = jf.get_array('data.adc', astype=np.float32)
     assert arr.dtype == np.float32
 
+    assert jf['data.adc'].shape == (8, 2, 16, 512, 1024)
+    assert jf['data.adc'].buffer_shape(
+        module_gaps=True, roi=np.s_[:, :25, :35]
+    ) == (8, 2, 16, 25, 35)
+
 
 def test_jungfraus_first_modno(mock_jungfrau_run, mock_fxe_jungfrau_run):
 
