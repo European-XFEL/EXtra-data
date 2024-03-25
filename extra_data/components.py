@@ -806,8 +806,6 @@ class MultimodKeyData:
         """Get data as a plain NumPy array with no labels"""
         train_ids = np.asarray(self.det.train_ids)
 
-        module_dim = self.det.n_modules if module_gaps else len(self.modno_to_keydata)
-
         out_shape = self.buffer_shape(module_gaps, roi)
 
         if out is None:
