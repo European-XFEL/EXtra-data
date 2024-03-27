@@ -452,6 +452,14 @@ class MultimodDetectorBase:
         """
         return MPxDetectorTrainIterator(self, require_all=require_all)
 
+    def data_availability(self, module_gaps=False):
+        """Get an array indicating what data is available
+
+        Returns a boolean array (modules, entries), True where a module has data
+        for a given train, False for missing data.
+        """
+        return self[self._main_data_key].data_availability(module_gaps)
+
 
 class XtdfDetectorBase(MultimodDetectorBase):
     """Common machinery for a group of detectors with similar data format
@@ -851,6 +859,25 @@ class MultimodKeyData:
             return DataArray(arr, dims=self.dimensions, coords=coords)
 
         return arr
+
+    def data_availability(self, module_gaps=False):
+        """Get an array indicating what data is available
+
+        Returns a boolean array (modules, entries), True where a module has data
+        for a given train, False for missing data.
+        """
+        train_ids = self.train_id_coordinates()
+
+        module_dim = self.det.n_modules if module_gaps else len(self.modno_to_keydata)
+        out = np.zeros((module_dim, len(train_ids)), dtype=np.bool_)
+
+        for i, (modno, kd) in enumerate(sorted(self.modno_to_keydata.items())):
+            mod_ix = (modno - self.det._modnos_start_at) if module_gaps else i
+            for chunk in kd._data_chunks:
+                for tgt_slice, _ in self.det._split_align_chunk(chunk, train_ids):
+                    out[mod_ix, tgt_slice] = True
+
+        return out
 
 
 class XtdfImageMultimodKeyData(MultimodKeyData):
