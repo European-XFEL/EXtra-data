@@ -302,6 +302,21 @@ def test_get_dask_array_jungfrau(mock_jungfrau_run):
     np.testing.assert_array_equal(arr.coords['train'], np.arange(10000, 10100))
 
 
+def test_data_availability_lpd_gap(mock_lpd_mini_gap_run):
+    run = RunDirectory(mock_lpd_mini_gap_run)
+    det = LPD1M(run, modules=[0, 1])  # This example just contains 2 modules
+
+    av = det.data_availability()
+    assert av.shape == (2, 50)
+    np.testing.assert_array_equal(av[1, 20:30], False)
+    assert av.sum() == 2 * 50 - 10
+
+    av_gaps = det.data_availability(module_gaps=True)
+    assert av_gaps.shape == (16, 50)
+    np.testing.assert_array_equal(av_gaps[2:], False)
+    assert av_gaps.sum() == 2 * 50 - 10
+
+
 def test_select_trains(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run.select_trains(np.s_[:20]))
