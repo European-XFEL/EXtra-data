@@ -452,6 +452,14 @@ class MultimodDetectorBase:
         """
         return MPxDetectorTrainIterator(self, require_all=require_all)
 
+    def data_availability(self, module_gaps=False):
+        """Get an array indicating what data is available
+
+        Returns a boolean array (modules, entries), True where a module has data
+        for a given train, False for missing data.
+        """
+        return self[self._main_data_key].data_availability(module_gaps)
+
 
 class XtdfDetectorBase(MultimodDetectorBase):
     """Common machinery for a group of detectors with similar data format
