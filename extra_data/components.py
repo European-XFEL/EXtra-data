@@ -1750,13 +1750,21 @@ class JUNGFRAU(MultimodDetectorBase):
         JUNGFRAUCXIWriter(self).write(filename, fillvalues=fillvalues)
 
     def cell_ids(self):
-        arr = self.select_trains(np.s_[:1])['data.memoryCell'].ndarray(
-            fill_value=NO_PULSE_ID
-        ) # -> (modules, 1, cells)
-        res = arr.max(axis=0)[0]
-        if (res == NO_PULSE_ID).any():
-            raise Exception("Could not identify cell IDs")
-        return res
+        MISSING = 255  # To fit in uint8
+        cids = self.select_trains(np.s_[:1])['data.memoryCell'].ndarray(
+            fill_value=MISSING
+        )[:, 0] # -> (modules, cells)
+
+        cells_min = cids.min(axis=0)
+        if (cells_min == MISSING).any():
+            raise Exception(f"Failed to find memoryCell")
+        cids[cids == MISSING] = 0
+        if (cells_min != cids.max(axis=0)).any():
+            raise Exception(f"Inconsistent memoryCell for different modules")
+
+        # Pulse IDs make sense. Drop the modules dimension, giving one
+        # pulse ID for each frame.
+        return cells_min
 
 
 def identify_multimod_detectors(
