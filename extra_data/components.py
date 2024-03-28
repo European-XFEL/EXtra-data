@@ -1749,6 +1749,16 @@ class JUNGFRAU(MultimodDetectorBase):
         """
         JUNGFRAUCXIWriter(self).write(filename, fillvalues=fillvalues)
 
+    def cell_ids(self):
+        arr = self.select_trains(np.s_[:1])['data.memoryCell'].ndarray(
+            fill_value=NO_PULSE_ID
+        ) # -> (modules, 1, cells)
+        res = arr.max(axis=0)[0]
+        if (res == NO_PULSE_ID).any():
+            raise Exception("Could not identify cell IDs")
+        return res
+
+
 def identify_multimod_detectors(
         data, detector_name=None, *, single=False, clses=None
 ):

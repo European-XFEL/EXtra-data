@@ -346,6 +346,14 @@ def test_pulse_id_cell_id_reduced(mock_reduced_spb_proc_run):
     assert kd.cell_id_coordinates().shape == (nframes,)
 
 
+def test_jungfrau_cell_ids(mock_jungfrau_run):
+    run = RunDirectory(mock_jungfrau_run)
+    det = JUNGFRAU(run)
+    cellids = det.cell_ids()
+
+    assert cellids.shape == (16,)
+
+
 def test_select_trains(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run.select_trains(np.s_[:20]))
