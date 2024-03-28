@@ -933,6 +933,14 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             a = a.copy()  # So you can't accidentally modify the internal array
         return a
 
+    def pulse_id_coordinates(self):
+        """Get an array of pulse IDs per-frame for this data"""
+        return self.det._collect_inner_ids('pulseId')
+
+    def cell_id_coordinates(self):
+        """Get an array of memory cell IDs per-frame for this data"""
+        return self.det._collect_inner_ids('cellId')
+
     @property
     def dimensions(self):
         ndim_inner = self.ndim - 2

@@ -322,6 +322,30 @@ def test_data_availability_lpd_gap(mock_lpd_mini_gap_run):
     assert av_gaps.sum() == 2 * 50 - 10
 
 
+def test_pulse_id_cell_id(mock_lpd_mini_gap_run):
+    run = RunDirectory(mock_lpd_mini_gap_run)
+    det = LPD1M(run, modules=[0, 1])  # This example just contains 2 modules
+    kd = det['image.data']
+
+    np.testing.assert_array_equal(
+        kd.pulse_id_coordinates(), np.tile(np.arange(10), 5)
+    )
+    np.testing.assert_array_equal(
+        kd.cell_id_coordinates(), np.tile(np.arange(10), 5)
+    )
+
+def test_pulse_id_cell_id_reduced(mock_reduced_spb_proc_run):
+    run = RunDirectory(mock_reduced_spb_proc_run)
+    det = AGIPD1M(run)
+    kd = det['image.data']
+    nframes = kd.shape[1]
+
+    # The selected frames are random, so we don't know precisely the pattern
+    assert kd.train_id_coordinates().shape == (nframes,)
+    assert kd.pulse_id_coordinates().shape == (nframes,)
+    assert kd.cell_id_coordinates().shape == (nframes,)
+
+
 def test_select_trains(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run.select_trains(np.s_[:20]))
