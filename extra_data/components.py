@@ -933,6 +933,14 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             a = a.copy()  # So you can't accidentally modify the internal array
         return a
 
+    def pulse_id_coordinates(self):
+        """Get an array of pulse IDs per-frame for this data"""
+        return self.det._collect_inner_ids('pulseId')
+
+    def cell_id_coordinates(self):
+        """Get an array of memory cell IDs per-frame for this data"""
+        return self.det._collect_inner_ids('cellId')
+
     @property
     def dimensions(self):
         ndim_inner = self.ndim - 2
@@ -1740,6 +1748,24 @@ class JUNGFRAU(MultimodDetectorBase):
             zero for integer arrays)
         """
         JUNGFRAUCXIWriter(self).write(filename, fillvalues=fillvalues)
+
+    def cell_ids(self):
+        MISSING = 255  # To fit in uint8
+        cids = self.select_trains(np.s_[:1])['data.memoryCell'].ndarray(
+            fill_value=MISSING
+        )[:, 0] # -> (modules, cells)
+
+        cells_min = cids.min(axis=0)
+        if (cells_min == MISSING).any():
+            raise Exception(f"Failed to find memoryCell")
+        cids[cids == MISSING] = 0
+        if (cells_min != cids.max(axis=0)).any():
+            raise Exception(f"Inconsistent memoryCell for different modules")
+
+        # Pulse IDs make sense. Drop the modules dimension, giving one
+        # pulse ID for each frame.
+        return cells_min
+
 
 def identify_multimod_detectors(
         data, detector_name=None, *, single=False, clses=None
