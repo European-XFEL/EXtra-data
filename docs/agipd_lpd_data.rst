@@ -10,12 +10,9 @@ DSSC and JUNGFRAU, pulling together the separate modules into a single array.
 
 .. note::
 
-   These detectors can record a lot of data. The ``.get_array()`` method
-   loads all of the selected data into memory, which may not be practical for
-   entire runs. You might need to think about iterating over trains, selecting
-   batches of trains from the run, or using `Dask arrays
-   <https://docs.dask.org/en/latest/array.html>`_.
-
+   These detectors can record a lot of data, so loading it all into memory at
+   once may be impossible. You can use the :meth:`~LPD1M.split_trains` method
+   to work on a chunk at a time, or work with Dask arrays.
 
 .. autoclass:: AGIPD1M
 
@@ -29,11 +26,18 @@ DSSC and JUNGFRAU, pulling together the separate modules into a single array.
 
 .. autoclass:: LPD1M
 
+   Selecting a key from the detector, e.g. ``det['image.data']``, gives an
+   object similar to a single-source :class:`KeyData`, but with the modules
+   arranged along the first axis. So ``det['image.data'].ndarray()`` will
+   load all the selected data as a NumPy array.
+
    .. automethod:: get_array
 
    .. automethod:: get_dask_array
 
    .. automethod:: trains
+
+   .. automethod:: data_availability
 
    .. automethod:: select_trains
 
@@ -49,11 +53,18 @@ DSSC and JUNGFRAU, pulling together the separate modules into a single array.
 
 .. autoclass:: JUNGFRAU
 
+   Selecting a key from the detector, e.g. ``jf['data.adc']``, gives an
+   object similar to a single-source :class:`KeyData`, but with the modules
+   arranged along the first axis. So ``jf['data.adc'].ndarray()`` will
+   load all the selected data as a NumPy array.
+
    .. automethod:: get_array
 
    .. automethod:: get_dask_array
 
    .. automethod:: trains
+
+   .. automethod:: data_availability
 
    .. automethod:: select_trains
 

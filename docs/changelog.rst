@@ -1,6 +1,28 @@
 Release Notes
 =============
 
+1.17
+----
+
+2024-04-10
+
+-  Add support to open run data from any number of data locations (:ghpull:`298`).
+-  Add ``.pulse_id_coordinates()`` & ``.train_id_coordinates()`` for XTDF image
+   data (:ghpull:`506`).
+-  Add :meth:`~.LPD1M.data_availability` method for multi-module detectors
+   (:ghpull:`504`).
+-  New ``include_empty`` option to include empty trains when iterating KeyData
+   with :meth:`~.KeyData.trains` (:ghpull:`501`)
+-  Support selecting down DataCollection by SourceData objects (:ghpull:`499`)
+-  Merge attributes of key group and value dataset for CONTROL keys
+   (:ghpull:`498`)
+-  Add warning when :meth:`~.DataCollection.select` with ``require_all``
+   discards all trains (:ghpull:`497`).
+-  Miscellaneous improvements to ``.buffer_shape()`` method for multi-module
+   detector data (:ghpull:`505`).
+-  Return a copy of the array for ``detector_key.train_id_coordinates()``
+   (:ghpull:`502`)
+
 1.16
 ----
 
