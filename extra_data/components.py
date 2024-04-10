@@ -453,7 +453,7 @@ class MultimodDetectorBase:
         return MPxDetectorTrainIterator(self, require_all=require_all)
 
     def data_availability(self, module_gaps=False):
-        """Get an array indicating what data is available
+        """Get an array indicating what image data is available
 
         Returns a boolean array (modules, entries), True where a module has data
         for a given train, False for missing data.
