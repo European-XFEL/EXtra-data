@@ -6,7 +6,15 @@ Release Notes
 
 2024-04-10
 
--  Add support to open run data from any number of data locations (:ghpull:`298`).
+-  :func:`open_run` can now combine additional data locations besides the main
+   raw & proc folders (:ghpull:`298`)::
+
+       run = open_run(6616, 31, data=['raw', 'scratch/test_cal'])
+
+   This specifies a list of paths under the proposal directory. The folders
+   given should contain run folders with 4 digit run numbers, e.g. ``r0031``.
+   If the same source names appear, those sources will be visible from the last
+   location in the list.
 -  Add ``.pulse_id_coordinates()`` & ``.train_id_coordinates()`` for XTDF image
    data (:ghpull:`506`).
 -  Add :meth:`~.LPD1M.data_availability` method for multi-module detectors
