@@ -429,11 +429,13 @@ class JUNGFRAUCXIWriter(VirtualCXIWriterBase):
             self.image_label: VLayout(
                 shape, dtype=image_grp[self.image_label].dtype),
             'gain': VLayout(shape, dtype=image_grp['gain'].dtype),
-            'mask': VLayout(shape, dtype=image_grp['mask'].dtype),
             self.cell_id_label: VLayout(
                 (self.nframes, self.nmodules),
                 dtype=image_grp[self.cell_id_label].dtype
             ),
         }
+
+        if 'mask' in image_grp:
+            layouts['mask'] = VLayout(shape, dtype=image_grp['mask'].dtype)
 
         return self._map_layouts(layouts)
