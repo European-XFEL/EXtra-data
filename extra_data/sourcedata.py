@@ -82,6 +82,9 @@ class SourceData:
             inc_suspect_trains=self.inc_suspect_trains,
         )
 
+    def _ipython_key_completions_(self):
+        return list(self.keys(inc_timestamps=False))
+
     def _get_first_source_file(self):
         first_kd = self[self.one_key()]
 

@@ -36,6 +36,9 @@ class AliasIndexer:
 
         raise TypeError('expected alias or (source alias, key) tuple')
 
+    def _ipython_key_completions_(self):
+        return list(self.data._aliases.keys())
+
     def __contains__(self, aliased_item):
         try:
             self[aliased_item]
