@@ -10,6 +10,7 @@ class AliasIndexer:
         self.data = data
 
     def _resolve_any_alias(self, alias):
+        alias = alias.lower().replace('_', '-')
         try:
             literal = self.data._aliases[alias]
         except KeyError:
