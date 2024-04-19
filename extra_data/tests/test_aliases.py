@@ -87,10 +87,8 @@ def test_alias_clash(mock_sa3_control_data, mock_sa3_control_aliases):
     run_without_aliases = H5File(mock_sa3_control_data)
     # The aliases include 'mcp-adc' - test with an equivalent name
     with pytest.raises(ValueError, match='conflicting alias'):
-        run = run_without_aliases.with_aliases(
-            mock_sa3_control_aliases | {'MCP_ADC': 'SA3_XTD10_MCP/ADC/2'}
-        )
-
+        mock_sa3_control_aliases.update({'MCP_ADC': 'SA3_XTD10_MCP/ADC/2'})
+        run_without_aliases.with_aliases(mock_sa3_control_aliases)
 
 
 def test_json_alias_file(mock_sa3_control_data, mock_sa3_control_aliases, tmp_path):
