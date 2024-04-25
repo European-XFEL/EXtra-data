@@ -578,7 +578,8 @@ class DataCollection:
                 alias = alias.lower().replace('_', '-')
                 if new_aliases.setdefault(alias, literal) != literal:
                     raise ValueError(f'conflicting alias definition '
-                                     f'for {alias}')
+                                     f'for {alias} (or {alias.upper()}, '
+                                     f'{alias.replace("-", "_")}, etc.)')
 
         return new_aliases
 
