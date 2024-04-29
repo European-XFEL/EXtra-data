@@ -265,6 +265,9 @@ class DataCollection:
 
         raise TypeError("Expected data[source] or data[source, key]")
 
+    def _ipython_key_completions_(self):
+        return list(self.all_sources)
+
     def get_entry_shape(self, source, key):
         """Get the shape of a single data entry for the given source & key"""
         return self._get_key_data(source, key).entry_shape
