@@ -24,6 +24,9 @@ def test_with_aliases(mock_sa3_control_data, mock_sa3_control_aliases):
     # Test whether source alias yields identical SourceData.
     assert run.alias['sa3-xgm'] is run['SA3_XTD10_XGM/XGM/DOOCS']
 
+    # Test alternative capitalisation and _ instead of -
+    assert run.alias['SA3_XGM'] is run['SA3_XTD10_XGM/XGM/DOOCS']
+
     # Test __contains__()
     assert "sa3-xgm" in run.alias
     assert not "sa42-xgm" in run.alias
@@ -80,6 +83,14 @@ def test_with_aliases(mock_sa3_control_data, mock_sa3_control_aliases):
     str(run.alias)
 
 
+def test_alias_clash(mock_sa3_control_data, mock_sa3_control_aliases):
+    run_without_aliases = H5File(mock_sa3_control_data)
+    # The aliases include 'mcp-adc' - test with an equivalent name
+    with pytest.raises(ValueError, match='conflicting alias'):
+        mock_sa3_control_aliases.update({'MCP_ADC': 'SA3_XTD10_MCP/ADC/2'})
+        run_without_aliases.with_aliases(mock_sa3_control_aliases)
+
+
 def test_json_alias_file(mock_sa3_control_data, mock_sa3_control_aliases, tmp_path):
     aliases_path = tmp_path / 'aliases.json'
     aliases_path.write_text('''
@@ -125,7 +136,8 @@ imgfel-frames2: [SA3_XTD10_IMGFEL/CAM/BEAMVIEW2:daqOutput, data.image.pixels]
 imgfel-screen-pos: [SA3_XTD10_IMGFEL/MOTOR/SCREEN, actualPosition]
 imgfel-filter-pos: [SA3_XTD10_IMGFEL/MOTOR/FILTER, actualPosition]
 
-mcp-adc: SA3_XTD10_MCP/ADC/1
+# Will be normalised to mcp-adc
+MCP_ADC: SA3_XTD10_MCP/ADC/1
 mcp-mpod: SA3_XTD10_MCP/MCPS/MPOD
 mcp-voltage: [SA3_XTD10_MCP/MCPS/MPOD, channels.U3.voltage]
 mcp-trace: [SA3_XTD10_MCP/ADC/1:channel_5.output, data.rawData]
