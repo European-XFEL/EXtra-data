@@ -31,6 +31,8 @@ DSSC and JUNGFRAU, pulling together the separate modules into a single array.
    arranged along the first axis. So ``det['image.data'].ndarray()`` will
    load all the selected data as a NumPy array.
 
+   .. automethod:: masked_data
+
    .. automethod:: get_array
 
    .. automethod:: get_dask_array
@@ -57,6 +59,8 @@ DSSC and JUNGFRAU, pulling together the separate modules into a single array.
    object similar to a single-source :class:`KeyData`, but with the modules
    arranged along the first axis. So ``jf['data.adc'].ndarray()`` will
    load all the selected data as a NumPy array.
+
+   .. automethod:: masked_data
 
    .. automethod:: get_array
 

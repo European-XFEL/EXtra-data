@@ -178,6 +178,23 @@ class MultimodDetectorBase:
         return MultimodKeyData(self, item)
 
     def masked_data(self, key=None, *, mask_bits=None, masked_value=np.nan):
+        """Combine corrected data with the mask in the files
+
+        This provides an interface similar to ``det['data.adc']``, but masking
+        out pixels with the mask from the correction pipeline.
+
+        Parameters
+        ----------
+
+        key: str
+          The data key to look at, by default the main data key of the detector
+          (e.g. 'data.adc').
+        mask_bits: int
+          Bitmask of reasons to exclude pixels. By default, all types of bad
+          pixel are masked out.
+        masked_value: int, float
+          The replacement value to use for masked data. By default this is NaN.
+        """
         key = key or self._main_data_key
         return DetectorMaskedKeyData(
             self, key, mask_key=self._mask_data_key,
@@ -491,6 +508,23 @@ class XtdfDetectorBase(MultimodDetectorBase):
         return super().__getitem__(item)
 
     def masked_data(self, key=None, *, mask_bits=None, masked_value=np.nan):
+        """Combine corrected data with the mask in the files
+
+        This provides an interface similar to ``det['image.data']``, but masking
+        out pixels with the mask from the correction pipeline.
+
+        Parameters
+        ----------
+
+        key: str
+          The data key to look at, by default the main data key of the detector
+          (e.g. 'image.data').
+        mask_bits: int
+          Bitmask of reasons to exclude pixels. By default, all types of bad
+          pixel are masked out.
+        masked_value: int, float
+          The replacement value to use for masked data. By default this is NaN.
+        """
         key = key or self._main_data_key
         assert key.startswith('image.')
         return XtdfMaskedKeyData(
@@ -928,6 +962,7 @@ class DetectorMaskedKeyData(MultimodKeyData):
         )
 
     def ndarray(self, *, module_gaps=False, **kwargs):
+        """Load data into a NumPy array & apply the mask"""
         # Load mask first: it shrinks from 4 bytes/px to 1, so peak memory use
         # is lower than loading it after the data
         mask = _load_mask(self.det[self._mask_key], module_gaps, self._mask_bits)
