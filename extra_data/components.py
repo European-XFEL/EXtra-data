@@ -854,7 +854,8 @@ class MultimodKeyData:
 
     # For select_trains() & split_trains() to work correctly with subclasses
     def _with_selected_det(self, det_selected):
-        kw = self._init_kwargs() | {'det': det_selected}
+        kw = self._init_kwargs()
+        kw.update(det=det_selected)
         return type(self)(**kw)
 
     def select_trains(self, trains):
@@ -946,11 +947,13 @@ class DetectorMaskedKeyData(MultimodKeyData):
         return f"<Masked {self.key!r} detector data for {len(self.modules)} modules>"
 
     def _init_kwargs(self):
-        return super()._init_kwargs() | dict(
+        kw = super()._init_kwargs()
+        kw.update(
             mask_key=self._mask_key,
             mask_bits=self._mask_bits,
             masked_value=self._masked_value,
         )
+        return kw
 
     def _load_mask(self, module_gaps):
         """Load the mask & convert to boolean (True for bad pixels)"""
@@ -982,7 +985,9 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         self._extraneous_dim = (len(entry_shape) >= 1) and (entry_shape[0] == 1)
 
     def _init_kwargs(self):
-        return super()._init_kwargs() | dict(pulse_sel=self._pulse_sel)
+        kw = super()._init_kwargs()
+        kw.update(pulse_sel=self._pulse_sel)
+        return kw
 
     @property
     def ndim(self):
@@ -1053,7 +1058,8 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         return ['module', 'train_pulse'] + entry_dims
 
     def select_pulses(self, pulses):
-        kw = self._init_kwargs() | {'pulse_sel': _check_pulse_selection(pulses)}
+        kw = self._init_kwargs()
+        kw.update(pulse_sel=_check_pulse_selection(pulses))
         return type(self)(**kw)
 
     @property
