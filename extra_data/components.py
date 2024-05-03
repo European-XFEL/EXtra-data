@@ -196,6 +196,7 @@ class MultimodDetectorBase:
           The replacement value to use for masked data. By default this is NaN.
         """
         key = key or self._main_data_key
+        self[self._mask_data_key]  # Check that the mask is there
         return DetectorMaskedKeyData(
             self, key, mask_key=self._mask_data_key,
             mask_bits=mask_bits, masked_value=masked_value
@@ -527,6 +528,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
         """
         key = key or self._main_data_key
         assert key.startswith('image.')
+        self[self._mask_data_key]  # Check that the mask is there
         return XtdfMaskedKeyData(
             self, key, mask_key=self._mask_data_key,
             mask_bits=mask_bits, masked_value=masked_value
