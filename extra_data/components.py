@@ -935,15 +935,6 @@ class MultimodKeyData:
         return out
 
 
-def _load_mask(mask_kd, module_gaps, mask_bits=None):
-    """Load the mask & convert to boolean (True for bad pixels)"""
-    mask_data = mask_kd.ndarray(module_gaps=module_gaps)
-    if mask_bits is None:
-        return mask_data != 0  # Skip extra temporary array from &
-    else:
-        return (mask_data & mask_bits) != 0
-
-
 class DetectorMaskedKeyData(MultimodKeyData):
     def __init__(self, *args, mask_key, mask_bits, masked_value, **kwargs):
         super().__init__(*args, **kwargs)
@@ -961,11 +952,19 @@ class DetectorMaskedKeyData(MultimodKeyData):
             masked_value=self._masked_value,
         )
 
+    def _load_mask(self, module_gaps):
+        """Load the mask & convert to boolean (True for bad pixels)"""
+        mask_data = self.det[self._mask_key].ndarray(module_gaps=module_gaps)
+        if self._mask_bits is None:
+            return mask_data != 0  # Skip extra temporary array from &
+        else:
+            return (mask_data & self._mask_bits) != 0
+
     def ndarray(self, *, module_gaps=False, **kwargs):
         """Load data into a NumPy array & apply the mask"""
         # Load mask first: it shrinks from 4 bytes/px to 1, so peak memory use
         # is lower than loading it after the data
-        mask = _load_mask(self.det[self._mask_key], module_gaps, self._mask_bits)
+        mask = self._load_mask(module_gaps=module_gaps)
 
         data = super().ndarray(module_gaps=module_gaps, **kwargs)
         data[mask] = self._masked_value
