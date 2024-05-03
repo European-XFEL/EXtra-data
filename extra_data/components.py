@@ -968,6 +968,7 @@ class DetectorMaskedKeyData(MultimodKeyData):
         # Load mask first: it shrinks from 4 bytes/px to 1, so peak memory use
         # is lower than loading it after the data
         mask = self._load_mask(module_gaps=module_gaps)
+        print(mask[0, 0, 0, :35])
 
         data = super().ndarray(module_gaps=module_gaps, **kwargs)
         data[mask] = self._masked_value

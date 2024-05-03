@@ -252,6 +252,62 @@ def test_jungfraus_first_modno(mock_jungfrau_run, mock_fxe_jungfrau_run):
         assert np.all(arr['module'] == [modno])
 
 
+def test_jungfrau_masked_data(mock_fxe_jungfrau_run):
+    run = RunDirectory(mock_fxe_jungfrau_run)
+    jf = JUNGFRAU(run, 'FXE_XAD_JF500K')
+
+    # Default options
+    kd = jf.masked_data().select_trains(np.s_[:1])
+    arr = kd.ndarray()
+    assert arr.shape == (1, 1, 16, 512, 1024)
+    assert arr.dtype == np.float32
+    line0 = np.zeros(1024, dtype=np.float32)
+    line0[1:32] = np.nan
+    np.testing.assert_array_equal(arr[0, 0, 0, 0, :], line0)
+
+    # Xarray
+    xarr = kd.xarray()
+    assert xarr.dims[:2] == ('module', 'trainId')
+    np.testing.assert_array_equal(xarr.values[0, 0, 0, 0, :], line0)
+
+    # Specify which mask bits to use, & replace masked values with 99
+    kd = jf.masked_data(mask_bits=1, masked_value=99).select_trains(np.s_[:1])
+    arr = kd.ndarray()
+    assert arr.shape == (1, 1, 16, 512, 1024)
+    line0 = np.zeros(1024, dtype=np.float32)
+    line0[1:32:2] = 99
+    np.testing.assert_array_equal(arr[0, 0, 0, 0, :], line0)
+
+    # Different field
+    kd = jf.masked_data('data.gain', masked_value=255).select_trains(np.s_[:1])
+    arr = kd.ndarray()
+    assert arr.shape == (1, 1, 16, 512, 1024)
+    assert arr.dtype == np.uint8
+    line0 = np.zeros(1024, dtype=np.uint8)
+    line0[1:32] = 255
+    np.testing.assert_array_equal(arr[0, 0, 0, 0, :], line0)
+
+
+def test_xtdf_masked_data(mock_reduced_spb_proc_run):
+    run = RunDirectory(mock_reduced_spb_proc_run)
+    agipd = AGIPD1M(run, modules=[8, 9])
+
+    kd = agipd.masked_data().select_trains(np.s_[:1])
+    assert kd.shape == (2, kd.shape[1], 512, 128)
+    arr = kd.ndarray()
+    assert arr.shape == kd.shape
+    assert arr.dtype == np.float32
+    line0_2mod = np.zeros((2, 128), dtype=np.float32)
+    line0_2mod[1, 1:32] = np.nan
+    np.testing.assert_array_equal(arr[:, 0, 0, :], line0_2mod)
+
+    kd = agipd.masked_data(mask_bits=1, masked_value=-1).select_trains(np.s_[:1])
+    arr = kd.ndarray()
+    line0_2mod = np.zeros((2, 128), dtype=np.float32)
+    line0_2mod[1, 1:32:2] = -1
+    np.testing.assert_array_equal(arr[:, 0, 0, :], line0_2mod)
+
+
 def test_get_dask_array(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run)
