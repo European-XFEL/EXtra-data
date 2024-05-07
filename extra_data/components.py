@@ -2,6 +2,7 @@
 """
 import logging
 import re
+from collections.abc import Iterable
 from copy import copy
 from warnings import warn
 
@@ -189,18 +190,27 @@ class MultimodDetectorBase:
         key: str
           The data key to look at, by default the main data key of the detector
           (e.g. 'data.adc').
-        mask_bits: int
-          Bitmask of reasons to exclude pixels. By default, all types of bad
-          pixel are masked out.
+        mask_bits: int or list of ints
+          Reasons to exclude pixels, as a bitmask or a list of integers.
+          By default, all types of bad pixel are masked out.
         masked_value: int, float
           The replacement value to use for masked data. By default this is NaN.
         """
         key = key or self._main_data_key
         self[self._mask_data_key]  # Check that the mask is there
+        if isinstance(mask_bits, Iterable):
+            mask_bits = self._combine_bitfield(mask_bits)
         return DetectorMaskedKeyData(
             self, key, mask_key=self._mask_data_key,
             mask_bits=mask_bits, masked_value=masked_value
         )
+
+    @staticmethod
+    def _combine_bitfield(ints):
+        res = 0
+        for i in ints:
+            res |= i
+        return res
 
     @classmethod
     def _find_detector_name(cls, data):
@@ -520,15 +530,17 @@ class XtdfDetectorBase(MultimodDetectorBase):
         key: str
           The data key to look at, by default the main data key of the detector
           (e.g. 'image.data').
-        mask_bits: int
-          Bitmask of reasons to exclude pixels. By default, all types of bad
-          pixel are masked out.
+        mask_bits: int or list of ints
+          Reasons to exclude pixels, as a bitmask or a list of integers.
+          By default, all types of bad pixel are masked out.
         masked_value: int, float
           The replacement value to use for masked data. By default this is NaN.
         """
         key = key or self._main_data_key
         assert key.startswith('image.')
         self[self._mask_data_key]  # Check that the mask is there
+        if isinstance(mask_bits, Iterable):
+            mask_bits = self._combine_bitfield(mask_bits)
         return XtdfMaskedKeyData(
             self, key, mask_key=self._mask_data_key,
             mask_bits=mask_bits, masked_value=masked_value

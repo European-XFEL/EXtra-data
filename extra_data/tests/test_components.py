@@ -301,10 +301,10 @@ def test_xtdf_masked_data(mock_reduced_spb_proc_run):
     line0_2mod[1, 1:32] = np.nan
     np.testing.assert_array_equal(arr[:, 0, 0, :], line0_2mod)
 
-    kd = agipd.masked_data(mask_bits=1, masked_value=-1).select_trains(np.s_[:1])
+    kd = agipd.masked_data(mask_bits=[1, 4], masked_value=-1).select_trains(np.s_[:1])
     arr = kd.ndarray()
     line0_2mod = np.zeros((2, 128), dtype=np.float32)
-    line0_2mod[1, 1:32:2] = -1
+    line0_2mod[1, np.nonzero(np.arange(32) & 5)] = -1
     np.testing.assert_array_equal(arr[:, 0, 0, :], line0_2mod)
 
 
