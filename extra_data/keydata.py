@@ -209,6 +209,8 @@ class KeyData:
     def __getitem__(self, item):
         return self.select_trains(item)
 
+    __iter__ = None  # Disable iteration
+
     def _only_tids(self, tids, files=None):
         tids_arr = np.array(tids)
         if files is None:

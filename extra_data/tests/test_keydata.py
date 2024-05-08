@@ -39,6 +39,10 @@ def test_get_keydata(mock_spb_raw_run):
     data = xgm_beam_x.ndarray()
     assert xgm_beam_x.nbytes == data.nbytes
 
+    # Ensure KeyData is not accidentally iterable
+    with pytest.raises(TypeError):
+        iter(xgm_beam_x)
+
 def test_select_trains(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
     xgm_beam_x = run['SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value']
