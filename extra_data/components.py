@@ -806,6 +806,11 @@ class MultimodKeyData:
     def select_trains(self, trains):
         return self._with_selected_det(self.det.select_trains(trains))
 
+    def __getitem__(self, item):
+        return self.select_trains(item)
+
+    __iter__ = None  # Disable iteration
+
     def split_trains(self, parts=None, trains_per_part=None, frames_per_part=None):
         for det_split in self.det.split_trains(parts, trains_per_part, frames_per_part):
             yield self._with_selected_det(det_split)
