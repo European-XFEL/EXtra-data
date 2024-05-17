@@ -373,7 +373,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     available_checks = {f.__name__ for f in FileValidator.check_funcs}
-    bad_skips = set(args.skip) - available_checks
+    bad_skips = set(args.skip or []) - available_checks
     if bad_skips:
         print("Unknown names passed to --skip:", ", ".join(sorted(bad_skips)))
         return 1
