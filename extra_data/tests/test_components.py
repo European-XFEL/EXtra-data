@@ -365,6 +365,20 @@ def test_select_trains(mock_fxe_raw_run):
     assert arr.shape == (16, 2, 128, 256, 256)
 
 
+def test_keydata_select_trains(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    det = LPD1M(run.select_trains(np.s_[:20]))
+    kd = det['image.data']
+    assert len(kd.train_ids) == 20
+    assert kd.shape == (16, 20 * 128, 256, 256)
+    kd = kd[:3]
+    assert len(kd.train_ids) == 3
+    assert kd.shape == (16, 3 * 128, 256, 256)
+
+    with pytest.raises(TypeError):
+        iter(kd)
+
+
 def test_split_trains(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run.select_trains(np.s_[:20]))
