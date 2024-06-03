@@ -178,6 +178,9 @@ class MultimodDetectorBase:
     def __getitem__(self, item):
         return MultimodKeyData(self, item)
 
+    def __contains__(self, item):
+        return all(item in self.data[s] for s in self.source_to_modno)
+
     def masked_data(self, key=None, *, mask_bits=None, masked_value=np.nan):
         """Combine corrected data with the mask in the files
 
@@ -192,12 +195,17 @@ class MultimodDetectorBase:
           (e.g. 'data.adc').
         mask_bits: int or list of ints
           Reasons to exclude pixels, as a bitmask or a list of integers.
-          By default, all types of bad pixel are masked out.
+          By default, all types of bad pixel are masked out. See the possible
+          values at: https://extra.readthedocs.io/en/latest/calibration/#extra.calibration.BadPixels
         masked_value: int, float
           The replacement value to use for masked data. By default this is NaN.
         """
         key = key or self._main_data_key
-        self[self._mask_data_key]  # Check that the mask is there
+        if self._mask_data_key not in self:
+            raise RuntimeError(
+                f"This data doesn't include a mask ({self._mask_data_key}). "
+                f"You might be using raw instead of corrected data."
+            )
         if isinstance(mask_bits, Iterable):
             mask_bits = self._combine_bitfield(mask_bits)
         return DetectorMaskedKeyData(
@@ -538,7 +546,11 @@ class XtdfDetectorBase(MultimodDetectorBase):
         """
         key = key or self._main_data_key
         assert key.startswith('image.')
-        self[self._mask_data_key]  # Check that the mask is there
+        if self._mask_data_key not in self:
+            raise RuntimeError(
+                f"This data doesn't include a mask ({self._mask_data_key}). "
+                f"You might be using raw instead of corrected data."
+            )
         if isinstance(mask_bits, Iterable):
             mask_bits = self._combine_bitfield(mask_bits)
         return XtdfMaskedKeyData(

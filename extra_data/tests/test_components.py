@@ -308,6 +308,14 @@ def test_xtdf_masked_data(mock_reduced_spb_proc_run):
     np.testing.assert_array_equal(arr[:, 0, 0, :], line0_2mod)
 
 
+def test_masked_data_raw_error(mock_fxe_raw_run):
+    run = RunDirectory(mock_fxe_raw_run)
+    lpd = LPD1M(run)
+
+    with pytest.raises(RuntimeError, match="image.mask"):
+        lpd.masked_data()
+
+
 def test_get_dask_array(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run)
