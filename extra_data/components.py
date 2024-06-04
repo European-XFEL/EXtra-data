@@ -2,6 +2,7 @@
 """
 import logging
 import re
+from collections.abc import Iterable
 from copy import copy
 from warnings import warn
 
@@ -122,6 +123,7 @@ class MultimodDetectorBase:
     _source_re = re.compile(r'(?P<detname>.+)/DET/(\d+)CH')
     # Override in subclass
     _main_data_key = ''  # Key to use for checking data counts match
+    _mask_data_key = ''
     _frames_per_entry = 1  # Override if separate pulse dimension in files
     _modnos_start_at = 0  # Override if module numbers start at 1 (JUNGFRAU)
     module_shape = (0, 0)
@@ -175,6 +177,48 @@ class MultimodDetectorBase:
 
     def __getitem__(self, item):
         return MultimodKeyData(self, item)
+
+    def __contains__(self, item):
+        return all(item in self.data[s] for s in self.source_to_modno)
+
+    def masked_data(self, key=None, *, mask_bits=None, masked_value=np.nan):
+        """Combine corrected data with the mask in the files
+
+        This provides an interface similar to ``det['data.adc']``, but masking
+        out pixels with the mask from the correction pipeline.
+
+        Parameters
+        ----------
+
+        key: str
+          The data key to look at, by default the main data key of the detector
+          (e.g. 'data.adc').
+        mask_bits: int or list of ints
+          Reasons to exclude pixels, as a bitmask or a list of integers.
+          By default, all types of bad pixel are masked out. See the possible
+          values at: https://extra.readthedocs.io/en/latest/calibration/#extra.calibration.BadPixels
+        masked_value: int, float
+          The replacement value to use for masked data. By default this is NaN.
+        """
+        key = key or self._main_data_key
+        if self._mask_data_key not in self:
+            raise RuntimeError(
+                f"This data doesn't include a mask ({self._mask_data_key}). "
+                f"You might be using raw instead of corrected data."
+            )
+        if isinstance(mask_bits, Iterable):
+            mask_bits = self._combine_bitfield(mask_bits)
+        return DetectorMaskedKeyData(
+            self, key, mask_key=self._mask_data_key,
+            mask_bits=mask_bits, masked_value=masked_value
+        )
+
+    @staticmethod
+    def _combine_bitfield(ints):
+        res = 0
+        for i in ints:
+            res |= i
+        return res
 
     @classmethod
     def _find_detector_name(cls, data):
@@ -471,6 +515,7 @@ class XtdfDetectorBase(MultimodDetectorBase):
     """
     n_modules = 16
     _main_data_key = 'image.data'
+    _mask_data_key = 'image.mask'
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
                  *, min_modules=1):
@@ -480,6 +525,38 @@ class XtdfDetectorBase(MultimodDetectorBase):
         if item.startswith('image.'):
             return XtdfImageMultimodKeyData(self, item)
         return super().__getitem__(item)
+
+    def masked_data(self, key=None, *, mask_bits=None, masked_value=np.nan):
+        """Combine corrected data with the mask in the files
+
+        This provides an interface similar to ``det['image.data']``, but masking
+        out pixels with the mask from the correction pipeline.
+
+        Parameters
+        ----------
+
+        key: str
+          The data key to look at, by default the main data key of the detector
+          (e.g. 'image.data').
+        mask_bits: int or list of ints
+          Reasons to exclude pixels, as a bitmask or a list of integers.
+          By default, all types of bad pixel are masked out.
+        masked_value: int, float
+          The replacement value to use for masked data. By default this is NaN.
+        """
+        key = key or self._main_data_key
+        assert key.startswith('image.')
+        if self._mask_data_key not in self:
+            raise RuntimeError(
+                f"This data doesn't include a mask ({self._mask_data_key}). "
+                f"You might be using raw instead of corrected data."
+            )
+        if isinstance(mask_bits, Iterable):
+            mask_bits = self._combine_bitfield(mask_bits)
+        return XtdfMaskedKeyData(
+            self, key, mask_key=self._mask_data_key,
+            mask_bits=mask_bits, masked_value=masked_value
+        )
 
     # Several methods below are overridden in LPD1M for parallel gain mode
 
@@ -746,7 +823,6 @@ def zip_trains_pulses(trains, pulses):
     return res
 
 
-
 class MultimodKeyData:
     def __init__(self, det: MultimodDetectorBase, key):
         self.det = det
@@ -754,6 +830,9 @@ class MultimodKeyData:
         self.modno_to_keydata = {
             m: det.data[s, key] for (m, s) in det.modno_to_source.items()
         }
+
+    def _init_kwargs(self):  # Extended in subclasses
+        return dict(det=self.det, key=self.key)
 
     @property
     def train_ids(self):
@@ -799,9 +878,11 @@ class MultimodKeyData:
     def dtype(self):
         return self._eg_keydata.dtype
 
+    # For select_trains() & split_trains() to work correctly with subclasses
     def _with_selected_det(self, det_selected):
-        # Overridden for XtdfImageMultimodKeyData to preserve pulse selection
-        return MultimodKeyData(det_selected, self.key)
+        kw = self._init_kwargs()
+        kw.update(det=det_selected)
+        return type(self)(**kw)
 
     def select_trains(self, trains):
         return self._with_selected_det(self.det.select_trains(trains))
@@ -836,12 +917,15 @@ class MultimodKeyData:
                     )
         return out
 
-    def xarray(self, *, fill_value=None, roi=(), astype=None):
+    def _wrap_xarray(self, arr):
         from xarray import DataArray
-        arr = self.ndarray(fill_value=fill_value, roi=roi, astype=astype)
 
         coords = {'module': self.modules, 'trainId': self.train_id_coordinates()}
         return DataArray(arr, dims=self.dimensions, coords=coords)
+
+    def xarray(self, *, fill_value=None, roi=(), astype=None):
+        arr = self.ndarray(fill_value=fill_value, roi=roi, astype=astype)
+        return self._wrap_xarray(arr)
 
     def dask_array(self, *, labelled=False, fill_value=None, astype=None):
         from dask.delayed import delayed
@@ -859,9 +943,7 @@ class MultimodKeyData:
         ) for c in split], axis=1)
 
         if labelled:
-            from xarray import DataArray
-            coords = {'module': self.modules, 'trainId': self.train_id_coordinates()}
-            return DataArray(arr, dims=self.dimensions, coords=coords)
+            return self._wrap_xarray(arr)
 
         return arr
 
@@ -885,6 +967,44 @@ class MultimodKeyData:
         return out
 
 
+class DetectorMaskedKeyData(MultimodKeyData):
+    def __init__(self, *args, mask_key, mask_bits, masked_value, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._mask_key = mask_key
+        self._mask_bits = mask_bits
+        self._masked_value = masked_value
+
+    def __repr__(self):
+        return f"<Masked {self.key!r} detector data for {len(self.modules)} modules>"
+
+    def _init_kwargs(self):
+        kw = super()._init_kwargs()
+        kw.update(
+            mask_key=self._mask_key,
+            mask_bits=self._mask_bits,
+            masked_value=self._masked_value,
+        )
+        return kw
+
+    def _load_mask(self, module_gaps):
+        """Load the mask & convert to boolean (True for bad pixels)"""
+        mask_data = self.det[self._mask_key].ndarray(module_gaps=module_gaps)
+        if self._mask_bits is None:
+            return mask_data != 0  # Skip extra temporary array from &
+        else:
+            return (mask_data & self._mask_bits) != 0
+
+    def ndarray(self, *, module_gaps=False, **kwargs):
+        """Load data into a NumPy array & apply the mask"""
+        # Load mask first: it shrinks from 4 bytes/px to 1, so peak memory use
+        # is lower than loading it after the data
+        mask = self._load_mask(module_gaps=module_gaps)
+
+        data = super().ndarray(module_gaps=module_gaps, **kwargs)
+        data[mask] = self._masked_value
+        return data
+
+
 class XtdfImageMultimodKeyData(MultimodKeyData):
     _sel_frames_cached = None
     det: XtdfDetectorBase
@@ -894,6 +1014,11 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         self._pulse_sel = pulse_sel
         entry_shape = self._eg_keydata.entry_shape
         self._extraneous_dim = (len(entry_shape) >= 1) and (entry_shape[0] == 1)
+
+    def _init_kwargs(self):
+        kw = super()._init_kwargs()
+        kw.update(pulse_sel=self._pulse_sel)
+        return kw
 
     @property
     def ndim(self):
@@ -963,14 +1088,10 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             entry_dims = [f'dim_{i}' for i in range(ndim_inner)]
         return ['module', 'train_pulse'] + entry_dims
 
-    # Used for .select_trains() and .split_trains()
-    def _with_selected_det(self, det_selected):
-        return XtdfImageMultimodKeyData(det_selected, self.key, self._pulse_sel)
-
     def select_pulses(self, pulses):
-        pulses = _check_pulse_selection(pulses)
-
-        return XtdfImageMultimodKeyData(self.det, self.key, pulses)
+        kw = self._init_kwargs()
+        kw.update(pulse_sel=_check_pulse_selection(pulses))
+        return type(self)(**kw)
 
     @property
     def _sel_frames(self):
@@ -1106,6 +1227,12 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             return self._wrap_xarray(arr, subtrain_index)
 
         return arr
+
+
+class XtdfMaskedKeyData(DetectorMaskedKeyData, XtdfImageMultimodKeyData):
+    # Created from xtdf_det.masked_data()
+    pass
+
 
 class FramesFileWriter(FileWriter):
     """Write selected detector frames in European XFEL HDF5 format"""
@@ -1630,6 +1757,7 @@ class JUNGFRAU(MultimodDetectorBase):
         r'(MODULE_|RECEIVER-|JNGFR)(?P<modno>\d+)'
     )
     _main_data_key = 'data.adc'
+    _mask_data_key = 'data.mask'
     _modnos_start_at = 1
     module_shape = (512, 1024)
 

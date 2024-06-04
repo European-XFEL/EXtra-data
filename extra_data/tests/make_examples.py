@@ -326,6 +326,12 @@ def make_reduced_spb_run(dir_path, raw=True, rng=None, format_version='0.5'):
                          frames_per_train=frame_counts)
             ], ntrains=64, chunksize=32, format_version=format_version)
 
+        if modno == 9 and not raw:
+            # For testing masked_data
+            with h5py.File(path, 'a') as f:
+                mask_ds = f['INSTRUMENT/SPB_DET_AGIPD1M-1/DET/9CH0:xtdf/image/mask']
+                mask_ds[0, 0, :32] = np.arange(32)
+
     write_file(osp.join(dir_path, '{}-R0238-DA01-S00000.h5'.format(prefix)),
                [ XGM('SA1_XTD2_XGM/DOOCS/MAIN'),
                  XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
@@ -408,6 +414,10 @@ def make_fxe_jungfrau_run(dir_path):
     write_file(path, [
         JUNGFRAUModule(f'FXE_XAD_JF500K/DET/JNGFR03')
     ], ntrains=100, chunksize=1, format_version='1.0')
+    with h5py.File(path, 'a') as f:
+        # For testing masked_data
+        mask_ds = f['INSTRUMENT/FXE_XAD_JF500K/DET/JNGFR03:daqOutput/data/mask']
+        mask_ds[0, 0, 0, :32] = np.arange(32)
 
     write_file(osp.join(dir_path, f'RAW-R0052-JNGFRCTRL00-S00000.h5'), [
         JUNGFRAUControl('FXE_XAD_JF1M/DET/CONTROL'),
