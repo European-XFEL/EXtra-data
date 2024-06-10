@@ -94,7 +94,17 @@ class RunFilesMap:
         loaded_data = []
         t0 = time.monotonic()
 
+        paths_mtimes = []
+
         for path in self.candidate_paths:
+            try:
+                st = os.stat(path)
+                paths_mtimes.append((path, st.st_mtime))
+            except (FileNotFoundError, PermissionError):
+                pass
+
+        # Try the newest found file (greatest mtime) first
+        for path, _ in sorted(paths_mtimes, key=lambda x: x[1], reverse=True):
             try:
                 with open(path) as f:
                     loaded_data = json.load(f)
