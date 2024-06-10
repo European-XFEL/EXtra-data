@@ -72,7 +72,7 @@ def lc_match(files, accept=ONDISK):
             filtered.append(path)
         else:
             print(f"Skipping file {path}", file=sys.stderr)
-            print(f"  ({LOCMSG[loc]})", file=sys.stderr)
+            print(f"  ({LOCMSG[code]})", file=sys.stderr)
             
     return filtered
         
