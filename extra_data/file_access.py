@@ -467,25 +467,51 @@ class FileAccess(metaclass=MetaFileAccess):
         self._keys_cache[source] = res
         return res
 
-    def get_one_key(self, source):
+    def get_one_key(self, source, index_group=None):
         """Similar to get_keys(), except it returns only a single key for performance"""
+
+        # Use empty prefix if no index group filter is active.
+        prefix = index_group + '.' if index_group is not None else ''
+
         if source in self._keys_cache:
-            return next(iter(self._keys_cache[source]))
-        elif self._known_keys[source]:
-            return next(iter(self._known_keys[source]))
+            for key in self._keys_cache[source]:
+                if key.startswith(prefix):
+                    return key
+
+            # _keys_cache is a complete set, so this point can only be
+            # reached for a key-less source (currently assumed to no
+            # exist) or a non-existing index group was passed.
+            raise ValueError(f'{index_group} not an index group of `{source}`')
+
+        if self._known_keys[source]:
+            for key in self._known_keys[source]:
+                if key.startswith(prefix):
+                    return key
 
         if source in self.control_sources:
-            group = '/CONTROL/' + source
+            root = 'CONTROL'
         elif source in self.instrument_sources:
-            group = '/INSTRUMENT/' + source
+            root = 'INSTRUMENT'
         else:
             raise SourceNameError(source)
 
-        def get_key(key, value):
-            if isinstance(value, h5py.Dataset):
-                return key.replace('/', '.')
+        group = f'/{root}/{source}'
 
-        return self.file[group].visititems(get_key)
+        if index_group is not None:
+            group += '/' + index_group
+
+        def get_key(subkey, value):
+            if isinstance(value, h5py.Dataset):
+                return prefix + subkey.replace('/', '.')
+
+        try:
+            h5_group = self.file[group]
+        except KeyError:
+            # Can only happen for missing index groups, as missing
+            # sources are handled above already.
+            raise ValueError(f'{index_group} not an index group of `{source}`')
+        else:
+            return h5_group.visititems(get_key)
 
     def get_run_keys(self, source):
         """Get the keys in the RUN section for a given control source name
