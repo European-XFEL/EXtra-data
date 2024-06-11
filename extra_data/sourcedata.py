@@ -96,17 +96,6 @@ class SourceData:
 
         return FileAccess(sample_path)
 
-    def _get_index_group_sample(self, index_group):
-        if self.is_control and not index_group:
-            # Shortcut for CONTROL data.
-            return self.one_key()
-
-        for key in self.keys():
-            if self[key].index_group == index_group:
-                return key
-
-        raise ValueError(f'{index_group} not an index group of this source')
-
     @property
     def storage_class(self):
         if self._first_source_file is ...:
@@ -354,9 +343,8 @@ class SourceData:
         if index_group is None:
             # Collect data counts for a sample key per index group.
             data_counts = {
-                index_group: self[
-                    self._get_index_group_sample(index_group)
-                ].data_counts(labelled=labelled)
+                index_group: self[self.one_key(index_group)].data_counts(
+                    labelled=labelled)
                 for index_group in self.index_groups
             }
 
@@ -367,8 +355,8 @@ class SourceData:
                 return np.stack(list(data_counts.values())).max(axis=0)
 
         else:
-            return self[self._get_index_group_sample(index_group)] \
-                .data_counts(labelled=labelled)
+            return self[self.one_key(index_group)].data_counts(
+                labelled=labelled)
 
     def train_id_coordinates(self, index_group=None):
         """Make an array of train IDs to use alongside data this source.
@@ -395,8 +383,7 @@ class SourceData:
 
             index_group = self.index_groups.pop()
 
-        return self[self._get_index_group_sample(index_group)] \
-            .train_id_coordinates()
+        return self[self.one_key(index_group)].train_id_coordinates()
 
     def run_metadata(self) -> Dict:
         """Get a dictionary of metadata about the run
