@@ -155,17 +155,28 @@ class SourceData:
         for f in self.files:
             return f.get_keys(self.source)
 
-    def one_key(self):
+    def one_key(self, index_group=None):
         """Get a single (random) key for this source
 
         If you only need a single key, this can be much faster than calling
-        :meth:`keys`.
+        :meth:`keys`. If *index_group* is omitted, the key may be part of
+        any index group.
         """
         if self.sel_keys is not None:
-            return next(iter(self.sel_keys))
+            if index_group is None:
+                return next(iter(self.sel_keys))
+
+            prefix = f'{index_group}.'
+
+            for key in self.sel_keys:
+                if key.startswith(prefix):
+                    return key
+
+            raise ValueError(f'none of the selected keys is part of '
+                             f'`{index_group}`')
 
         for f in self.files:
-            return f.get_one_key(self.source)
+            return f.get_one_key(self.source, index_group)
 
     @property
     def index_groups(self) -> set:
