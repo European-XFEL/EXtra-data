@@ -142,8 +142,11 @@ class RunFilesMap:
             res = {
                 'train_ids': np.array(d['train_ids'], dtype=np.uint64),
                 'control_sources': frozenset(d['control_sources']),
-                'instrument_sources': frozenset(d['instrument_sources'])
+                'instrument_sources': frozenset(d['instrument_sources']),
             }
+            # Older cache files don't contain info on legacy sources.
+            if 'legacy_sources' in d:
+                res['legacy_sources'] = d['legacy_sources']
             # Older cache files don't contain info on 'suspect' trains.
             if 'suspect_train_indices' in d:
                 res['flag'] = flag = np.ones_like(d['train_ids'], dtype=np.bool_)
@@ -155,9 +158,11 @@ class RunFilesMap:
     def _cache_valid(self, fname):
         # The cache is invalid (needs to be written out) if the file is not in
         # files_data (which it won't be if the size or mtime don't match - see
-        # load()), or if suspect_train_indices is missing. This was added after
-        # we started making cache files, so we want to add it to existing caches.
-        return 'suspect_train_indices' in self.files_data.get(fname, {})
+        # load()), or if the later added suspect_train_indices/legagy_sources
+        # are missing. These may be missing from caches created by legacy
+        # versions of EXtra-data.
+        return not bool({'suspect_train_indices', 'legacy_sources'} \
+            - self.files_data.get(fname, {}).keys())
 
     def save(self, files):
         """Save the cache if needed
@@ -192,6 +197,8 @@ class RunFilesMap:
                     'train_ids': [int(t) for t in file_access.train_ids],
                     'control_sources': sorted(file_access.control_sources),
                     'instrument_sources': sorted(file_access.instrument_sources),
+                    'legacy_sources': {k: file_access.legacy_sources[k]
+                                       for k in sorted(file_access.legacy_sources)},
                     'suspect_train_indices': [
                         int(i) for i in (~file_access.validity_flag).nonzero()[0]
                     ],

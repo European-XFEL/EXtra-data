@@ -146,6 +146,7 @@ class FileAccess(metaclass=MetaFileAccess):
             self.train_ids = _cache_info['train_ids']
             self.control_sources = _cache_info['control_sources']
             self.instrument_sources = _cache_info['instrument_sources']
+            self.legacy_sources = _cache_info.get('legacy_sources', {})
             self.validity_flag = _cache_info.get('flag', None)
         else:
             try:
@@ -155,7 +156,8 @@ class FileAccess(metaclass=MetaFileAccess):
 
             self.train_ids = tid_data[tid_data != 0]
 
-            self.control_sources, self.instrument_sources = self._read_data_sources()
+            self.control_sources, self.instrument_sources, self.legacy_sources \
+                = self._read_data_sources()
 
             self.validity_flag = None
 
@@ -294,7 +296,7 @@ class FileAccess(metaclass=MetaFileAccess):
         return self._format_version
 
     def _read_data_sources(self):
-        control_sources, instrument_sources = set(), set()
+        control_sources, instrument_sources, legacy_sources = set(), set(), dict()
 
         # The list of data sources moved in file format 1.0
         if self.format_version == '0.5':
@@ -307,16 +309,28 @@ class FileAccess(metaclass=MetaFileAccess):
         except KeyError:
             raise FileStructureError(f'{data_sources_path} not found')
 
-        for source in data_sources_group[:]:
-            if not source:
+        for source_id in data_sources_group[:]:
+            if not source_id:
                 continue
-            source = source.decode()
-            category, _, h5_source = source.partition('/')
+            source_id = source_id.decode()
+            category, _, h5_source = source_id.partition('/')
             if category == 'INSTRUMENT':
                 device, _, chan_grp = h5_source.partition(':')
                 chan, _, group = chan_grp.partition('/')
                 source = device + ':' + chan
-                instrument_sources.add(source)
+
+                if source not in instrument_sources:
+                    # The legacy source name is only expected to be used
+                    # for instrument (more precisely, XTDF sources) for
+                    # now. For performance reasons, the check is
+                    # therefore only performed here, and only once rather
+                    # than by index group.
+                    item = self.file.get(f'{category}/{source}', getlink=True)
+
+                    if isinstance(item, h5py.SoftLink):
+                        legacy_sources[source] = item.path[1:].partition('/')[2]
+
+                    instrument_sources.add(source)
                 # TODO: Do something with groups?
             elif category == 'CONTROL':
                 control_sources.add(h5_source)
@@ -327,7 +341,8 @@ class FileAccess(metaclass=MetaFileAccess):
             else:
                 raise ValueError("Unknown data category %r" % category)
 
-        return frozenset(control_sources), frozenset(instrument_sources)
+        return frozenset(control_sources), frozenset(instrument_sources), \
+            legacy_sources
 
     def _guess_valid_trains(self):
         # File format version 1.0 includes a flag which is 0 if a train ID
