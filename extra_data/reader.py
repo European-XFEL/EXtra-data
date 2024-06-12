@@ -1249,30 +1249,30 @@ class DataCollection:
             # Include summary section for multi-module detectors unless
             # source details are enabled.
 
-            detector_modules = {}
+            sources_by_detector = {}
             for source in self.detector_sources:
                 name, modno = DETECTOR_SOURCE_RE.match(source).groups((1, 2))
-                detector_modules[(name, modno)] = source
+                sources_by_detector.setdefault(name, {})[modno] = source
 
-            # A run should only have one detector, but if that changes, don't hide it
-            detector_name = ','.join(sorted(set(k[0] for k in detector_modules)))
+            for detector_name in sorted(sources_by_detector.keys()):
+                detector_modules = sources_by_detector[detector_name]
 
-            print("{} XTDF detector modules ({})".format(
-                len(self.detector_sources), detector_name
-            ))
-            if len(detector_modules) > 0:
-                # Show detail on the first module (the others should be similar)
-                mod_key = sorted(detector_modules)[0]
-                mod_source = detector_modules[mod_key]
-                dinfo = self.detector_info(mod_source)
-                module = ' '.join(mod_key)
-                dims = ' x '.join(str(d) for d in dinfo['dims'])
-                print("  e.g. module {} : {} pixels".format(module, dims))
-                print("  {}".format(mod_source))
-                print("  {} frames per train, up to {} frames total".format(
-                    dinfo['frames_per_train'], dinfo['total_frames']
+                print("{} XTDF detector modules of {}/*".format(
+                    len(detector_modules), detector_name
                 ))
-            print()
+                if len(detector_modules) > 0:
+                    # Show detail on the first module (the others should be similar)
+                    mod_key = sorted(detector_modules)[0]
+                    mod_source = detector_modules[mod_key]
+                    dinfo = self.detector_info(mod_source)
+                    module = ' '.join(mod_key)
+                    dims = ' x '.join(str(d) for d in dinfo['dims'])
+                    print("  e.g. module {} : {} pixels".format(module, dims))
+                    print("  {}".format(mod_source))
+                    print("  {} frames per train, up to {} frames total".format(
+                        dinfo['frames_per_train'], dinfo['total_frames']
+                    ))
+                print()
 
         # Invert aliases for faster lookup.
         src_aliases = defaultdict(set)
