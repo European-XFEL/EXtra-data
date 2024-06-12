@@ -96,19 +96,22 @@ class DataCollection:
 
         if sources_data is None:
             files_by_sources = defaultdict(list)
+            legacy_sources = dict()
             for f in self.files:
                 for source in f.control_sources:
                     files_by_sources[source, 'CONTROL'].append(f)
                 for source in f.instrument_sources:
                     files_by_sources[source, 'INSTRUMENT'].append(f)
+                legacy_sources.update(f.legacy_sources)
             sources_data = {
                 src: SourceData(src,
                     sel_keys=None,
                     train_ids=train_ids,
                     files=files,
                     section=section,
+                    legacy=legacy_sources.get(src, None),
                     is_single_run=self.is_single_run,
-                    inc_suspect_trains=self.inc_suspect_trains,
+                    inc_suspect_trains=self.inc_suspect_trains
                 )
                 for ((src, section), files) in files_by_sources.items()
             }
@@ -127,6 +130,10 @@ class DataCollection:
             name for (name, sd) in self._sources_data.items()
             if sd.section == 'INSTRUMENT'
         })
+        self.legacy_sources = {
+            name: sd.legacy for (name, sd) in self._sources_data.items()
+            if sd.legacy is not None
+        }
 
     @staticmethod
     def _open_file(path, cache_info=None):
@@ -223,7 +230,8 @@ class DataCollection:
 
     @property
     def detector_sources(self):
-        return set(filter(DETECTOR_SOURCE_RE.match, self.instrument_sources))
+        return set(filter(DETECTOR_SOURCE_RE.match, self.instrument_sources)) \
+            - self.legacy_sources.keys()
 
     def _check_field(self, source, key):
         if source not in self.all_sources:
@@ -254,6 +262,14 @@ class DataCollection:
     def _get_source_data(self, source):
         if source not in self._sources_data:
             raise SourceNameError(source)
+
+        sd = self._sources_data[source]
+
+        if sd.is_legacy:
+            warn(f"{source} is a legacy name for {self.legacy_sources[source]}. "
+                 f"Access via this name will be removed at a future data.",
+                 DeprecationWarning,
+                 stacklevel=3)
 
         return self._sources_data[source]
 
@@ -1321,11 +1337,11 @@ class DataCollection:
 
         if details_for_sources:
             # All instrument sources with details enabled.
-            displayed_inst_srcs = self.instrument_sources
+            displayed_inst_srcs = self.instrument_sources - self.legacy_sources.keys()
             print(len(displayed_inst_srcs), 'instrument sources:')
         else:
             # Only non-XTDF instrument sources without details enabled.
-            displayed_inst_srcs = self.instrument_sources - self.detector_sources
+            displayed_inst_srcs = self.instrument_sources - self.detector_sources - self.legacy_sources.keys()
             print(len(displayed_inst_srcs), 'instrument sources (excluding XTDF detectors):')
 
         for s in sorted(displayed_inst_srcs):
@@ -1376,6 +1392,12 @@ class DataCollection:
                         print(f"      - {k}{alias_str}\t[{dt}{entry_info}]")
 
         print()
+
+        if self.legacy_sources:
+            print(len(self.legacy_sources), 'legacy source names:')
+            for s in sorted(self.legacy_sources.keys()):
+                print(' -', s, '->', self.legacy_sources[s])
+            print()
 
     def plot_missing_data(self, min_saved_pct=95, expand_instrument=False):
         """Plot sources that have missing data for some trains.
