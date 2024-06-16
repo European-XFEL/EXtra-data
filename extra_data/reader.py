@@ -267,7 +267,7 @@ class DataCollection:
 
         if sd.is_legacy:
             warn(f"{source} is a legacy name for {self.legacy_sources[source]}. "
-                 f"Access via this name will be removed at a future data.",
+                 f"Access via this name will be removed for future data.",
                  DeprecationWarning,
                  stacklevel=3)
 
