@@ -1394,9 +1394,26 @@ class DataCollection:
         print()
 
         if self.legacy_sources:
+            # Collect legacy souces matching DETECTOR_SOURCE_RE
+            # separately for a condensed view.
+            detector_legacy_sources = defaultdict(set)
+
             print(len(self.legacy_sources), 'legacy source names:')
             for s in sorted(self.legacy_sources.keys()):
-                print(' -', s, '->', self.legacy_sources[s])
+                m = DETECTOR_SOURCE_RE.match(s)
+
+                if m is not None:
+                    detector_legacy_sources[m[1]].add(s)
+                else:
+                    # Only print non-XTDF legacy sources.
+                    print(' -', s, '->', self.legacy_sources[s])
+
+            for legacy_det, legacy_sources in detector_legacy_sources.items():
+                canonical_mod = self.legacy_sources[next(iter(legacy_sources))]
+                canonical_det = DETECTOR_SOURCE_RE.match(canonical_mod)[1]
+
+                print(' -', f'{legacy_det}/*', '->', f'{canonical_det}/*',
+                      f'({len(legacy_sources)})')
             print()
 
     def plot_missing_data(self, min_saved_pct=95, expand_instrument=False):
