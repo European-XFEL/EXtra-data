@@ -152,3 +152,20 @@ def test_one_key(mock_spb_raw_run, source, index_group):
 
     # Test with use of _known_keys.
     assert fa.get_one_key(source, index_group) == single_key
+
+
+def test_legacy_sources(mock_modern_spb_proc_run):
+    # Get FileAccess for first module.
+    fa = sorted(RunDirectory(mock_modern_spb_proc_run).files,
+                key=lambda fa: fa.filename)[0]
+
+    # There should be no control source.
+    assert not fa.control_sources
+
+    # Instrument sources should be a set of both canonical and legacy name.
+    assert fa.instrument_sources == {
+        'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'SPB_DET_AGIPD1M-1/CORR/0CH0:xtdf'}
+
+    # Legacy sources should be a dict mapping to the canonical name.
+    assert fa.legacy_sources == {
+        'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf': 'SPB_DET_AGIPD1M-1/CORR/0CH0:xtdf'}

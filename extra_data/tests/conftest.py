@@ -159,6 +159,14 @@ def mock_spb_raw_and_proc_run():
 
 
 @pytest.fixture(scope='session')
+def mock_modern_spb_proc_run(format_version):
+    with TemporaryDirectory() as td:
+        make_examples.make_modern_spb_proc_run(
+            td, format_version=format_version)
+        yield td
+
+
+@pytest.fixture(scope='session')
 def mock_jungfrau_run():
     with TemporaryDirectory() as td:
         make_examples.make_jungfrau_run(td)

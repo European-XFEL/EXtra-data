@@ -346,6 +346,16 @@ def make_reduced_spb_run(dir_path, raw=True, rng=None, format_version='0.5'):
                format_version=format_version)
 
 
+def make_modern_spb_proc_run(dir_path, format_version='0.5'):
+    for modno in range(16):
+        path = osp.join(dir_path, f'CORR-R0142-AGIPD{modno:0>2}-S00000.h5')
+        write_file(path, [
+            AGIPDModule(f'SPB_DET_AGIPD1M-1/CORR/{modno}CH0', raw=False,
+                         frames_per_train=32,
+                         legacy_name=f'SPB_DET_AGIPD1M-1/DET/{modno}CH0')
+            ], ntrains=64, chunksize=32, format_version=format_version)
+
+
 def make_agipd1m_run(
     dir_path,
     rep_rate=True,
