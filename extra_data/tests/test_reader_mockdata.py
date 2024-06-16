@@ -1110,3 +1110,35 @@ def test_run_metadata_no_trains(mock_scs_run):
     sel = run.select_trains(np.s_[:0])
     md = sel.run_metadata()
     assert md['dataFormatVersion'] == '1.0'
+
+
+def test_proc_legacy_sources(mock_modern_spb_proc_run):
+    run = RunDirectory(mock_modern_spb_proc_run)
+
+    src_pattern = 'SPB_DET_AGIPD1M-1/{}/{}CH0:xtdf'
+    corr_sources = {src_pattern.format('CORR', i) for i in range(16)}
+    det_sources = {src_pattern.format('DET', i) for i in range(16)}
+
+    # Should contain both canonical and legacy names.
+    assert run.all_sources == corr_sources | det_sources
+    assert run.instrument_sources == corr_sources | det_sources
+    assert not run.control_sources
+
+    # Should only contain canonical names.
+    assert run.detector_sources == corr_sources
+
+    # Should map legacy to canonical names.
+    assert run.legacy_sources == dict(zip(
+        sorted(det_sources), sorted(corr_sources)))
+
+    det_mod0 = src_pattern.format('DET', 0)
+
+    # Classic APIs continue to work as normal, but raise warnings
+    # whenever data is accessed through creation of SourceData object.
+    with pytest.warns(DeprecationWarning):
+        assert 'image.data' in run.keys_for_source(det_mod0)
+
+    with pytest.warns(DeprecationWarning):
+        assert run.get_dtype(det_mod0, 'image.data') == np.float32
+
+    assert run.select(det_mod0).all_sources == {det_mod0}
