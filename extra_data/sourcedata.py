@@ -96,17 +96,6 @@ class SourceData:
 
         return FileAccess(sample_path)
 
-    def _get_index_group_sample(self, index_group):
-        if self.is_control and not index_group:
-            # Shortcut for CONTROL data.
-            return self.one_key()
-
-        for key in self.keys():
-            if self[key].index_group == index_group:
-                return key
-
-        raise ValueError(f'{index_group} not an index group of this source')
-
     @property
     def storage_class(self):
         if self._first_source_file is ...:
@@ -155,17 +144,28 @@ class SourceData:
         for f in self.files:
             return f.get_keys(self.source)
 
-    def one_key(self):
+    def one_key(self, index_group=None):
         """Get a single (random) key for this source
 
         If you only need a single key, this can be much faster than calling
-        :meth:`keys`.
+        :meth:`keys`. If *index_group* is omitted, the key may be part of
+        any index group.
         """
         if self.sel_keys is not None:
-            return next(iter(self.sel_keys))
+            if index_group is None:
+                return next(iter(self.sel_keys))
+
+            prefix = f'{index_group}.'
+
+            for key in self.sel_keys:
+                if key.startswith(prefix):
+                    return key
+
+            raise ValueError(f'none of the selected keys is part of '
+                             f'`{index_group}`')
 
         for f in self.files:
-            return f.get_one_key(self.source)
+            return f.get_one_key(self.source, index_group)
 
     @property
     def index_groups(self) -> set:
@@ -343,9 +343,8 @@ class SourceData:
         if index_group is None:
             # Collect data counts for a sample key per index group.
             data_counts = {
-                index_group: self[
-                    self._get_index_group_sample(index_group)
-                ].data_counts(labelled=labelled)
+                index_group: self[self.one_key(index_group)].data_counts(
+                    labelled=labelled)
                 for index_group in self.index_groups
             }
 
@@ -356,8 +355,8 @@ class SourceData:
                 return np.stack(list(data_counts.values())).max(axis=0)
 
         else:
-            return self[self._get_index_group_sample(index_group)] \
-                .data_counts(labelled=labelled)
+            return self[self.one_key(index_group)].data_counts(
+                labelled=labelled)
 
     def train_id_coordinates(self, index_group=None):
         """Make an array of train IDs to use alongside data this source.
@@ -384,8 +383,7 @@ class SourceData:
 
             index_group = self.index_groups.pop()
 
-        return self[self._get_index_group_sample(index_group)] \
-            .train_id_coordinates()
+        return self[self.one_key(index_group)].train_id_coordinates()
 
     def run_metadata(self) -> Dict:
         """Get a dictionary of metadata about the run

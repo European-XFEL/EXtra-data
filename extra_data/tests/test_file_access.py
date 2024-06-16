@@ -6,6 +6,7 @@ import pytest
 
 import numpy as np
 
+from .. import RunDirectory
 from ..file_access import FileAccess
 from ..exceptions import FileStructureError
 
@@ -116,3 +117,38 @@ def test_no_index(empty_h5_file):
 def test_no_metadata(mock_no_metadata_file):
     with pytest.raises(FileStructureError):
         FileAccess(mock_no_metadata_file)
+
+@pytest.mark.parametrize(
+    ['source', 'index_group'],
+    [('SPB_XTD9_XGM/DOOCS/MAIN', None),
+     ('SPB_DET_AGIPD1M-1/DET/4CH0:xtdf', None),
+     ('SPB_DET_AGIPD1M-1/DET/4CH0:xtdf', 'image')],
+    ids=['control', 'instrument-*', 'instrument-image'])
+def test_one_key(mock_spb_raw_run, source, index_group):
+    # Get first file of the chosen source.
+    fa = RunDirectory(mock_spb_raw_run)[source].files[0]
+
+    # Collect valid key results, this may populate the cache.
+    keys = [k for k in fa.get_keys(source)
+            if index_group is None or k.startswith(index_group)]
+
+    # Test with use of _keys_cache.
+    assert fa.get_one_key(source, index_group) in keys
+
+    # Force an empty cache.
+    fa._keys_cache.clear()
+    fa._known_keys.clear()
+
+    # Test with direct file access.
+    assert fa.get_one_key(source, index_group) in keys
+
+    # Force an empty cache.
+    fa._keys_cache.clear()
+    fa._known_keys.clear()
+
+    # Ask for a specific key to populate _known_keys.
+    single_key = next(iter(keys))
+    assert fa.has_source_key(source, single_key)
+
+    # Test with use of _known_keys.
+    assert fa.get_one_key(source, index_group) == single_key

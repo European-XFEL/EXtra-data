@@ -51,6 +51,18 @@ def test_keys(mock_spb_raw_run):
     xgm_output = run['SPB_XTD9_XGM/DOOCS/MAIN:output']
     assert xgm_output.one_key() in xgm_output.keys()
 
+    # Test one_key() with index group.
+    am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf']
+    assert am0.one_key('image').startswith('image.')
+
+    with pytest.raises(ValueError):
+        # Asking for a de-selected index group.
+        assert am0.select_keys('header.*').one_key('image')
+
+    with pytest.raises(ValueError):
+        # Not an index group of this source.
+        assert am0.one_key('data')
+
 
 def test_select_keys(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
