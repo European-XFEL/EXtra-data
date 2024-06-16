@@ -16,7 +16,7 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 DETECTOR_NAMES = {'AGIPD', 'DSSC', 'LPD'}
-DETECTOR_SOURCE_RE = re.compile(r'(.+(?:DET|CORR))/(\d+)CH')
+DETECTOR_SOURCE_RE = re.compile(r'(.+\/(?:DET|CORR))\/(\d+)CH')
 
 DATA_ROOT_DIR = os.environ.get('EXTRA_DATA_DATA_ROOT', '/gpfs/exfel/exp')
 
