@@ -22,15 +22,15 @@ class SourceData:
     _first_source_file = ...
 
     def __init__(
-            self, source, *, sel_keys, train_ids, files, section, legacy,
-            is_single_run, inc_suspect_trains=True,
+            self, source, *, sel_keys, train_ids, files, section,
+            canonical_name, is_single_run, inc_suspect_trains=True,
     ):
         self.source = source
         self.sel_keys = sel_keys
         self.train_ids = train_ids
         self.files: List[FileAccess] = files
         self.section = section
-        self.legacy = legacy
+        self.canonical_name = canonical_name
         self.is_single_run = is_single_run
         self.inc_suspect_trains = inc_suspect_trains
 
@@ -51,7 +51,7 @@ class SourceData:
     @property
     def is_legacy(self):
         """Whether this source is a legacy name for another source."""
-        return self.legacy is not None
+        return self.canonical_name != self.source
 
     def _has_exact_key(self, key):
         if self.sel_keys is not None:
@@ -264,7 +264,7 @@ class SourceData:
             train_ids=self.train_ids,
             files=self.files,
             section=self.section,
-            legacy=self.legacy,
+            canonical_name=self.canonical_name,
             is_single_run=self.is_single_run,
             inc_suspect_trains=self.inc_suspect_trains
         )
@@ -290,7 +290,7 @@ class SourceData:
             train_ids=tids,
             files=files,
             section=self.section,
-            legacy=self.legacy,
+            canonical_name=self.canonical_name,
             is_single_run=self.is_single_run,
             inc_suspect_trains=self.inc_suspect_trains
         )
@@ -489,7 +489,7 @@ class SourceData:
             train_ids=sorted(train_ids),
             files=sorted(files, key=lambda f: f.filename),
             section=self.section,
-            legacy=self.legacy,
+            canonical_name=self.canonical_name,
             is_single_run=same_run(self, *others),
             inc_suspect_trains=self.inc_suspect_trains
         )

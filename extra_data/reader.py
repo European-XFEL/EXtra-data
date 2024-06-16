@@ -109,7 +109,7 @@ class DataCollection:
                     train_ids=train_ids,
                     files=files,
                     section=section,
-                    legacy=legacy_sources.get(src, None),
+                    canonical_name=legacy_sources.get(src, src),
                     is_single_run=self.is_single_run,
                     inc_suspect_trains=self.inc_suspect_trains
                 )
@@ -131,8 +131,8 @@ class DataCollection:
             if sd.section == 'INSTRUMENT'
         })
         self.legacy_sources = {
-            name: sd.legacy for (name, sd) in self._sources_data.items()
-            if sd.legacy is not None
+            name: sd.canonical_name for (name, sd)
+            in self._sources_data.items() if sd.is_legacy
         }
 
     @staticmethod
