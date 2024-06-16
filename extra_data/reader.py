@@ -299,7 +299,8 @@ class DataCollection:
             if file is None:
                 return True
 
-        for source in self.instrument_sources:
+        # No need to evaluate this for legacy sources as well.
+        for source in self.instrument_sources - self.legacy_sources.keys():
             file, pos = self._find_data(source, tid)
             if file is None:
                 return True
