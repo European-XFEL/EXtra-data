@@ -35,7 +35,7 @@ jobs:
 
     - name: Test with pytest
       run: |
-        python3 -m pytest -v --nbval-lax --current-env --cov=extra_data --cov-report=xml
+        python3 -m pytest -v --nbval-lax --nbval-current-env --cov=extra_data --cov-report=xml
       env:
         MPLBACKEND: agg
 
