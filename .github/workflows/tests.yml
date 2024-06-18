@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
     steps:
     - name: Checkout
@@ -35,12 +35,13 @@ jobs:
 
     - name: Test with pytest
       run: |
-        python3 -m pytest -v --nbval-lax --current-env --cov=extra_data --cov-report=xml
+        python3 -m pytest -v --nbval-lax --nbval-current-env --cov=extra_data --cov-report=xml
       env:
         MPLBACKEND: agg
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      # This specific version uses Node 20 - see codecov-action#1293
+      uses: codecov/codecov-action@v3.1.5
 
   publish:
     runs-on: ubuntu-latest
