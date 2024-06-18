@@ -207,7 +207,7 @@ class VirtualCXIWriterBase:
             - mask: 0xffffffff (uint32)
         """
         pulse_ids = self.collect_pulse_ids()
-        experiment_ids = np.core.defchararray.add(np.core.defchararray.add(
+        experiment_ids = np.char.add(np.char.add(
             self.train_ids_perframe.astype(str), ':'), pulse_ids.astype(str))
 
         layouts = self.collect_data()
