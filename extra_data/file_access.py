@@ -471,7 +471,7 @@ class FileAccess(metaclass=MetaFileAccess):
         """Similar to get_keys(), except it returns only a single key for performance"""
 
         # Use empty prefix if no index group filter is active.
-        prefix = index_group + '.' if index_group is not None else ''
+        prefix = index_group + '.' if index_group else ''
 
         if source in self._keys_cache:
             for key in self._keys_cache[source]:
@@ -497,7 +497,7 @@ class FileAccess(metaclass=MetaFileAccess):
 
         group = f'/{root}/{source}'
 
-        if index_group is not None:
+        if index_group:
             group += '/' + index_group
 
         def get_key(subkey, value):

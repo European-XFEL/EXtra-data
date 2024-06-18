@@ -121,9 +121,10 @@ def test_no_metadata(mock_no_metadata_file):
 @pytest.mark.parametrize(
     ['source', 'index_group'],
     [('SPB_XTD9_XGM/DOOCS/MAIN', None),
+     ('SPB_XTD9_XGM/DOOCS/MAIN', ''),
      ('SPB_DET_AGIPD1M-1/DET/4CH0:xtdf', None),
      ('SPB_DET_AGIPD1M-1/DET/4CH0:xtdf', 'image')],
-    ids=['control', 'instrument-*', 'instrument-image'])
+    ids=['control-None', 'control-empty', 'instrument-*', 'instrument-image'])
 def test_one_key(mock_spb_raw_run, source, index_group):
     # Get first file of the chosen source.
     fa = RunDirectory(mock_spb_raw_run)[source].files[0]
