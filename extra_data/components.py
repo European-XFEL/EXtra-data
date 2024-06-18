@@ -1479,7 +1479,7 @@ class MPxDetectorTrainIterator:
         else:
             desired = val
 
-        return np.nonzero(np.isin(pulse_ids, desired))[0]
+        return np.nonzero(np.isin(pulse_ids, desired))[0].astype(np.uint64)
 
     def _select_pulse_indices(self, count):
         """Select pulses by index
