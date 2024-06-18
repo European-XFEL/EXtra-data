@@ -1,6 +1,13 @@
 import numpy as np
 import re
 
+# numpy.exceptions exists from 1.25 onwards, but for Python 3.8 we still support
+# numpy 1.24. We can clean this up once we require Python >= 3.9.
+try:
+    from numpy.exceptions import AxisError
+except ImportError:
+    from numpy import AxisError
+
 __all__ = [
     'stack_data',
     'stack_detector_data',
@@ -238,7 +245,7 @@ class StackView:
                 try:
                     slices[ax] = 0
                 except IndexError:
-                    raise np.AxisError(
+                    raise AxisError(
                         "axis {} is out of bounds for array of dimension {}"
                         .format(ax, self.ndim)
                     )
