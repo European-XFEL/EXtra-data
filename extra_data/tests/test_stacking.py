@@ -1,6 +1,13 @@
 import numpy as np
 import pytest
 
+# numpy.exceptions exists from 1.25 onwards, but for Python 3.8 we still support
+# numpy 1.24. We can clean this up once we require Python >= 3.9.
+try:
+    from numpy.exceptions import AxisError
+except ImportError:
+    from numpy import AxisError
+
 from extra_data import RunDirectory, stack_data, stack_detector_data
 from extra_data.stacking import StackView
 
@@ -174,5 +181,5 @@ def test_stackview_squeeze():
     assert sv.squeeze(axis=0).shape == (1, 4)
     assert sv.squeeze(axis=-2).shape == (1, 4)
 
-    with pytest.raises(np.AxisError):
+    with pytest.raises(AxisError):
         sv.squeeze(axis=4)

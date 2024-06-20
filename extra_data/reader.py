@@ -1232,7 +1232,7 @@ class DataCollection:
             last_train = self.train_ids[-1]
             seconds, deciseconds = divmod((last_train - first_train + 1), 10)
             try:
-                td = datetime.timedelta(seconds=seconds)
+                td = datetime.timedelta(seconds=int(seconds))
             except OverflowError:  # Can occur if a train ID is corrupted
                 span_txt = "OverflowError (one or more train IDs are probably wrong)"
             else:
