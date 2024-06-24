@@ -291,3 +291,23 @@ def test_train_id_coordinates(mock_reduced_spb_proc_run):
     # Should fail due to multiple index groups with differing counts.
     with pytest.raises(ValueError):
         am0.train_id_coordinates()
+
+
+def test_legacy_sourcedata(mock_modern_spb_proc_run):
+    run = RunDirectory(mock_modern_spb_proc_run)
+
+    det_mod0 = 'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf'
+    corr_mod0 = 'SPB_DET_AGIPD1M-1/CORR/0CH0:xtdf'
+
+    # True (canonical) source works as normal
+    sd = run[corr_mod0]
+    assert sd.canonical_name == corr_mod0
+    assert not sd.is_legacy
+
+    # Obtaining SourceData object via legacy name emits a warning.
+    with pytest.warns(DeprecationWarning):
+        sd = run[det_mod0]
+
+    assert sd.source == det_mod0
+    assert sd.canonical_name == corr_mod0
+    assert sd.is_legacy

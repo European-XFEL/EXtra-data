@@ -96,19 +96,22 @@ class DataCollection:
 
         if sources_data is None:
             files_by_sources = defaultdict(list)
+            legacy_sources = dict()
             for f in self.files:
                 for source in f.control_sources:
                     files_by_sources[source, 'CONTROL'].append(f)
                 for source in f.instrument_sources:
                     files_by_sources[source, 'INSTRUMENT'].append(f)
+                legacy_sources.update(f.legacy_sources)
             sources_data = {
                 src: SourceData(src,
                     sel_keys=None,
                     train_ids=train_ids,
                     files=files,
                     section=section,
+                    canonical_name=legacy_sources.get(src, src),
                     is_single_run=self.is_single_run,
-                    inc_suspect_trains=self.inc_suspect_trains,
+                    inc_suspect_trains=self.inc_suspect_trains
                 )
                 for ((src, section), files) in files_by_sources.items()
             }
@@ -127,6 +130,10 @@ class DataCollection:
             name for (name, sd) in self._sources_data.items()
             if sd.section == 'INSTRUMENT'
         })
+        self.legacy_sources = {
+            name: sd.canonical_name for (name, sd)
+            in self._sources_data.items() if sd.is_legacy
+        }
 
     @staticmethod
     def _open_file(path, cache_info=None):
@@ -223,7 +230,8 @@ class DataCollection:
 
     @property
     def detector_sources(self):
-        return set(filter(DETECTOR_SOURCE_RE.match, self.instrument_sources))
+        return set(filter(DETECTOR_SOURCE_RE.match, self.instrument_sources)) \
+            - self.legacy_sources.keys()
 
     def _check_field(self, source, key):
         if source not in self.all_sources:
@@ -255,6 +263,14 @@ class DataCollection:
         if source not in self._sources_data:
             raise SourceNameError(source)
 
+        sd = self._sources_data[source]
+
+        if sd.is_legacy:
+            warn(f"{source} is a legacy name for {self.legacy_sources[source]}. "
+                 f"Access via this name will be removed for future data.",
+                 DeprecationWarning,
+                 stacklevel=3)
+
         return self._sources_data[source]
 
     def __getitem__(self, item):
@@ -283,7 +299,8 @@ class DataCollection:
             if file is None:
                 return True
 
-        for source in self.instrument_sources:
+        # No need to evaluate this for legacy sources as well.
+        for source in self.instrument_sources - self.legacy_sources.keys():
             file, pos = self._find_data(source, tid)
             if file is None:
                 return True
@@ -1249,30 +1266,30 @@ class DataCollection:
             # Include summary section for multi-module detectors unless
             # source details are enabled.
 
-            detector_modules = {}
+            sources_by_detector = {}
             for source in self.detector_sources:
                 name, modno = DETECTOR_SOURCE_RE.match(source).groups((1, 2))
-                detector_modules[(name, modno)] = source
+                sources_by_detector.setdefault(name, {})[modno] = source
 
-            # A run should only have one detector, but if that changes, don't hide it
-            detector_name = ','.join(sorted(set(k[0] for k in detector_modules)))
+            for detector_name in sorted(sources_by_detector.keys()):
+                detector_modules = sources_by_detector[detector_name]
 
-            print("{} XTDF detector modules ({})".format(
-                len(self.detector_sources), detector_name
-            ))
-            if len(detector_modules) > 0:
-                # Show detail on the first module (the others should be similar)
-                mod_key = sorted(detector_modules)[0]
-                mod_source = detector_modules[mod_key]
-                dinfo = self.detector_info(mod_source)
-                module = ' '.join(mod_key)
-                dims = ' x '.join(str(d) for d in dinfo['dims'])
-                print("  e.g. module {} : {} pixels".format(module, dims))
-                print("  {}".format(mod_source))
-                print("  {} frames per train, up to {} frames total".format(
-                    dinfo['frames_per_train'], dinfo['total_frames']
+                print("{} XTDF detector modules of {}/*".format(
+                    len(detector_modules), detector_name
                 ))
-            print()
+                if len(detector_modules) > 0:
+                    # Show detail on the first module (the others should be similar)
+                    mod_key = sorted(detector_modules)[0]
+                    mod_source = detector_modules[mod_key]
+                    dinfo = self.detector_info(mod_source)
+                    module = ' '.join(mod_key)
+                    dims = ' x '.join(str(d) for d in dinfo['dims'])
+                    print("  e.g. module {} : {} pixels".format(module, dims))
+                    print("  {}".format(mod_source))
+                    print("  {} frames per train, up to {} frames total".format(
+                        dinfo['frames_per_train'], dinfo['total_frames']
+                    ))
+                print()
 
         # Invert aliases for faster lookup.
         src_aliases = defaultdict(set)
@@ -1321,11 +1338,11 @@ class DataCollection:
 
         if details_for_sources:
             # All instrument sources with details enabled.
-            displayed_inst_srcs = self.instrument_sources
+            displayed_inst_srcs = self.instrument_sources - self.legacy_sources.keys()
             print(len(displayed_inst_srcs), 'instrument sources:')
         else:
             # Only non-XTDF instrument sources without details enabled.
-            displayed_inst_srcs = self.instrument_sources - self.detector_sources
+            displayed_inst_srcs = self.instrument_sources - self.detector_sources - self.legacy_sources.keys()
             print(len(displayed_inst_srcs), 'instrument sources (excluding XTDF detectors):')
 
         for s in sorted(displayed_inst_srcs):
@@ -1376,6 +1393,29 @@ class DataCollection:
                         print(f"      - {k}{alias_str}\t[{dt}{entry_info}]")
 
         print()
+
+        if self.legacy_sources:
+            # Collect legacy souces matching DETECTOR_SOURCE_RE
+            # separately for a condensed view.
+            detector_legacy_sources = defaultdict(set)
+
+            print(len(self.legacy_sources), 'legacy source names:')
+            for s in sorted(self.legacy_sources.keys()):
+                m = DETECTOR_SOURCE_RE.match(s)
+
+                if m is not None:
+                    detector_legacy_sources[m[1]].add(s)
+                else:
+                    # Only print non-XTDF legacy sources.
+                    print(' -', s, '->', self.legacy_sources[s])
+
+            for legacy_det, legacy_sources in detector_legacy_sources.items():
+                canonical_mod = self.legacy_sources[next(iter(legacy_sources))]
+                canonical_det = DETECTOR_SOURCE_RE.match(canonical_mod)[1]
+
+                print(' -', f'{legacy_det}/*', '->', f'{canonical_det}/*',
+                      f'({len(legacy_sources)})')
+            print()
 
     def plot_missing_data(self, min_saved_pct=95, expand_instrument=False):
         """Plot sources that have missing data for some trains.

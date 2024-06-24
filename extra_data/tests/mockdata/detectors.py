@@ -1,4 +1,5 @@
 import numpy as np
+import h5py
 
 class DetectorModule:
     # Overridden in subclasses:
@@ -17,7 +18,8 @@ class DetectorModule:
         'trailer',
     ]
 
-    def __init__(self, device_id, frames_per_train=64, raw=True):
+    def __init__(self, device_id, frames_per_train=64, raw=True,
+                 legacy_name=None):
         self.device_id = device_id
         self._frames_per_train = frames_per_train
         if not raw:
@@ -25,6 +27,7 @@ class DetectorModule:
             # and gain. This dimension is removed by the calibration process.
             self.image_dims = self.image_dims[1:]
         self.raw = raw
+        self.legacy_name = legacy_name
 
     def write_control(self, f):
         """Write the CONTROL and RUN data, and the relevant parts of INDEX"""
@@ -149,9 +152,19 @@ class DetectorModule:
             f.create_dataset('INSTRUMENT/%s:xtdf/%s' % (self.device_id, key),
                      (ntrains_pad,) + dims, datatype, maxshape=((None,) + dims))
 
+        if self.legacy_name is not None:
+            f[f'INDEX/{self.legacy_name}:xtdf'] = h5py.SoftLink(
+                f'/INDEX/{self.device_id}:xtdf')
+            f[f'INSTRUMENT/{self.legacy_name}:xtdf'] = h5py.SoftLink(
+                f'/INSTRUMENT/{self.device_id}:xtdf')
+
     def datasource_ids(self):
         for part in self.output_parts:
             yield 'INSTRUMENT/%s:xtdf/%s' % (self.device_id, part)
+
+        if self.legacy_name is not None:
+            for part in self.output_parts:
+                yield 'INSTRUMENT/%s:xtdf/%s' % (self.legacy_name, part)
 
 
 class AGIPDModule(DetectorModule):
