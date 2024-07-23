@@ -764,6 +764,21 @@ def test_train_timestamps_nat(mock_fxe_control_data):
         assert not np.any(np.isnat(tss))
 
 
+def test_train_timestamps_local_time(mock_scs_run):
+    run = RunDirectory(mock_scs_run)
+    tss_loc = run.train_timestamps(local_time=True, labelled=False)
+    tss_utc = run.train_timestamps(local_time=False, labelled=False)
+    mask = np.logical_not(np.isnat(tss_utc))
+    # Same tests as above to check that nothing strange happens during
+    # the conversion since it involves numpy -> pandas -> numpy
+    assert isinstance(tss_loc, np.ndarray)
+    assert tss_loc.shape == (len(run.train_ids),)
+    assert tss_loc.dtype == np.dtype('datetime64[ns]')
+    # Now check that the conversion was successful
+    delta_t = (tss_loc[mask] - tss_utc[mask]) / np.timedelta64(1, 'h')
+    assert np.all(delta_t == 2)
+
+
 def test_union(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
 
