@@ -1605,13 +1605,16 @@ class DataCollection:
         print('\tControls')
         [print('\t-', d) for d in sorted(ctrl)] or print('\t-')
 
-    def train_timestamps(self, labelled=False):
+    def train_timestamps(self, local_time=True, labelled=False):
         """Get approximate timestamps for each train
 
         Timestamps are stored and returned in UTC (not local time).
         Older files (before format version 1.0) do not have timestamp data,
         and the returned data in those cases will have the special value NaT
         (Not a Time).
+
+        If *local_time* is True (default), the timestamps are converted from
+        the UTC timezone to Europe/Berlin (XFEL) timezone.
 
         If *labelled* is True, they are returned in a pandas series, labelled
         with train IDs. If False (default), they are returned in a NumPy array
@@ -1640,6 +1643,16 @@ class DataCollection:
         arr = arr.astype('datetime64[ns]')
         epoch = np.uint64(0).astype('datetime64[ns]')
         arr[arr == epoch] = 'NaT'  # Not a Time
+
+        if local_time:
+            from pandas import DatetimeIndex
+            # First we need timezone aware timestamps
+            arr_dti = DatetimeIndex(arr, tz='UTC')
+            # Then we need to convert it to the XFEL time zone
+            arr_dti = arr_dti.tz_convert(tz='Europe/Berlin')
+            # And finally we need to convert it back to timezone-naive
+            arr = arr_dti.tz_localize(None).to_numpy(dtype='datetime64[ns]')
+
         if labelled:
             import pandas as pd
             return pd.Series(arr, index=self.train_ids)
