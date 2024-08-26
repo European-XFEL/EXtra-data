@@ -8,7 +8,7 @@ numpy<2.2.0
 pandas<2.3.0
 Pillow<10.5.0
 psutil==6.0.0
-pyparsing==3.1.2
+pyparsing==3.1.4
 python-dateutil==2.9.0.post0
 pytz==2024.1
 pyzmq==26.2.0
