@@ -69,7 +69,8 @@ _empty_cache_info = dict(
     train_ids= np.zeros(0, dtype=np.uint64),
     control_sources=frozenset(),
     instrument_sources=frozenset(),
-    flag=np.zeros(0, dtype=np.int32)
+    flag=np.zeros(0, dtype=np.int32),
+    legacy_sources={},
 )
 
 
