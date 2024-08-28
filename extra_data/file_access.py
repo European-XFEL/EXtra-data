@@ -146,8 +146,8 @@ class FileAccess(metaclass=MetaFileAccess):
             self.train_ids = _cache_info['train_ids']
             self.control_sources = _cache_info['control_sources']
             self.instrument_sources = _cache_info['instrument_sources']
-            self.legacy_sources = _cache_info.get('legacy_sources', {})
-            self.validity_flag = _cache_info.get('flag', None)
+            self.legacy_sources = _cache_info['legacy_sources']
+            self.validity_flag = _cache_info['flag']
         else:
             try:
                 tid_data = self.file['INDEX/trainId'][:]
