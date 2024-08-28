@@ -42,6 +42,14 @@ class RunFilesMap:
     """
     cache_file = None
 
+    expected_cache_keys = frozenset({
+        'train_ids',
+        'control_sources',
+        'instrument_sources',
+        'suspect_train_indices',
+        'legacy_sources',
+    })
+
     def __init__(self, directory):
         self.directory = osp.abspath(directory)
         self.dir_stat = os.stat(self.directory)
@@ -121,12 +129,21 @@ class RunFilesMap:
                 st = os.stat(osp.join(self.directory, filename))
             except OSError:
                 continue
-            if (st.st_mtime == info['mtime']) and (st.st_size == info['size']):
+            if self._cache_info_valid(info, st):
                 self.files_data[filename] = info
 
         if loaded_data:
             dt = time.monotonic() - t0
             log.debug("Loaded cached files map in %.2g s", dt)
+
+    @staticmethod
+    def _cache_info_valid(info, file_stat: os.stat_result):
+        # Ignore the cached info if the file size or mtime have changed, or
+        # if it is missing expected keys (likely
+        added_keys = {'suspect_train_indices', 'legacy_sources'}
+        return ((file_stat.st_mtime == info['mtime'])
+                and (file_stat.st_size == info['size'])
+                and added_keys.issubset(info.keys()))
 
     def is_my_directory(self, dir_path):
         return osp.samestat(os.stat(dir_path), self.dir_stat)
@@ -175,7 +192,7 @@ class RunFilesMap:
 
         for file_access in files:
             dirname, fname = osp.split(osp.abspath(file_access.filename))
-            if self.is_my_directory(dirname) and not self._cache_valid(fname):
+            if self.is_my_directory(dirname) and fname not in self.files_data:
                 log.debug("Will save cached data for %s", fname)
                 need_save = True
 
