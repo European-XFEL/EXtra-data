@@ -60,12 +60,12 @@ class RunFilesMap:
         #   /gpfs/exfel/exp/inst/cycle/prop/(raw|proc)/run
         maxwell_match = re.match(
             #     raw/proc  instr  cycle prop   run
-            r'.+/(raw|proc)/(\w+)/(\w+)/(p\d+)/(r\d+)/?$',
+            r'.+/(raw|proc|red)/(\w+)/(\w+)/(p\d+)/(r\d+)/?$',
             os.path.realpath(directory)
         )
         online_match = re.match(
             #     instr cycle prop   raw/proc   run
-            r'^.+/(\w+)/(\w+)/(p\d+)/(raw|proc)/(r\d+)/?$',
+            r'^.+/(\w+)/(\w+)/(p\d+)/(raw|proc|red)/(r\d+)/?$',
             os.path.realpath(directory)
         )
 
