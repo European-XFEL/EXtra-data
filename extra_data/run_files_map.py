@@ -42,6 +42,14 @@ class RunFilesMap:
     """
     cache_file = None
 
+    expected_cache_keys = frozenset({
+        'train_ids',
+        'control_sources',
+        'instrument_sources',
+        'suspect_train_indices',
+        'legacy_sources',
+    })
+
     def __init__(self, directory):
         self.directory = osp.abspath(directory)
         self.dir_stat = os.stat(self.directory)
@@ -89,7 +97,7 @@ class RunFilesMap:
     def load(self):
         """Load the cached data
 
-        This skips over invalid cache entries(based on the file's size & mtime).
+        This drops invalid or incomplete cache entries.
         """
         loaded_data = []
         t0 = time.monotonic()
@@ -121,12 +129,20 @@ class RunFilesMap:
                 st = os.stat(osp.join(self.directory, filename))
             except OSError:
                 continue
-            if (st.st_mtime == info['mtime']) and (st.st_size == info['size']):
+            if self._cache_info_valid(info, st):
                 self.files_data[filename] = info
 
         if loaded_data:
             dt = time.monotonic() - t0
             log.debug("Loaded cached files map in %.2g s", dt)
+
+    @classmethod
+    def _cache_info_valid(cls, info, file_stat: os.stat_result):
+        # Ignore the cached info if the file size or mtime have changed, or
+        # if it is missing expected keys (likely keys added more recently).
+        return ((file_stat.st_mtime == info['mtime'])
+                and (file_stat.st_size == info['size'])
+                and cls.expected_cache_keys.issubset(info.keys()))
 
     def is_my_directory(self, dir_path):
         return osp.samestat(os.stat(dir_path), self.dir_stat)
@@ -143,26 +159,13 @@ class RunFilesMap:
                 'train_ids': np.array(d['train_ids'], dtype=np.uint64),
                 'control_sources': frozenset(d['control_sources']),
                 'instrument_sources': frozenset(d['instrument_sources']),
+                'legacy_sources': dict(d['legacy_sources']),
             }
-            # Older cache files don't contain info on legacy sources.
-            if 'legacy_sources' in d:
-                res['legacy_sources'] = d['legacy_sources']
-            # Older cache files don't contain info on 'suspect' trains.
-            if 'suspect_train_indices' in d:
-                res['flag'] = flag = np.ones_like(d['train_ids'], dtype=np.bool_)
-                flag[d['suspect_train_indices']] = 0
+            res['flag'] = flag = np.ones_like(d['train_ids'], dtype=np.bool_)
+            flag[d['suspect_train_indices']] = 0
             return res
 
         return None
-
-    def _cache_valid(self, fname):
-        # The cache is invalid (needs to be written out) if the file is not in
-        # files_data (which it won't be if the size or mtime don't match - see
-        # load()), or if the later added suspect_train_indices/legagy_sources
-        # are missing. These may be missing from caches created by legacy
-        # versions of EXtra-data.
-        return not bool({'suspect_train_indices', 'legacy_sources'} \
-            - self.files_data.get(fname, {}).keys())
 
     def save(self, files):
         """Save the cache if needed
@@ -175,7 +178,7 @@ class RunFilesMap:
 
         for file_access in files:
             dirname, fname = osp.split(osp.abspath(file_access.filename))
-            if self.is_my_directory(dirname) and not self._cache_valid(fname):
+            if self.is_my_directory(dirname) and fname not in self.files_data:
                 log.debug("Will save cached data for %s", fname)
                 need_save = True
 
