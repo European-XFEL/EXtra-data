@@ -752,6 +752,7 @@ def test_train_timestamps(mock_scs_run):
     assert isinstance(tss_ser, pd.Series)
     np.testing.assert_array_equal(tss_ser.values, tss)
     np.testing.assert_array_equal(tss_ser.index, run.train_ids)
+    assert tss_ser.dt.tz is timezone.utc
 
 
 def test_train_timestamps_nat(mock_fxe_control_data):

@@ -1642,7 +1642,7 @@ class DataCollection:
         arr[arr == epoch] = 'NaT'  # Not a Time
         if labelled:
             import pandas as pd
-            return pd.Series(arr, index=self.train_ids)
+            return pd.Series(arr, index=self.train_ids).dt.tz_localize('UTC')
         return arr
 
     def run_metadata(self) -> dict:
