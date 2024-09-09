@@ -1605,7 +1605,7 @@ class DataCollection:
         print('\tControls')
         [print('\t-', d) for d in sorted(ctrl)] or print('\t-')
 
-    def train_timestamps(self, labelled=False):
+    def train_timestamps(self, labelled=False, *, pydatetime=False):
         """Get approximate timestamps for each train
 
         Timestamps are stored and returned in UTC (not local time).
@@ -1614,8 +1614,10 @@ class DataCollection:
         (Not a Time).
 
         If *labelled* is True, they are returned in a pandas series, labelled
-        with train IDs. If False (default), they are returned in a NumPy array
-        of the same length as data.train_ids.
+        with train IDs. If *pydatetime* is True, a list of Python datetime
+        objects (truncated to microseconds) is returned, the same length as
+        data.train_ids. Otherwise (by default), timestamps are returned as a
+        NumPy array with datetime64 dtype.
         """
         arr = np.zeros(len(self.train_ids), dtype=np.uint64)
         id_to_ix = {tid: i for (i, tid) in enumerate(self.train_ids)}
@@ -1643,6 +1645,15 @@ class DataCollection:
         if labelled:
             import pandas as pd
             return pd.Series(arr, index=self.train_ids).dt.tz_localize('UTC')
+        elif pydatetime:
+            from datetime import datetime, timezone
+            res = []
+            for npdt in arr:
+                pydt = npdt.astype('datetime64[ms]').item()
+                if pydt is not None:  # Numpy NaT becomes None
+                    pydt = pydt.replace(tzinfo=timezone.utc)
+                res.append(pydt)
+            return res
         return arr
 
     def run_metadata(self) -> dict:

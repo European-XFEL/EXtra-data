@@ -743,10 +743,12 @@ def test_train_timestamps(mock_scs_run):
     assert np.all(np.diff(tss).astype(np.uint64) > 0)
 
     # Convert numpy datetime64[ns] to Python datetime (dropping some precision)
-    dt0 = tss[0].astype('datetime64[ms]').item().replace(tzinfo=timezone.utc)
+    tss_l = run.train_timestamps(pydatetime=True)
+    assert len(tss_l) == len(run.train_ids)
     now = datetime.now(timezone.utc)
-    assert dt0 > (now - timedelta(days=1))  # assuming tests take < 1 day to run
-    assert dt0 < now
+    assert tss_l[0] > (now - timedelta(days=1))  # assuming tests take < 1 day to run
+    assert tss_l[0] < now
+    assert tss_l[0].tzinfo is timezone.utc
 
     tss_ser = run.train_timestamps(labelled=True)
     assert isinstance(tss_ser, pd.Series)
@@ -763,6 +765,13 @@ def test_train_timestamps_nat(mock_fxe_control_data):
         assert np.all(np.isnat(tss))
     else:
         assert not np.any(np.isnat(tss))
+
+    tss_l = f.train_timestamps(pydatetime=True)
+    assert len(tss_l) == len(f.train_ids)
+    if f.files[0].format_version == '0.5':
+        assert all(t is None for t in tss_l)
+    else:
+        assert not any(t is None for t in tss_l)
 
 
 def test_union(mock_fxe_raw_run):
