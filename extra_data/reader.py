@@ -1605,7 +1605,7 @@ class DataCollection:
         print('\tControls')
         [print('\t-', d) for d in sorted(ctrl)] or print('\t-')
 
-    def train_timestamps(self, labelled=False, *, pydatetime=False):
+    def train_timestamps(self, labelled=False, *, pydatetime=False, euxfel_local_time=False):
         """Get approximate timestamps for each train
 
         Timestamps are stored and returned in UTC (not local time).
@@ -1644,7 +1644,8 @@ class DataCollection:
         arr[arr == epoch] = 'NaT'  # Not a Time
         if labelled:
             import pandas as pd
-            return pd.Series(arr, index=self.train_ids).dt.tz_localize('UTC')
+            series = pd.Series(arr, index=self.train_ids).dt.tz_localize('UTC')
+            return series.dt.tz_convert('Europe/Berlin') if euxfel_local_time else series
         elif pydatetime:
             from datetime import datetime, timezone
             res = []
@@ -1652,8 +1653,15 @@ class DataCollection:
                 pydt = npdt.astype('datetime64[ms]').item()
                 if pydt is not None:  # Numpy NaT becomes None
                     pydt = pydt.replace(tzinfo=timezone.utc)
+                    if euxfel_local_time:
+                        from zoneinfo import ZoneInfo
+                        pydt = pydt.astimezone(ZoneInfo('Europe/Berlin'))
                 res.append(pydt)
             return res
+        elif euxfel_local_time:
+            raise ValueError("The euxfel_local_time option '+\
+                'can only be invoked if either labelled or pydatetime '+\
+                'are set to True")
         return arr
 
     def run_metadata(self) -> dict:
