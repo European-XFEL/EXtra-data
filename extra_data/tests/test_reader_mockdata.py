@@ -4,6 +4,7 @@ from multiprocessing import Process
 from pathlib import Path
 from textwrap import dedent
 from warnings import catch_warnings
+from zoneinfo import ZoneInfo  # Needed for checking euxfel_local_time
 
 import h5py
 import numpy as np
@@ -755,6 +756,37 @@ def test_train_timestamps(mock_scs_run):
     np.testing.assert_array_equal(tss_ser.values, tss)
     np.testing.assert_array_equal(tss_ser.index, run.train_ids)
     assert tss_ser.dt.tz is timezone.utc
+
+def test_train_timestamps_local_time(mock_scs_run):
+    run = RunDirectory(mock_scs_run)
+
+    del1h = timedelta(hours=1)
+    del2h = timedelta(hours=2)
+      
+    # First, the pydatetime case
+    tss = run.train_timestamps(pydatetime=True)
+    tss_berlin = run.train_timestamps(pydatetime=True, euxfel_local_time=True)
+
+    # The time difference between UTC and Europe/Berlin can only be
+    # one or two hours depending on daylight savings
+    assert all(
+        t2.replace(tzinfo=None) - t1.replace(tzinfo=None) == del1h or
+        t2.replace(tzinfo=None) - t1.replace(tzinfo=None) == del2h
+        for t1, t2, in zip(tss, tss_berlin)
+    )
+
+    # Second, the pandas (labelled=True) case
+    tss = run.train_timestamps(labelled=True)
+    tss_berlin = run.train_timestamps(labelled=True, euxfel_local_time=True)
+  
+    dtss = tss_berlin.dt.tz_localize(None) - tss.dt.tz_localize(None) 
+    assert all(dtss == del1h) or all(dtss == del2h)
+    
+    # Finally, check that ValueError is raised if euxfel_local_time is used
+    # on its own
+    with pytest.raises(ValueError):
+        run.train_timestamps(pydatetime=False, euxfel_local_time=True)
+        run.train_timestamps(labelled=False, euxfel_local_time=True)
 
 
 def test_train_timestamps_nat(mock_fxe_control_data):

@@ -1659,9 +1659,11 @@ class DataCollection:
                 res.append(pydt)
             return res
         elif euxfel_local_time:
-            raise ValueError("The euxfel_local_time option '+\
-                'can only be invoked if either labelled or pydatetime '+\
-                'are set to True")
+            raise ValueError(
+                'The euxfel_local_time option '
+                + 'can only be invoked if either labelled or pydatetime '
+                + 'are set to True'
+            )
         return arr
 
     def run_metadata(self) -> dict:
