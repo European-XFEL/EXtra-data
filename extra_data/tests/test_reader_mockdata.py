@@ -4,7 +4,6 @@ from multiprocessing import Process
 from pathlib import Path
 from textwrap import dedent
 from warnings import catch_warnings
-from zoneinfo import ZoneInfo  # Needed for checking euxfel_local_time
 
 import h5py
 import numpy as np
