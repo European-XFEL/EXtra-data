@@ -761,7 +761,7 @@ def test_train_timestamps_local_time(mock_scs_run):
 
     del1h = timedelta(hours=1)
     del2h = timedelta(hours=2)
-      
+
     # First, the pydatetime case
     tss = run.train_timestamps(pydatetime=True)
     tss_berlin = run.train_timestamps(pydatetime=True, euxfel_local_time=True)
@@ -769,18 +769,17 @@ def test_train_timestamps_local_time(mock_scs_run):
     # The time difference between UTC and Europe/Berlin can only be
     # one or two hours depending on daylight savings
     assert all(
-        t2.replace(tzinfo=None) - t1.replace(tzinfo=None) == del1h or
-        t2.replace(tzinfo=None) - t1.replace(tzinfo=None) == del2h
-        for t1, t2, in zip(tss, tss_berlin)
+        t1.utcoffset() == del1h or t1.utcoffset() == del2h
+        for t1 in tss_berlin
     )
 
     # Second, the pandas (labelled=True) case
     tss = run.train_timestamps(labelled=True)
     tss_berlin = run.train_timestamps(labelled=True, euxfel_local_time=True)
-  
-    dtss = tss_berlin.dt.tz_localize(None) - tss.dt.tz_localize(None) 
+
+    dtss = tss_berlin.dt.tz_localize(None) - tss.dt.tz_localize(None)
     assert all(dtss == del1h) or all(dtss == del2h)
-    
+
     # Finally, check that ValueError is raised if euxfel_local_time is used
     # on its own
     with pytest.raises(ValueError):
