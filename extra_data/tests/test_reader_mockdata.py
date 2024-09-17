@@ -784,8 +784,7 @@ def test_train_timestamps_local_time(mock_scs_run):
     # Finally, check that ValueError is raised if euxfel_local_time is used
     # on its own
     with pytest.raises(ValueError):
-        run.train_timestamps(pydatetime=False, euxfel_local_time=True)
-        run.train_timestamps(labelled=False, euxfel_local_time=True)
+        run.train_timestamps(pydatetime=False, labelled=False, euxfel_local_time=True)
 
 
 def test_train_timestamps_nat(mock_fxe_control_data):

@@ -1608,7 +1608,7 @@ class DataCollection:
     def train_timestamps(self, labelled=False, *, pydatetime=False, euxfel_local_time=False):
         """Get approximate timestamps for each train
 
-        Timestamps are stored and returned in UTC (not local time).
+        Timestamps are stored and returned in UTC by default.
         Older files (before format version 1.0) do not have timestamp data,
         and the returned data in those cases will have the special value NaT
         (Not a Time).
@@ -1618,6 +1618,9 @@ class DataCollection:
         objects (truncated to microseconds) is returned, the same length as
         data.train_ids. Otherwise (by default), timestamps are returned as a
         NumPy array with datetime64 dtype.
+
+        *euxfel_local_time* can be True when either *labelled* or *pydatetime* is True.
+        In this case, timestamps are converted to the `Europe/Berlin` timezone.
         """
         arr = np.zeros(len(self.train_ids), dtype=np.uint64)
         id_to_ix = {tid: i for (i, tid) in enumerate(self.train_ids)}
@@ -1661,7 +1664,7 @@ class DataCollection:
         elif euxfel_local_time:
             raise ValueError(
                 'The euxfel_local_time option '
-                + 'can only be invoked if either labelled or pydatetime '
+                + 'can only be used if either labelled or pydatetime '
                 + 'are set to True'
             )
         return arr
