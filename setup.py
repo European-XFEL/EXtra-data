@@ -86,7 +86,7 @@ setup(name="EXtra-data",
               'testpath',
           ]
       },
-      python_requires='>=3.8',
+      python_requires='>=3.9',
       classifiers=[
           'Development Status :: 5 - Production/Stable',
           'Environment :: Console',
