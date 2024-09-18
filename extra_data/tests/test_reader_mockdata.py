@@ -763,7 +763,6 @@ def test_train_timestamps_local_time(mock_scs_run):
     del2h = timedelta(hours=2)
 
     # First, the pydatetime case
-    tss = run.train_timestamps(pydatetime=True)
     tss_berlin = run.train_timestamps(pydatetime=True, euxfel_local_time=True)
 
     # The time difference between UTC and Europe/Berlin can only be
