@@ -743,15 +743,46 @@ def test_train_timestamps(mock_scs_run):
     assert np.all(np.diff(tss).astype(np.uint64) > 0)
 
     # Convert numpy datetime64[ns] to Python datetime (dropping some precision)
-    dt0 = tss[0].astype('datetime64[ms]').item().replace(tzinfo=timezone.utc)
+    tss_l = run.train_timestamps(pydatetime=True)
+    assert len(tss_l) == len(run.train_ids)
     now = datetime.now(timezone.utc)
-    assert dt0 > (now - timedelta(days=1))  # assuming tests take < 1 day to run
-    assert dt0 < now
+    assert tss_l[0] > (now - timedelta(days=1))  # assuming tests take < 1 day to run
+    assert tss_l[0] < now
+    assert tss_l[0].tzinfo is timezone.utc
 
     tss_ser = run.train_timestamps(labelled=True)
     assert isinstance(tss_ser, pd.Series)
     np.testing.assert_array_equal(tss_ser.values, tss)
     np.testing.assert_array_equal(tss_ser.index, run.train_ids)
+    assert tss_ser.dt.tz is timezone.utc
+
+def test_train_timestamps_local_time(mock_scs_run):
+    run = RunDirectory(mock_scs_run)
+
+    del1h = timedelta(hours=1)
+    del2h = timedelta(hours=2)
+
+    # First, the pydatetime case
+    tss_berlin = run.train_timestamps(pydatetime=True, euxfel_local_time=True)
+
+    # The time difference between UTC and Europe/Berlin can only be
+    # one or two hours depending on daylight savings
+    assert all(
+        t1.utcoffset() == del1h or t1.utcoffset() == del2h
+        for t1 in tss_berlin
+    )
+
+    # Second, the pandas (labelled=True) case
+    tss = run.train_timestamps(labelled=True)
+    tss_berlin = run.train_timestamps(labelled=True, euxfel_local_time=True)
+
+    dtss = tss_berlin.dt.tz_localize(None) - tss.dt.tz_localize(None)
+    assert all(dtss == del1h) or all(dtss == del2h)
+
+    # Finally, check that ValueError is raised if euxfel_local_time is used
+    # on its own
+    with pytest.raises(ValueError):
+        run.train_timestamps(pydatetime=False, labelled=False, euxfel_local_time=True)
 
 
 def test_train_timestamps_nat(mock_fxe_control_data):
@@ -762,6 +793,13 @@ def test_train_timestamps_nat(mock_fxe_control_data):
         assert np.all(np.isnat(tss))
     else:
         assert not np.any(np.isnat(tss))
+
+    tss_l = f.train_timestamps(pydatetime=True)
+    assert len(tss_l) == len(f.train_ids)
+    if f.files[0].format_version == '0.5':
+        assert all(t is None for t in tss_l)
+    else:
+        assert not any(t is None for t in tss_l)
 
 
 def test_union(mock_fxe_raw_run):

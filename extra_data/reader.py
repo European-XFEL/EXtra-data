@@ -1605,17 +1605,22 @@ class DataCollection:
         print('\tControls')
         [print('\t-', d) for d in sorted(ctrl)] or print('\t-')
 
-    def train_timestamps(self, labelled=False):
+    def train_timestamps(self, labelled=False, *, pydatetime=False, euxfel_local_time=False):
         """Get approximate timestamps for each train
 
-        Timestamps are stored and returned in UTC (not local time).
+        Timestamps are stored and returned in UTC by default.
         Older files (before format version 1.0) do not have timestamp data,
         and the returned data in those cases will have the special value NaT
         (Not a Time).
 
         If *labelled* is True, they are returned in a pandas series, labelled
-        with train IDs. If False (default), they are returned in a NumPy array
-        of the same length as data.train_ids.
+        with train IDs. If *pydatetime* is True, a list of Python datetime
+        objects (truncated to microseconds) is returned, the same length as
+        data.train_ids. Otherwise (by default), timestamps are returned as a
+        NumPy array with datetime64 dtype.
+
+        *euxfel_local_time* can be True when either *labelled* or *pydatetime* is True.
+        In this case, timestamps are converted to the `Europe/Berlin` timezone.
         """
         arr = np.zeros(len(self.train_ids), dtype=np.uint64)
         id_to_ix = {tid: i for (i, tid) in enumerate(self.train_ids)}
@@ -1642,7 +1647,26 @@ class DataCollection:
         arr[arr == epoch] = 'NaT'  # Not a Time
         if labelled:
             import pandas as pd
-            return pd.Series(arr, index=self.train_ids)
+            series = pd.Series(arr, index=self.train_ids).dt.tz_localize('UTC')
+            return series.dt.tz_convert('Europe/Berlin') if euxfel_local_time else series
+        elif pydatetime:
+            from datetime import datetime, timezone
+            res = []
+            for npdt in arr:
+                pydt = npdt.astype('datetime64[ms]').item()
+                if pydt is not None:  # Numpy NaT becomes None
+                    pydt = pydt.replace(tzinfo=timezone.utc)
+                    if euxfel_local_time:
+                        from zoneinfo import ZoneInfo
+                        pydt = pydt.astimezone(ZoneInfo('Europe/Berlin'))
+                res.append(pydt)
+            return res
+        elif euxfel_local_time:
+            raise ValueError(
+                'The euxfel_local_time option '
+                + 'can only be used if either labelled or pydatetime '
+                + 'are set to True'
+            )
         return arr
 
     def run_metadata(self) -> dict:
