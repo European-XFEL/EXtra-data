@@ -1,6 +1,36 @@
 Release Notes
 =============
 
+1.18
+----
+
+2024-09-20
+
+-  EXtra-data now requires Python 3.9 or above (:ghpull:`554`).
+-  Aliases are now case-insensitive, and allow - & \_ interchangeably, so ``las-x``
+   and ``Las_X`` are considered the same (:ghpull:`515`).
+-  Add concept of 'legacy' source names, references to sources which have been
+   renamed (:ghpull:`527`). This will be used for calibrated detector data.
+-  Add source, key & alias completions for IPython (:ghpull:`514`).
+-  New ``.masked_data()`` method to load detector data with mask (:ghpull:`518`).
+   See :doc:`agipd_lpd_data`.
+-  A new ``euxfel_local_time`` option for :meth:`.DataCollection.train_timestamps`
+   to convert timestamps to local (German) time (:ghpull:`550`).
+-  Return timezone-aware values from :meth:`~.DataCollection.train_timestamps`
+   where possible (:ghpull:`550`).
+-  Allow ``kd[trains]`` for multi-module KeyData objects (:ghpull:`520`).
+-  Add optional index group filter to :meth:`.SourceData.one_key` (:ghpull:`526`).
+-  Fixed various compatibility issues with Numpy 2.0 (:ghpull:`530`).
+-  Allow caching file maps from 'open' & 'red' run folders in the proposal
+   scratch folder (:ghpull:`548`, :ghpull:`549`).
+-  When the file map is cached in multiple places, read the newest version
+   (:ghpull:`524`).
+-  Prevent unwanted iteration over a KeyData object (:ghpull:`519`).
+-  Fix making virtual CXI files for JUNGFRAU data if the 'mask' dataset is not
+   present (:ghpull:`511`).
+-  Fix the message shown when skipping files because of how they're stored
+   (:ghpull:`525`).
+
 1.17
 ----
 
