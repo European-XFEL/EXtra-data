@@ -4,7 +4,7 @@ Release Notes
 1.18
 ----
 
-2024-09-20
+2024-09-23
 
 -  EXtra-data now requires Python 3.9 or above (:ghpull:`554`).
 -  Aliases are now case-insensitive, and allow - & \_ interchangeably, so ``las-x``
