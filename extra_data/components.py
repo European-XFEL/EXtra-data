@@ -139,7 +139,7 @@ class MultimodDetectorBase:
             raise ValueError("min_modules must be a positive integer, not "
                              f"{min_modules!r}")
 
-        source_to_modno = self._identify_sources(data, detector_name, modules)
+        source_to_modno = self._identify_sources(data, detector_name, modules, raw=raw)
 
         data = data.select([(src, '*') for src in source_to_modno])
         self.detector_name = detector_name
