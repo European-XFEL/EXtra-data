@@ -1153,9 +1153,9 @@ def test_run_metadata_no_trains(mock_scs_run):
 def test_proc_legacy_sources(mock_modern_spb_proc_run):
     run = RunDirectory(mock_modern_spb_proc_run)
 
-    src_pattern = 'SPB_DET_AGIPD1M-1/{}/{}CH0:xtdf'
-    corr_sources = {src_pattern.format('CORR', i) for i in range(16)}
-    det_sources = {src_pattern.format('DET', i) for i in range(16)}
+    src_pattern = 'SPB_DET_AGIPD1M-1/{}/{}CH0:{}'
+    corr_sources = {src_pattern.format('CORR', i, 'output') for i in range(16)}
+    det_sources = {src_pattern.format('DET', i, 'xtdf') for i in range(16)}
 
     # Should contain both canonical and legacy names.
     assert run.all_sources == corr_sources | det_sources
@@ -1169,7 +1169,7 @@ def test_proc_legacy_sources(mock_modern_spb_proc_run):
     assert run.legacy_sources == dict(zip(
         sorted(det_sources), sorted(corr_sources)))
 
-    det_mod0 = src_pattern.format('DET', 0)
+    det_mod0 = src_pattern.format('DET', 0, 'xtdf')
 
     # Classic APIs continue to work as normal, but raise warnings
     # whenever data is accessed through creation of SourceData object.
