@@ -4,11 +4,13 @@ The public API is in extra_data.reader; this is internal code.
 """
 import logging
 import math
+import operator
 import os
 import os.path as osp
 import re
 import time
 from glob import iglob
+from numbers import Integral
 from warnings import warn
 
 import numpy as np
@@ -106,29 +108,38 @@ def _tid_to_slice_ix(tid, train_ids, stop=False):
         return (train_ids > tid).nonzero()[0][0]
 
 
+def is_int_like(x):
+    if isinstance(x, np.ndarray):
+        return x.ndim == 0 and np.issubdtype(x.dtype, np.integer)
+    return isinstance(x, Integral)
+
+
 def select_train_ids(train_ids, sel):
     if isinstance(sel, by_index):
         sel = sel.value
-    elif isinstance(sel, int):
-        sel = slice(sel, sel+1, None)
 
-    if isinstance(sel, by_id) and isinstance(sel.value, slice):
-        # Slice by train IDs
-        start_ix = _tid_to_slice_ix(sel.value.start, train_ids, stop=False)
-        stop_ix = _tid_to_slice_ix(sel.value.stop, train_ids, stop=True)
-        return train_ids[start_ix: stop_ix: sel.value.step]
-    elif isinstance(sel, by_id) and isinstance(sel.value, (list, np.ndarray)):
-        # Select a list of trains by train ID
-        new_train_ids = sorted(set(train_ids).intersection(sel.value))
-        if len(sel.value) and not new_train_ids:
-            warn(
-                f"Given train IDs not found among {len(train_ids)} trains in "
-                "collection", stacklevel=3,
-            )
-        return new_train_ids
+    if isinstance(sel, by_id):
+        if isinstance(sel.value, slice):
+            # Slice by train IDs
+            start_ix = _tid_to_slice_ix(sel.value.start, train_ids, stop=False)
+            stop_ix = _tid_to_slice_ix(sel.value.stop, train_ids, stop=True)
+            return train_ids[start_ix: stop_ix: sel.value.step]
+        if is_int_like(sel.value):
+            sel.value = [operator.index(sel.value)]
+        if isinstance(sel.value, (list, np.ndarray)):
+            # Select a list of trains by train ID
+            new_train_ids = sorted(set(train_ids).intersection(sel.value))
+            if len(sel.value) and not new_train_ids:
+                warn(f"Given train IDs not found among {len(train_ids)} trains"
+                     " in collection", stacklevel=3,)
+            return new_train_ids
+        else:
+            raise TypeError(type(sel.value))
     elif isinstance(sel, slice):
         # Slice by indexes in this collection
         return train_ids[sel]
+    elif is_int_like(sel):
+        return [train_ids[operator.index(sel)]]
     elif isinstance(sel, (list, np.ndarray)):
         # Select a list of trains by index in this collection
         return sorted(np.asarray(train_ids)[sel])

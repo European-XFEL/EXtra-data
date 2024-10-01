@@ -3,7 +3,10 @@ import os.path as osp
 from unittest import mock
 
 import numpy as np
-from extra_data import RunDirectory, read_machinery
+import pytest
+
+from extra_data import RunDirectory, by_id, by_index, read_machinery
+from extra_data.read_machinery import select_train_ids
 
 
 def test_find_proposal(tmpdir):
@@ -51,3 +54,77 @@ def test_same_run(mock_spb_raw_run, mock_jungfrau_run, mock_scs_run):
         assert read_machinery.same_run(sd1, sd2)
     else:
         assert not read_machinery.same_run(sd1, sd2)
+
+
+def test_select_train_ids():
+    train_ids = list(range(1000000, 1000010))
+
+    # Test by_id with a single integer
+    assert select_train_ids(train_ids, by_id[1000002]) == [1000002]
+
+    # Test by_id with a numpy type
+    assert select_train_ids(train_ids, by_id[np.uint64(1000002)]) == [1000002]
+
+    # Test by_id with a slice
+    assert select_train_ids(train_ids, by_id[1000002:1000005]) == [1000002, 1000003, 1000004]
+
+    # Test by_id with a list
+    assert select_train_ids(train_ids, by_id[[1000002, 1000005]]) == [1000002, 1000005]
+
+    # Test by_id with a numpy array
+    assert select_train_ids(train_ids, by_id[np.array([1000002, 1000005])]) == [1000002, 1000005]
+
+    # Test by_id with a slice and step
+    assert select_train_ids(train_ids, by_id[1000000:1000008:2]) == [1000000, 1000002, 1000004, 1000006]
+
+    # Test by_id with an open-ended slice (end)
+    assert select_train_ids(train_ids, by_id[1000005:]) == [1000005, 1000006, 1000007, 1000008, 1000009]
+
+    # Test by_id with an open-ended slice (start)
+    assert select_train_ids(train_ids, by_id[:1000003]) == [1000000, 1000001, 1000002]
+
+    # Test by_index with a single integer
+    assert select_train_ids(train_ids, by_index[2]) == [1000002]
+
+    # Test by_index with a 0D numpy array
+    assert select_train_ids(train_ids, by_index[np.array(5, dtype=np.int8)]) == [1000005]
+
+    # Test by_index with a slice
+    assert select_train_ids(train_ids, by_index[1:4]) == [1000001, 1000002, 1000003]
+
+    # Test by_index with a list
+    assert select_train_ids(train_ids, by_index[[1, 3]]) == [1000001, 1000003]
+
+    # Test by_index with a slice and step
+    assert select_train_ids(train_ids, by_index[::2]) == [1000000, 1000002, 1000004, 1000006, 1000008]
+
+    # Test with a plain integer
+    assert select_train_ids(train_ids, 3) == [1000003]
+
+    # Test with a plain int-like
+    assert select_train_ids(train_ids, np.uint32(3)) == [1000003]
+
+    # Test with a plain slice
+    assert select_train_ids(train_ids, slice(1, 4)) == [1000001, 1000002, 1000003]
+
+    # Test with a plain list
+    assert select_train_ids(train_ids, [1, 3]) == [1000001, 1000003]
+
+    # Test with a numpy array
+    assert select_train_ids(train_ids, np.array([1, 3])) == [1000001, 1000003]
+
+    # Test with an invalid type (should raise TypeError)
+    with pytest.raises(TypeError):
+        select_train_ids(train_ids, "invalid")
+    
+    with pytest.raises(TypeError):
+        select_train_ids(train_ids, by_id[np.float64(1000006)])
+
+    # Test by_id with train IDs not found in the list (should raise a warning)
+    with pytest.warns(UserWarning):
+        result = select_train_ids(train_ids, by_id[[999999, 1000010]])
+    assert result == []
+    
+    with pytest.warns(UserWarning):
+        result = select_train_ids(train_ids, by_id[1000010])
+    assert result == []
