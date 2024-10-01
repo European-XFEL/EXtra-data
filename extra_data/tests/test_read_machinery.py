@@ -62,6 +62,9 @@ def test_select_train_ids():
     # Test by_id with a single integer
     assert select_train_ids(train_ids, by_id[1000002]) == [1000002]
 
+    # Test by_id with a numpy type
+    assert select_train_ids(train_ids, by_id[np.uint64(1000002)]) == [1000002]
+
     # Test by_id with a slice
     assert select_train_ids(train_ids, by_id[1000002:1000005]) == [1000002, 1000003, 1000004]
 
@@ -83,6 +86,9 @@ def test_select_train_ids():
     # Test by_index with a single integer
     assert select_train_ids(train_ids, by_index[2]) == [1000002]
 
+    # Test by_index with a 0D numpy array
+    assert select_train_ids(train_ids, by_index[np.array(5, dtype=np.int8)]) == [1000005]
+
     # Test by_index with a slice
     assert select_train_ids(train_ids, by_index[1:4]) == [1000001, 1000002, 1000003]
 
@@ -91,6 +97,12 @@ def test_select_train_ids():
 
     # Test by_index with a slice and step
     assert select_train_ids(train_ids, by_index[::2]) == [1000000, 1000002, 1000004, 1000006, 1000008]
+
+    # Test with a plain integer
+    assert select_train_ids(train_ids, 3) == [1000003]
+
+    # Test with a plain int-like
+    assert select_train_ids(train_ids, np.uint32(3)) == [1000003]
 
     # Test with a plain slice
     assert select_train_ids(train_ids, slice(1, 4)) == [1000001, 1000002, 1000003]
@@ -104,8 +116,15 @@ def test_select_train_ids():
     # Test with an invalid type (should raise TypeError)
     with pytest.raises(TypeError):
         select_train_ids(train_ids, "invalid")
+    
+    with pytest.raises(TypeError):
+        select_train_ids(train_ids, by_id[np.float64(1000006)])
 
     # Test by_id with train IDs not found in the list (should raise a warning)
     with pytest.warns(UserWarning):
         result = select_train_ids(train_ids, by_id[[999999, 1000010]])
+    assert result == []
+    
+    with pytest.warns(UserWarning):
+        result = select_train_ids(train_ids, by_id[1000010])
     assert result == []
