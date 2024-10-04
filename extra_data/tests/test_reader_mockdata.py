@@ -719,7 +719,7 @@ def test_select_trains(mock_fxe_raw_run):
 
     assert run[10].train_ids == [10010]
     assert run[by_id[10000]].train_ids == [10000]
-    assert run[by_index[469:555]] == [10479]
+    assert run[by_index[479:555]].train_ids == [10479]
     with pytest.raises(IndexError):
         run[555]
 
