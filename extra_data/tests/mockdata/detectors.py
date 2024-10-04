@@ -19,7 +19,7 @@ class DetectorModule:
     ]
 
     def __init__(self, device_id, frames_per_train=64, raw=True,
-                 legacy_name=None):
+                 channel_name='xtdf', legacy_name=None):
         self.device_id = device_id
         self._frames_per_train = frames_per_train
         if not raw:
@@ -27,6 +27,7 @@ class DetectorModule:
             # and gain. This dimension is removed by the calibration process.
             self.image_dims = self.image_dims[1:]
         self.raw = raw
+        self.channel_name = channel_name
         self.legacy_name = legacy_name
 
     def write_control(self, f):
@@ -81,13 +82,13 @@ class DetectorModule:
         if ntrains_pad % self.chunksize:
             ntrains_pad += + self.chunksize - (ntrains_pad % self.chunksize)
 
+        inst_source = f'{self.device_id}:{self.channel_name}'
+
         # INDEX
         for part in self.output_parts:
-            dev_chan = '%s:xtdf/%s' % (self.device_id, part)
-
-            i_first = f.create_dataset('INDEX/%s/first' % dev_chan,
+            i_first = f.create_dataset(f'INDEX/{inst_source}/{part}/first',
                                        (self.ntrains,), 'u8', maxshape=(None,))
-            i_count = f.create_dataset('INDEX/%s/count' % dev_chan,
+            i_count = f.create_dataset(f'INDEX/{inst_source}/{part}/count',
                                        (self.ntrains,), 'u8', maxshape=(None,))
             if part == 'image':
                 # First first is always 0
@@ -108,63 +109,65 @@ class DetectorModule:
         if self.raw:
             # Raw data have an extra dimension (length 1) and an unlimited max
             # for the first dimension.
-            ds = f.create_dataset('INSTRUMENT/%s:xtdf/image/trainId' % self.device_id,
+            ds = f.create_dataset(f'INSTRUMENT/{inst_source}/image/trainId',
                                   (nframes, 1), 'u8', maxshape=(None, 1))
             ds[:, 0] = tid_index
 
-            pid = f.create_dataset('INSTRUMENT/%s:xtdf/image/pulseId' % self.device_id,
+            pid = f.create_dataset(f'INSTRUMENT/{inst_source}/image/pulseId',
                                    (nframes, 1), 'u8', maxshape=(None, 1))
             pid[:, 0] = pid_index
 
-            cid = f.create_dataset('INSTRUMENT/%s:xtdf/image/cellId' % self.device_id,
+            cid = f.create_dataset(f'INSTRUMENT/{inst_source}/image/cellId',
                                    (nframes, 1), 'u2', maxshape=(None, 1))
             cid[:, 0] = pid_index  # Cell IDs mirror pulse IDs for now
         else:
             # Corrected data drops the extra dimension, and maxshape==shape.
             f.create_dataset(
-                'INSTRUMENT/%s:xtdf/image/trainId' % self.device_id,
+                f'INSTRUMENT/{inst_source}/image/trainId',
                 (nframes,), 'u8', chunks=True, data=tid_index
             )
 
             f.create_dataset(
-                'INSTRUMENT/%s:xtdf/image/pulseId' % self.device_id,
+                f'INSTRUMENT/{inst_source}/image/pulseId',
                 (nframes,), 'u8', chunks=True, data=pid_index
             )
 
             f.create_dataset(  # Cell IDs mirror pulse IDs for now
-                'INSTRUMENT/%s:xtdf/image/cellId' % self.device_id,
+                f'INSTRUMENT/{inst_source}/image/cellId',
                 (nframes,), 'u2', chunks=True, data=pid_index
             )
 
         max_len = None if self.raw else nframes
         for (key, datatype, dims) in self.image_keys:
-            f.create_dataset('INSTRUMENT/%s:xtdf/image/%s' % (self.device_id, key),
+            f.create_dataset(f'INSTRUMENT/{inst_source}/image/{key}',
                              (nframes,) + dims, datatype, maxshape=((max_len,) + dims))
 
 
         # INSTRUMENT (other parts)
         for part in ['detector', 'header', 'trailer']:
-            ds = f.create_dataset('INSTRUMENT/%s:xtdf/%s/trainId' % (self.device_id, part),
+            ds = f.create_dataset(f'INSTRUMENT/{inst_source}/{part}/trainId',
                                   (ntrains_pad,), 'u8', maxshape=(None,))
             ds[:self.ntrains] = trainids
 
         for (key, datatype, dims) in self.other_keys:
-            f.create_dataset('INSTRUMENT/%s:xtdf/%s' % (self.device_id, key),
+            f.create_dataset(f'INSTRUMENT/{inst_source}/{key}',
                      (ntrains_pad,) + dims, datatype, maxshape=((None,) + dims))
 
         if self.legacy_name is not None:
+            # The legacy source name for corrected data is the same as for
+            # raw data, which for these detectors always has the xtdf channel.
             f[f'INDEX/{self.legacy_name}:xtdf'] = h5py.SoftLink(
-                f'/INDEX/{self.device_id}:xtdf')
+                f'/INDEX/{inst_source}')
             f[f'INSTRUMENT/{self.legacy_name}:xtdf'] = h5py.SoftLink(
-                f'/INSTRUMENT/{self.device_id}:xtdf')
+                f'/INSTRUMENT/{inst_source}')
 
     def datasource_ids(self):
         for part in self.output_parts:
-            yield 'INSTRUMENT/%s:xtdf/%s' % (self.device_id, part)
+            yield f'INSTRUMENT/{self.device_id}:{self.channel_name}/{part}'
 
         if self.legacy_name is not None:
             for part in self.output_parts:
-                yield 'INSTRUMENT/%s:xtdf/%s' % (self.legacy_name, part)
+                yield f'INSTRUMENT/{self.legacy_name}:xtdf/{part}'
 
 
 class AGIPDModule(DetectorModule):

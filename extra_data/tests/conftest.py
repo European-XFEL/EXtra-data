@@ -157,12 +157,16 @@ def mock_spb_raw_and_proc_run():
 
         yield td, raw_run_dir, proc_run_dir
 
+@pytest.fixture(scope='session')
+def mock_spb_raw_run_fmt1():
+    with TemporaryDirectory() as td:
+        make_examples.make_spb_run(td, format_version="1.2")
+        yield td
 
 @pytest.fixture(scope='session')
-def mock_modern_spb_proc_run(format_version):
+def mock_modern_spb_proc_run():
     with TemporaryDirectory() as td:
-        make_examples.make_modern_spb_proc_run(
-            td, format_version=format_version)
+        make_examples.make_modern_spb_proc_run(td)
         yield td
 
 
