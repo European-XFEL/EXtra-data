@@ -2,15 +2,15 @@ import fnmatch
 import re
 from typing import Dict, List, Optional
 
-import numpy as np
 import h5py
+import numpy as np
 
-from .exceptions import MultiRunError, PropertyNameError, NoDataError
+from .exceptions import MultiRunError, NoDataError, PropertyNameError
 from .file_access import FileAccess
 from .keydata import KeyData
-from .read_machinery import (
-    glob_wildcards_re, same_run, select_train_ids, split_trains, trains_files_index
-)
+from .read_machinery import (by_id, by_index, glob_wildcards_re, is_int_like,
+                             same_run, select_train_ids, split_trains,
+                             trains_files_index)
 
 
 class SourceData:
@@ -67,6 +67,12 @@ class SourceData:
         return res
 
     def __getitem__(self, key):
+        if (
+            isinstance(key, (by_id, by_index, list, np.ndarray, slice)) or
+            is_int_like(key)
+        ):
+            return self.select_trains(key)
+
         if key not in self:
             raise PropertyNameError(key, self.source)
         ds0 = self.files[0].file[

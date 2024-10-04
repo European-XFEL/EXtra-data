@@ -717,6 +717,12 @@ def test_select_trains(mock_fxe_raw_run):
     with pytest.raises(IndexError):
         run.select_trains(by_index[[480]])
 
+    assert run[10].train_ids == [10010]
+    assert run[by_id[10000]].train_ids == [10000]
+    assert run[by_index[469:555]] == [10479]
+    with pytest.raises(IndexError):
+        run[555]
+
 
 def test_split_trains(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
