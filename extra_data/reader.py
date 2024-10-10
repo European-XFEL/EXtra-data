@@ -33,17 +33,17 @@ import h5py
 import numpy as np
 
 from . import locality, voview
+from .aliases import AliasIndexer
 from .exceptions import (MultiRunError, PropertyNameError, SourceNameError,
                          TrainIDError)
 from .file_access import FileAccess
 from .keydata import KeyData
-from .read_machinery import (DETECTOR_SOURCE_RE, FilenameInfo, by_id, by_index,
-                             find_proposal, glob_wildcards_re, same_run,
-                             select_train_ids, split_trains)
+from .read_machinery import (DETECTOR_SOURCE_RE, by_id, by_index,
+                             find_proposal, glob_wildcards_re, is_int_like,
+                             same_run, select_train_ids)
 from .run_files_map import RunFilesMap
 from .sourcedata import SourceData
 from .utils import available_cpu_cores
-from .aliases import AliasIndexer
 
 __all__ = [
     'H5File',
@@ -278,8 +278,13 @@ class DataCollection:
             return self._get_key_data(*item)
         elif isinstance(item, str):
             return self._get_source_data(item)
+        elif (
+            isinstance(item, (by_id, by_index, list, np.ndarray, slice)) or
+            is_int_like(item)
+        ):
+            return self.select_trains(item)
 
-        raise TypeError("Expected data[source] or data[source, key]")
+        raise TypeError("Expected data[source], data[source, key] or data[train_selection]")
 
     def _ipython_key_completions_(self):
         return list(self.all_sources)

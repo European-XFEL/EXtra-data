@@ -114,6 +114,19 @@ def test_select_trains(mock_spb_raw_run):
     assert sel.train_ids == []
     assert sel.keys() == xgm.keys()
 
+    sel = xgm[by_id[10020:10040]]
+    assert sel.train_ids == list(range(10020, 10040))
+
+    sel = xgm[by_index[:10]]
+    assert sel.train_ids == list(range(10000, 10010))
+
+    sel = xgm[10]
+    assert sel.train_ids == [10010]
+
+    sel = xgm[999:1000]
+    assert sel.train_ids == []
+    assert sel.keys() == xgm.keys()
+
 
 def test_split_trains(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
