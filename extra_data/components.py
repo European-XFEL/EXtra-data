@@ -257,8 +257,8 @@ class MultimodDetectorBase:
 
     @classmethod
     def _data_is_raw(cls, data, source: str):
-        # As of November 2023, raw data is uint16 & corrected is float32
-        # Override this method if that changes
+        # For most detectors, raw data is uint16 & corrected is float32.
+        # Overridden for AGIPD, where output dtype is configurable.
         kd = data[source, cls._main_data_key]
         return np.issubdtype(kd.dtype, np.integer)
 
@@ -394,9 +394,12 @@ class MultimodDetectorBase:
         return counts.pop() * self._frames_per_entry
 
     def __repr__(self):
-        return "<{}: Data interface for detector {!r} with {} modules>".format(
-            type(self).__name__, self.detector_name, len(self.source_to_modno),
-        )
+        # Show raw/proc
+        det = type(self).__name__
+        raw = all(self._data_is_raw(self.data, s) for s in self.source_to_modno)
+        rp = 'raw' if raw else 'proc'
+        return (f"<{det}: Data interface for detector {self.detector_name!r} "
+                f"- {rp} data with {len(self.source_to_modno)} modules>")
 
     def select_trains(self, trains):
         """Select a subset of trains from this data as a new object.
@@ -1614,6 +1617,12 @@ class AGIPD1M(XtdfDetectorBase):
     _source_corr_pat = r'/CORR/(?P<modno>\d+)CH'
     module_shape = (512, 128)
 
+    @classmethod
+    def _data_is_raw(cls, data, source: str):
+        # Raw AGIPD data has an extra dimension (data/gain) compared to raw
+        kd = data[source, cls._main_data_key]
+        return kd.ndim == 4
+
 
 @multimod_detectors
 class AGIPD500K(XtdfDetectorBase):
@@ -1627,6 +1636,12 @@ class AGIPD500K(XtdfDetectorBase):
     _source_corr_pat = r'/CORR/(?P<modno>\d+)CH'
     module_shape = (512, 128)
     n_modules = 8
+
+    @classmethod
+    def _data_is_raw(cls, data, source: str):
+        # Raw AGIPD data has an extra dimension (data/gain) compared to raw
+        kd = data[source, cls._main_data_key]
+        return kd.ndim == 4
 
 
 @multimod_detectors
@@ -1680,8 +1695,10 @@ class LPD1M(XtdfDetectorBase):
     module_shape = (256, 256)
 
     def __init__(self, data: DataCollection, detector_name=None, modules=None,
-                 *, min_modules=1, parallel_gain=False):
-        super().__init__(data, detector_name, modules, min_modules=min_modules)
+                 *, min_modules=1, parallel_gain=False, raw=None):
+        super().__init__(
+            data, detector_name, modules, min_modules=min_modules, raw=raw
+        )
 
         self.parallel_gain = parallel_gain
         if parallel_gain:
