@@ -269,7 +269,10 @@ class MultimodDetectorBase:
             source_to_modno = dict(cls._source_matches(data, pat))
             if not all(cls._data_is_raw(data, s) for s in source_to_modno):
                 # Older corrected data used the same names as raw
-                raise Exception("Raw data was requested, but only proc data was found")
+                raise ValueError(
+                    f"Raw data was not found: {detector_name}/DET/... sources "
+                    f"are from corrected data"
+                )
 
         else:
             # Prefer corrected data
@@ -282,7 +285,7 @@ class MultimodDetectorBase:
                 source_to_modno = dict(cls._source_matches(data, pat))
 
                 if (raw is False) and any(cls._data_is_raw(data, s) for s in source_to_modno):
-                    raise Exception("Corrected data was requested, but only raw data was found")
+                    raise SourceNameError(f'{detector_name}/CORR/...')
                 # raw=None -> legacy behaviour: prefer corrected but allow raw
 
         if modules is not None:
@@ -290,7 +293,8 @@ class MultimodDetectorBase:
                                if n in modules}
 
         if not source_to_modno:
-            raise SourceNameError(f'{detector_name}/DET/...')
+            dc = '(DET|CORR)' if raw is None else 'DET' if raw else 'CORR'
+            raise SourceNameError(f'{detector_name}/{dc}/...')
 
         return source_to_modno
 
