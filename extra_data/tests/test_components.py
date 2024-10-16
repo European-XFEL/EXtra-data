@@ -555,6 +555,38 @@ def test_iterate_jungfrau(mock_jungfrau_run):
     assert d['data.adc'].dims == ('module', 'cell', 'slow_scan', 'fast_scan')
 
 
+def test_modern_corr_sources(mock_modern_spb_proc_run, mock_spb_raw_run_fmt1):
+    run_raw = RunDirectory(mock_spb_raw_run_fmt1)
+    run_proc = RunDirectory(mock_modern_spb_proc_run)
+    combined = run_raw.union(run_proc.select("*/CORR/*:output"))
+
+    corr_sources = {f'SPB_DET_AGIPD1M-1/CORR/{i}CH0:output' for i in range(16)}
+    det_sources = {f'SPB_DET_AGIPD1M-1/DET/{i}CH0:xtdf' for i in range(16)}
+
+    # Specify that we want raw data
+    assert AGIPD1M(run_raw, raw=True).data.all_sources == det_sources
+    with pytest.raises(Exception):
+        AGIPD1M(run_proc, raw=True)
+    agipd_raw = AGIPD1M(combined, raw=True)
+    assert agipd_raw.data.all_sources == det_sources
+    assert 'image.mask' not in agipd_raw
+
+    # Specify that we want corrected data
+    with pytest.raises(Exception):
+        AGIPD1M(run_raw, raw=False)
+    assert AGIPD1M(run_proc, raw=False).data.all_sources == corr_sources
+    agipd_proc = AGIPD1M(combined, raw=False)
+    assert agipd_proc.data.all_sources == corr_sources
+    assert 'image.mask' in agipd_proc
+
+    # Legacy behaviour: prefer corrected, allow raw if only that is found
+    assert AGIPD1M(run_raw).data.all_sources == det_sources
+    assert AGIPD1M(run_proc).data.all_sources == corr_sources
+    agipd_dflt = AGIPD1M(combined)
+    assert agipd_dflt.data.all_sources == corr_sources
+    assert 'image.mask' in agipd_dflt
+
+
 def test_write_virtual_cxi(mock_spb_proc_run, tmpdir):
     run = RunDirectory(mock_spb_proc_run)
     det = AGIPD1M(run)

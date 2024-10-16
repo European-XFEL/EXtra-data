@@ -166,8 +166,8 @@ def test_legacy_sources(mock_modern_spb_proc_run):
 
     # Instrument sources should be a set of both canonical and legacy name.
     assert fa.instrument_sources == {
-        'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'SPB_DET_AGIPD1M-1/CORR/0CH0:xtdf'}
+        'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'SPB_DET_AGIPD1M-1/CORR/0CH0:output'}
 
     # Legacy sources should be a dict mapping to the canonical name.
     assert fa.legacy_sources == {
-        'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf': 'SPB_DET_AGIPD1M-1/CORR/0CH0:xtdf'}
+        'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf': 'SPB_DET_AGIPD1M-1/CORR/0CH0:output'}

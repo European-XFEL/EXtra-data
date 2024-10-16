@@ -297,7 +297,7 @@ def test_legacy_sourcedata(mock_modern_spb_proc_run):
     run = RunDirectory(mock_modern_spb_proc_run)
 
     det_mod0 = 'SPB_DET_AGIPD1M-1/DET/0CH0:xtdf'
-    corr_mod0 = 'SPB_DET_AGIPD1M-1/CORR/0CH0:xtdf'
+    corr_mod0 = 'SPB_DET_AGIPD1M-1/CORR/0CH0:output'
 
     # True (canonical) source works as normal
     sd = run[corr_mod0]
