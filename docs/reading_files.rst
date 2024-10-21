@@ -268,6 +268,16 @@ methods offer extra capabilities.
 Getting data by train
 ---------------------
 
+Selecting trains in a run, source or key data returns a new object with a subset
+of the data matching the train selection. For example, You can do::
+
+    # run data
+    run = run[:100]  # first 100 trains in the run
+    # source data
+    source = source[by_id[12345678]]  # data for train ID == 1234568
+    # key data
+    key = key[np.s_[10:20]]  # data for the 10th to the 20th trains
+
 Some kinds of data, e.g. from AGIPD, are too big to load a whole run into
 memory at once. In these cases, it's convenient to load one train at a time.
 
