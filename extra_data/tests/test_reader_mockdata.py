@@ -175,6 +175,10 @@ def test_read_fxe_raw_run_selective(mock_fxe_raw_run):
     assert run.train_ids == list(range(10000, 10480))
     assert 'SA1_XTD2_XGM/DOOCS/MAIN' not in run.control_sources
     assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in run.detector_sources
+    run = RunDirectory(mock_fxe_raw_run, file_filter=lambda x: [f for f in x if "LPD" in f])
+    assert run.train_ids == list(range(10000, 10480))
+    assert 'SA1_XTD2_XGM/DOOCS/MAIN' not in run.control_sources
+    assert 'FXE_DET_LPD1M-1/DET/0CH0:xtdf' in run.detector_sources
 
 
 def test_read_spb_proc_run(mock_spb_proc_run):
