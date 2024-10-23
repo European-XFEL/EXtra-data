@@ -611,6 +611,10 @@ def test_select(mock_fxe_raw_run):
     assert sel_by_kd.control_sources == {kd.source}
     assert sel_by_kd.keys_for_source(kd.source) == {kd.key}
 
+    # disallow mixing source and train ID selection
+    with pytest.raises(TypeError):
+        run['SPB_XTD9_XGM/DOOCS/MAIN', 10]
+
 
 @pytest.mark.parametrize(
     'select_str',
@@ -720,6 +724,12 @@ def test_select_trains(mock_fxe_raw_run):
 
     with pytest.raises(IndexError):
         run.select_trains(by_index[[480]])
+
+    assert run[10].train_ids == [10010]
+    assert run[by_id[10000]].train_ids == [10000]
+    assert run[by_index[479:555]].train_ids == [10479]
+    with pytest.raises(IndexError):
+        run[555]
 
 
 def test_split_trains(mock_fxe_raw_run):
