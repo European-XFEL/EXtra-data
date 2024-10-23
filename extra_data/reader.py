@@ -274,7 +274,11 @@ class DataCollection:
         return self._sources_data[source]
 
     def __getitem__(self, item):
-        if isinstance(item, tuple) and len(item) == 2:
+        if (
+            isinstance(item, tuple) and
+            len(item) == 2 and
+            all(isinstance(e, str) for e in item)
+        ):
             return self._get_key_data(*item)
         elif isinstance(item, str):
             return self._get_source_data(item)
