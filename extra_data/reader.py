@@ -1921,7 +1921,7 @@ def RunDirectory(
     files_map = RunFilesMap(path)
     t0 = time.monotonic()
     d = DataCollection.from_paths(
-        files, files_map, inc_suspect_trains=inc_suspect_trains,
+        sel_files, files_map, inc_suspect_trains=inc_suspect_trains,
         is_single_run=True, parallelize=parallelize
     )
     log.debug("Opened run with %d files in %.2g s",
