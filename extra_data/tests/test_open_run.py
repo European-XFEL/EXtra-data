@@ -81,7 +81,6 @@ def test_open_run(mock_spb_raw_and_proc_run):
         assert "xgm" in run.alias
 
 
-
 @pytest.mark.parametrize('location', ['all', ['raw', 'proc']],
                          ids=['all', 'list'])
 def test_open_run_multiple(mock_spb_raw_and_proc_run, location):
@@ -89,14 +88,14 @@ def test_open_run_multiple(mock_spb_raw_and_proc_run, location):
 
     with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', mock_data_root):
         # Separate folders
-        run = open_run(proposal=2012, run=238)
+        raw_run = open_run(proposal=2012, run=238, data='raw')
         proc_run = open_run(proposal=2012, run=238, data='proc')
 
         # All folders
         all_run = open_run(proposal=2012, run=238, data=location)
 
         # Raw contains all sources.
-        assert run.all_sources == all_run.all_sources
+        assert raw_run.all_sources == all_run.all_sources
 
         # Proc is a true subset.
         assert proc_run.all_sources < all_run.all_sources
@@ -123,7 +122,7 @@ def test_open_run_multiple(mock_spb_raw_and_proc_run, location):
             assert len(w) == 1
 
         # It should have opened at least the raw data
-        assert run.all_sources == all_run.all_sources
+        assert raw_run.all_sources == all_run.all_sources
 
         # Run that doesn't exist
         with pytest.raises(Exception):
@@ -135,6 +134,28 @@ def test_open_run_multiple(mock_spb_raw_and_proc_run, location):
             open_run(proposal=2012, run=238, data=location)
             assert len(w) == 1
 
+
+def test_open_run_default(mock_spb_raw_and_modern_proc_run):
+    mock_data_root, raw_run_dir, proc_run_dir = mock_spb_raw_and_modern_proc_run
+
+    with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', mock_data_root):
+        run = open_run(proposal=2012, run=238, data='default')
+
+        # /DET/ names should come from raw data
+        det_sources = {f'SPB_DET_AGIPD1M-1/DET/{m}CH0:xtdf' for m in range(16)}
+        for s in det_sources:
+            assert 'image.gain' not in run[s]
+            for file in run[s].files:
+                assert '/raw/' in file.filename
+
+        # /CORR/ names should come from corrected data
+        corr_sources = {f'SPB_DET_AGIPD1M-1/CORR/{m}CH0:output' for m in range(16)}
+        for s in corr_sources:
+            assert 'image.gain' in run[s]
+            for file in run[s].files:
+                assert '/proc/' in file.filename
+
+        assert run.legacy_sources == {}
 
 def open_run_daemonized_helper(mock_data_root):
     with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', mock_data_root):
