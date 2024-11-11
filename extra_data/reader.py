@@ -2011,7 +2011,7 @@ def open_run(
                 origin_dc = open_run(
                     proposal, run, data=origin, include=include,
                     file_filter=file_filter, inc_suspect_trains=inc_suspect_trains,
-                    parallelize=parallelize, aliases=aliases,
+                    parallelize=parallelize, aliases=aliases, _use_voview=_use_voview,
                 )
             except FileNotFoundError:
                 if origin not in absence_ok:
