@@ -1998,7 +1998,7 @@ def open_run(
     if data == 'default':
         data = ['proc', 'raw']
         absence_ok = {'proc'}
-    if data == 'all':
+    elif data == 'all':
         data = ['raw', 'proc']
 
     if isinstance(data, Sequence) and not isinstance(data, str):
@@ -2018,27 +2018,28 @@ def open_run(
                     if base_dc is None:
                         raise
                     warn(f'No data available for this run at origin {origin}')
+                continue
+
+            if base_dc is None:  # First origin found
+                base_dc = origin_dc
+                continue
+
+            # Deselect to those sources in the base not present in
+            # this origin.
+            base_extra = base_dc.deselect(
+                [(src, '*') for src
+                in base_dc.all_sources & origin_dc.all_sources])
+
+            if base_extra.files:
+                # If base is not a subset of this origin, merge the
+                # "extra" base sources into the origin sources and
+                # re-enable is_single_run flag.
+                base_dc = origin_dc.union(base_extra)
+                base_dc.is_single_run = True
             else:
-                if base_dc is None:  # First origin found
-                    base_dc = origin_dc
-                    continue
-
-                # Deselect to those sources in the base not present in
-                # this origin.
-                base_extra = base_dc.deselect(
-                    [(src, '*') for src
-                    in base_dc.all_sources & origin_dc.all_sources])
-
-                if base_extra.files:
-                    # If base is not a subset of this origin, merge the
-                    # "extra" base sources into the origin sources and
-                    # re-enable is_single_run flag.
-                    base_dc = origin_dc.union(base_extra)
-                    base_dc.is_single_run = True
-                else:
-                    # If the sources we previously found are a subset of those
-                    # in the latest origin, discard the previous data.
-                    base_dc = origin_dc
+                # If the sources we previously found are a subset of those
+                # in the latest origin, discard the previous data.
+                base_dc = origin_dc
 
         return base_dc
 
