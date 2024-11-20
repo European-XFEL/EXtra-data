@@ -1027,9 +1027,13 @@ class DetectorMaskedKeyData(MultimodKeyData):
         )
         return kw
 
+    # Overridden for XTDF data to accommodate pulse selection
+    def _mask_keydata(self):
+        return self.det[self._mask_key]
+
     def _load_mask(self, module_gaps):
         """Load the mask & convert to boolean (True for bad pixels)"""
-        mask_data = self.det[self._mask_key].ndarray(module_gaps=module_gaps)
+        mask_data = self._mask_keydata().ndarray(module_gaps=module_gaps)
         if self._mask_bits is None:
             return mask_data != 0  # Skip extra temporary array from &
         else:
@@ -1272,7 +1276,8 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
 
 class XtdfMaskedKeyData(DetectorMaskedKeyData, XtdfImageMultimodKeyData):
     # Created from xtdf_det.masked_data()
-    pass
+    def _mask_keydata(self):
+        return self.det[self._mask_key].select_pulses(self._pulse_sel)
 
 
 class FramesFileWriter(FileWriter):
