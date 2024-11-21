@@ -301,6 +301,11 @@ def test_xtdf_masked_data(mock_reduced_spb_proc_run):
     line0_2mod[1, 1:32] = np.nan
     np.testing.assert_array_equal(arr[:, 0, 0, :], line0_2mod)
 
+    # Test with pulse selection (frames per train is consistent but arbitrary)
+    kd_pulse_sel = kd.select_pulses(np.s_[:3])
+    assert kd_pulse_sel.shape[1] <= 3
+    assert kd_pulse_sel.ndarray().shape == kd_pulse_sel.shape
+
     kd = agipd.masked_data(mask_bits=[1, 4], masked_value=-1).select_trains(np.s_[:1])
     arr = kd.ndarray()
     line0_2mod = np.zeros((2, 128), dtype=np.float32)
