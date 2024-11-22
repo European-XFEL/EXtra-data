@@ -313,6 +313,8 @@ they will read data for all sources in the run, which may be very slow.
 
    .. automethod:: train_from_index
 
+.. _selecting-combining:
+
 Selecting & combining data
 --------------------------
 
