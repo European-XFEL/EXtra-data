@@ -7,15 +7,14 @@ Opening files
 -------------
 
 You will normally access data from a run, which is stored as a directory
-containing HDF5 files. You can open a run using :func:`RunDirectory` with the
-path of the directory, or using :func:`open_run` with the proposal number and
-run number to look up the standard data paths on the Maxwell cluster.
+containing HDF5 files. You can open a run by proposal & run number using
+:func:`open_run`, or from a directory path using :func:`RunDirectory`.
 
 .. module:: extra_data
 
-.. autofunction:: RunDirectory
-
 .. autofunction:: open_run
+
+.. autofunction:: RunDirectory
 
 You can also open a single file. The methods described below all work for either
 a run or a single file.
@@ -312,6 +311,8 @@ they will read data for all sources in the run, which may be very slow.
    .. automethod:: train_from_id
 
    .. automethod:: train_from_index
+
+.. _selecting-combining:
 
 Selecting & combining data
 --------------------------

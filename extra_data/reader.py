@@ -1882,13 +1882,13 @@ def RunDirectory(
         path, include='*', file_filter=locality.lc_any, *, inc_suspect_trains=True,
         parallelize=True, _use_voview=True,
 ):
-    """Open data files from a 'run' at European XFEL.
+    """Open a European XFEL run directory.
 
     ::
 
         run = RunDirectory("/gpfs/exfel/exp/XMPL/201750/p700000/raw/r0001")
 
-    A 'run' is a directory containing a number of HDF5 files with data from the
+    A run directory contains a number of HDF5 files with data from the
     same time period.
 
     Returns a :class:`DataCollection` object.
@@ -1950,13 +1950,14 @@ def open_run(
         inc_suspect_trains=True, parallelize=True, aliases=DEFAULT_ALIASES_FILE,
         _use_voview=True,
 ):
-    """Access EuXFEL data on the Maxwell cluster by proposal and run number.
+    """Access European XFEL data by proposal and run number.
 
     ::
 
         run = open_run(proposal=700000, run=1)
 
-    Returns a :class:`DataCollection` object.
+    Returns a :class:`DataCollection` object. This finds the run directory in
+    standard paths on EuXFEL infrastructure.
 
     Parameters
     ----------

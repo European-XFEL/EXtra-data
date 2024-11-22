@@ -9,27 +9,32 @@ Architecture
 Objects
 -------
 
-The :class:`.DataCollection` class is the central piece of EXtra-data. It
-represents a collection of XFEL data sources and their keys, for a set of train
-IDs. It refers to data in one or more files (a run directory is often the
-starting point). A subset of its sources/keys or train IDs may be selected to
-make a new, more restricted :class:`.DataCollection`.
+There are three classes making up the core API of EXtra-data:
 
-:class:`.KeyData` represents data for a single source & key, selected from a
-``DataCollection`` like ``run[source, key]``. This data may still be spread
-across several files. The data can be loaded into a NumPy array, among other
-types.
+- :class:`.DataCollection` is what you get from :ref:`opening a run or file
+  <opening-files>`: data for several sources over some range of pulse trains
+  (i.e. time). It has methods to :ref:`select a subset of that data
+  <selecting-combining>`.
+- :class:`.SourceData` comes from ``run[source]``, representing one source, such
+  as a motor or a detector module. Each source has a set of keys.
+- :class:`.KeyData` comes from ``run[source, key]``, representing data for a
+  single source & key. This has a dtype and a shape like a NumPy array, but
+  the data is not in memory. It has methods to load the data as a NumPy array,
+  an Xarray DataArray, or a Dask array.
 
-:class:`.FileAccess` manages access to a single EuXFEL format HDF5 file,
-including caching index information. There should only be one ``FileAccess``
-object per file on disk, even if multiple ``DataCollection`` and ``KeyData``
-objects refer to it.
+Component classes for :doc:`multi-module detectors <agipd_lpd_data>` build on
+top of this core to work more conveniently with major data sources. There are
+more component classes in the `EXtra package <https://extra.readthedocs.io/en/latest/>`_.
+
+:class:`.FileAccess` is a lower-level class to manage access to a single
+:doc:`EuXFEL format HDF5 file <data_format>`, including caching index information.
+There should only be one ``FileAccess`` object per file on disk, even if
+multiple ``DataCollection``, ``SourceData`` and ``KeyData`` objects refer to it.
 
 Modules
 -------
 
-- ``cli`` contains command-line interfaces (so far only
-  :ref:`cmd-make-virtual-cxi`).
+- ``cli`` contains command-line interfaces.
 - ``components`` provides interfaces that bring together data from several
   similar sources, i.e. multi-module detectors where each module is a separate
   source.
@@ -37,7 +42,6 @@ Modules
 - ``export`` sends data from files over ZMQ in the Karabo Bridge format.
 - ``file_access`` contains :class:`.FileAccess` (described above), along with
   machinery to keep the number of open files under a limit.
-- ``h5index`` lists datasets in an HDF5 file. Deprecated.
 - ``keydata`` contains :class:`.KeyData` (described above).
 - ``locality`` can check whether files are available on disk or on tape
   in a `dCache <https://www.dcache.org/>`_ filesystem.
@@ -47,6 +51,7 @@ Modules
 - ``read_machinery`` is a collection of pieces that support ``reader``.
 - ``run_files_map`` manages caching metadata about the files of a run in a
   JSON file, to speed up opening the run.
+- ``sourcedata`` contains :class:`.SourceData` (described above).
 - ``stacking`` has functions for stacking multiple arrays into one, another
   option for working with multi-module detector data.
 - ``utils`` is miscellaneous pieces that don't fit anywhere else.
