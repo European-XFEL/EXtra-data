@@ -13,4 +13,4 @@ python-dateutil==2.9.0.post0
 pytz==2024.2
 pyzmq==26.2.0
 six==1.16.0
-xarray<2024.11.0
+xarray<2024.12.0
