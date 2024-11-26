@@ -1176,18 +1176,21 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             # Except it's fast if you read the data to a matching selection in
             # memory (one weird trick).
             # So as a workaround, this allocates a temporary array of the same
-            # shape as the dataset, reads into it, and then copies the selected
+            # shape as the full chunk, reads into it, and then copies the selected
             # data to the output array. The extra memory copy is not optimal,
             # but it's better than the HDF5 performance issue, at least in some
             # realistic cases.
             # N.B. tmp should only use memory for the data it contains -
             # zeros() uses calloc, so the OS can do virtual memory tricks.
             # Don't change this to zeros_like() !
-            tmp = np.zeros(chunk.dataset.shape, chunk.dataset.dtype)
-            pulse_sel = np.nonzero(inc_pulses_chunk)[0] + chunk_slice.start
-            sel_region = (pulse_sel,) + roi
+            tmp = np.zeros(
+                shape=inc_pulses_chunk.shape + chunk.dataset.shape[1:],
+                dtype=chunk.dataset.dtype
+            )
+            tmp_sel = np.nonzero(inc_pulses_chunk)[0]
+            dataset_sel = tmp_sel + chunk_slice.start
             chunk.dataset.read_direct(
-                tmp, source_sel=sel_region, dest_sel=sel_region,
+                tmp, source_sel=(dataset_sel,) + roi, dest_sel=(tmp_sel,) + roi,
             )
             # Where does this data go in the target array?
             tgt_start_ix = self._sel_frames[:tgt_slice.start].sum()
@@ -1195,10 +1198,8 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
                 tgt_start_ix, tgt_start_ix + inc_pulses_chunk.sum()
             )
             # Copy data from temp array to output array
-            tmp_frames_mask = np.zeros(len(tmp), dtype=np.bool_)
-            tmp_frames_mask[pulse_sel] = True
             np.compress(
-                tmp_frames_mask, tmp[np.index_exp[:] + roi],
+                inc_pulses_chunk, tmp[np.index_exp[:] + roi],
                 axis=0, out=mod_out[tgt_pulse_sel]
             )
 
