@@ -169,6 +169,22 @@ def mock_modern_spb_proc_run():
         make_examples.make_modern_spb_proc_run(td)
         yield td
 
+@pytest.fixture()
+def mock_spb_raw_and_modern_proc_run():
+    with TemporaryDirectory() as td:
+        prop_dir = osp.join(str(td), 'SPB', '201830', 'p002012')
+
+        # Set up raw
+        raw_run_dir = osp.join(prop_dir, 'raw', 'r0238')
+        os.makedirs(raw_run_dir)
+        make_examples.make_spb_run(raw_run_dir)
+
+        # Set up proc
+        proc_run_dir = osp.join(prop_dir, 'proc', 'r0238')
+        os.makedirs(proc_run_dir)
+        make_examples.make_modern_spb_proc_run(proc_run_dir)
+
+        yield td, raw_run_dir, proc_run_dir
 
 @pytest.fixture(scope='session')
 def mock_jungfrau_run():

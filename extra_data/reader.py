@@ -1946,7 +1946,7 @@ RunHandler = RunDirectory
 DEFAULT_ALIASES_FILE = "{}/usr/extra-data-aliases.yml"
 
 def open_run(
-        proposal, run, data='raw', include='*', file_filter=locality.lc_any, *,
+        proposal, run, data='default', include='*', file_filter=locality.lc_any, *,
         inc_suspect_trains=True, parallelize=True, aliases=DEFAULT_ALIASES_FILE,
         _use_voview=True,
 ):
@@ -1968,8 +1968,9 @@ def open_run(
         A run number such as 243, '243' or 'r0243'.
     data: str or Sequence of str
         'raw', 'proc' (processed), or any other location relative to the
-        proposal path with data per run to access. May also be 'all'
-        (both 'raw' and 'proc') or a sequence of strings to load data from
+        proposal path with data per run to access. May also be 'default'
+        (combining raw & proc), 'all' (combined but preferring proc where source
+        names match) or a sequence of strings to load data from
         several locations, with later locations overwriting sources present
         in earlier ones.
     include: str
@@ -1994,42 +1995,52 @@ def open_run(
         the proposal directory path. By default it looks for a file named
         ``{}/usr/extra-data-aliases.yml``.
     """
-    if data == 'all':
+    absence_ok = set()
+    if data == 'default':
+        data = ['proc', 'raw']
+        absence_ok = {'proc'}
+    elif data == 'all':
         data = ['raw', 'proc']
 
     if isinstance(data, Sequence) and not isinstance(data, str):
-        common_args = dict(
-            proposal=proposal, run=run, include=include,
-            file_filter=file_filter, inc_suspect_trains=inc_suspect_trains,
-            parallelize=parallelize)
+        base_dc = None
 
-        # Open the raw data
-        base_dc = open_run(**common_args, data=data[0], aliases=aliases)
-
-        for origin in data[1:]:
+        for origin in data:
             try:
                 # Attempt to open data at this origin, but this may not
                 # exist.
-                origin_dc = open_run(**common_args, data=origin, aliases=aliases)
+                origin_dc = open_run(
+                    proposal, run, data=origin, include=include,
+                    file_filter=file_filter, inc_suspect_trains=inc_suspect_trains,
+                    parallelize=parallelize, aliases=aliases, _use_voview=_use_voview,
+                )
             except FileNotFoundError:
-                warn(f'No data available for this run at origin {origin}')
-            else:
-                # Deselect to those sources in the base not present in
-                # this origin.
-                base_extra = base_dc.deselect(
-                    [(src, '*') for src
-                    in base_dc.all_sources & origin_dc.all_sources])
+                if origin not in absence_ok:
+                    if base_dc is None:
+                        raise
+                    warn(f'No data available for this run at origin {origin}')
+                continue
 
-                if base_extra.files:
-                    # If base is not a subset of this origin, merge the
-                    # "extra" base sources into the origin sources and
-                    # re-enable is_single_run flag.
-                    base_dc = origin_dc.union(base_extra)
-                    base_dc.is_single_run = True
-                else:
-                    # If the sources we previously found are a subset of those
-                    # in the latest origin, discard the previous data.
-                    base_dc = origin_dc
+            if base_dc is None:  # First origin found
+                base_dc = origin_dc
+                continue
+
+            # Deselect to those sources in the base not present in
+            # this origin.
+            base_extra = base_dc.deselect(
+                [(src, '*') for src
+                in base_dc.all_sources & origin_dc.all_sources])
+
+            if base_extra.files:
+                # If base is not a subset of this origin, merge the
+                # "extra" base sources into the origin sources and
+                # re-enable is_single_run flag.
+                base_dc = origin_dc.union(base_extra)
+                base_dc.is_single_run = True
+            else:
+                # If the sources we previously found are a subset of those
+                # in the latest origin, discard the previous data.
+                base_dc = origin_dc
 
         return base_dc
 
