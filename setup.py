@@ -57,6 +57,7 @@ setup(name="EXtra-data",
           'packaging',
           'pandas',
           'xarray',
+          'pyyaml',
       ],
       extras_require={
           'bridge': [
@@ -66,7 +67,6 @@ setup(name="EXtra-data",
           'complete': [
               'dask[array]',
               'extra_data[bridge]',
-              'pyyaml',
               'tomli; python_version < "3.11"',
           ],
           'docs': [
