@@ -1050,3 +1050,13 @@ def test_proc_legacy_sources(mock_modern_spb_proc_run):
         assert run.get_dtype(det_mod0, 'image.data') == np.float32
 
     assert run.select(det_mod0).all_sources == {det_mod0}
+
+
+def test_datacollection_contains(mock_fxe_control_data):
+    run = H5File(mock_fxe_control_data)
+
+    assert 'FXE_XAD_GEC/CAM/CAMERA:daqOutput' in run
+    assert 'MY/LITTLE/PONY' not in run
+    assert 'SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos' in run
+    assert 'SPB_XTD9/XGM/DOOCS/MAIN', '42' not in run
+    assert 42 not in run

@@ -290,6 +290,18 @@ class DataCollection:
 
         raise TypeError("Expected data[source], data[source, key] or data[train_selection]")
 
+    def __contains__(self, item):
+        if (
+            isinstance(item, tuple) and
+            len(item) == 2 and
+            all(isinstance(e, str) for e in item)
+        ):
+            return item[1] in self._get_source_data(item[0])
+        elif isinstance(item, str):
+            return item in self.all_sources
+
+        return False
+
     def _ipython_key_completions_(self):
         return list(self.all_sources)
 
