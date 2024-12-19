@@ -66,6 +66,8 @@ class SourceData:
             res = self._has_exact_key(key + '.value')
         return res
 
+    __iter__ = None  # Disable iteration
+
     def __getitem__(self, key):
         if (
             isinstance(key, (by_id, by_index, list, np.ndarray, slice)) or

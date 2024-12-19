@@ -302,6 +302,8 @@ class DataCollection:
 
         return False
 
+    __iter__ = None  # Disable iteration
+
     def _ipython_key_completions_(self):
         return list(self.all_sources)
 
