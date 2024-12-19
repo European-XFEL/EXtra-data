@@ -499,3 +499,9 @@ class SourceData:
             is_single_run=same_run(self, *others),
             inc_suspect_trains=self.inc_suspect_trains
         )
+
+    def __or__(self, other):
+        return self.union(other)
+
+    def __ior__(self, other):
+        return self.union(other)

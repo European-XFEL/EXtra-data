@@ -843,6 +843,26 @@ def test_union(mock_fxe_raw_run):
     assert joined[xgm].train_ids == expected_tids
     assert joined[camera].train_ids == expected_tids
 
+    # Try via operators.
+    sel1 = run.select(xgm, 'beamPosition.ixPos')
+    sel2 = run.select(xgm, 'beamPosition.iyPos')
+
+    joined = sel1 | sel2
+    assert joined.selection == {
+        xgm: {
+            'beamPosition.ixPos.value',
+            'beamPosition.iyPos.value',
+        }
+    }
+
+    sel1 |= sel2
+    assert sel1.selection == {
+        xgm: {
+            'beamPosition.ixPos.value',
+            'beamPosition.iyPos.value',
+        }
+    }
+
 
 def test_union_raw_proc(mock_spb_raw_run, mock_spb_proc_run):
     raw_run = RunDirectory(mock_spb_raw_run)

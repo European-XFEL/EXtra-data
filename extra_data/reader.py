@@ -662,6 +662,12 @@ class DataCollection:
             is_single_run=same_run(self, *others),
         )
 
+    def __or__(self, other):
+        return self.union(other)
+
+    def __ior__(self, other):
+        return self.union(other)
+
     def _parse_aliases(self, alias_defs):
         """Parse alias definitions into alias dictionaries."""
 
