@@ -439,7 +439,7 @@ class SourceData:
             return val.decode('utf-8', 'surrogateescape')
         return val
 
-    def run_values(self):
+    def run_values(self, inc_timestamps=True):
         """Get a dict of all RUN values for this source
 
         This includes keys which are also in CONTROL.
@@ -461,6 +461,8 @@ class SourceData:
 
         # Arbitrary file - should be the same across a run
         self.files[0].file['RUN'][self.source].visititems(visitor)
+        if not inc_timestamps:
+            return {k[:-6]: v for (k, v) in res.items() if k.endswith('.value')}
         return res
 
     @property
