@@ -155,6 +155,13 @@ def test_union(mock_spb_raw_run):
     with pytest.raises(ValueError):
         xgm.union(am0)
 
+    sel = xgm.select_trains(np.s_[:10]) | xgm.select_trains(np.s_[-10:])
+    assert sel.train_ids == list(range(10000, 10010)) + list(range(10054, 10064))
+
+    sel = xgm.select_trains(np.s_[:10])
+    sel |= xgm.select_trains(np.s_[-10:])
+    assert sel.train_ids == list(range(10000, 10010)) + list(range(10054, 10064))
+
 
 def test_run_value(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
