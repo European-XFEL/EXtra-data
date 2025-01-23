@@ -265,6 +265,8 @@ class RunValidator:
         self.problems = []
         self.skip_checks = set(skip_checks)
 
+    check_funcs = []
+
     def validate(self):
         problems = self.run_checks()
         if problems:
@@ -272,8 +274,13 @@ class RunValidator:
 
     def run_checks(self):
         self.problems = []
+        # check_files populates file_accesses as well as running FileValidator
         self.check_files()
-        self.check_files_map()
+        for func in self.check_funcs:
+            if func.__name__ in self.skip_checks:
+                continue
+            self.problems += func(self.run_dir, self.file_accesses)
+
         return self.problems
 
     def progress(self, done, total, nproblems, badfiles):
@@ -329,33 +336,40 @@ class RunValidator:
                 dict(msg="No usable files found", directory=self.run_dir)
             )
 
-    def check_files_map(self):
-        # Outdated cache entries we can detect with the file's stat() are not a
-        # problem. Loading the cache file will discard those automatically.
-        cache = RunFilesMap(self.run_dir)
-        for f_access in self.file_accesses:
-            f_cache = cache.get(f_access.filename)
-            if f_cache is None:
-                continue
 
-            if (
-                    f_cache['control_sources'] != f_access.control_sources
-                 or f_cache['instrument_sources'] != f_access.instrument_sources
-                 or not np.array_equal(f_cache['train_ids'], f_access.train_ids)
-            ):
-                self.problems.append(dict(
-                    msg="Incorrect data map cache entry",
-                    cache_file=cache.cache_file,
-                    data_file=f_access.filename,
-                ))
+def run_dir_check(f):
+    RunValidator.check_funcs.append(f)
+    return f
 
-            f_access.close()
+
+@run_dir_check
+def run_json_cache(run_dir, file_accesses):
+    # Outdated cache entries we can detect with the file's stat() are not a
+    # problem. Loading the cache file will discard those automatically.
+    cache = RunFilesMap(run_dir)
+    for f_access in file_accesses:
+        f_cache = cache.get(f_access.filename)
+        if f_cache is None:
+            continue
+
+        if (
+                f_cache['control_sources'] != f_access.control_sources
+             or f_cache['instrument_sources'] != f_access.instrument_sources
+             or not np.array_equal(f_cache['train_ids'], f_access.train_ids)
+        ):
+            yield dict(
+                msg="Incorrect data map cache entry",
+                cache_file=cache.cache_file,
+                data_file=f_access.filename,
+            )
+
+        f_access.close()
 
 
 class ListAction(Action):
     def __call__(self, parser, namespace, values, option_string=None):
         print("Available checks:")
-        for func in FileValidator.check_funcs:
+        for func in FileValidator.check_funcs + RunValidator.check_funcs:
             print(f"  {func.__name__}")
         parser.exit()
 
@@ -372,7 +386,9 @@ def main(argv=None):
                     help="Skip a named check (may be used several times)")
     args = ap.parse_args(argv)
 
-    available_checks = {f.__name__ for f in FileValidator.check_funcs}
+    available_checks = {
+        f.__name__ for f in FileValidator.check_funcs + RunValidator.check_funcs
+    }
     bad_skips = set(args.skip or []) - available_checks
     if bad_skips:
         print("Unknown names passed to --skip:", ", ".join(sorted(bad_skips)))
