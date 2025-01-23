@@ -1,6 +1,36 @@
 Release Notes
 =============
 
+1.19
+----
+
+2025-01-??
+
+- :func:`~.open_run` now combines raw & corrected data by default, preferring
+  raw for source names found in both (:ghpull:`569`). This means corrected
+  detector data is visible by default in recent runs.
+- :doc:`Detector data classes <agipd_lpd_data>` can now select corrected or raw
+  data with the parameter ``raw=False`` or ``True`` (:ghpull:`558`). If this is
+  not specified, they will use corrected data if available, and raw if not, in
+  line with the previous behaviour. This also depends on how you open the run.
+- ``source_name in run`` and ``(source_name, key_name) in run`` now work
+  (:ghpull:`582`).
+- You can now select train IDs in DataCollection and SourceData like
+  ``run[tids]`` (:ghpull:`559`)
+- Make it easier to select a single train ID using ``by_id``, and fix raising
+  IndexError when selecting a single train index as an integer (:ghpull:`558`).
+- You can use the ``|`` operator to combine multiple :class:`DataCollection`
+  or :class:`SourceData` objects, equivalent to their
+  :meth:`~.DataCollection.union` methods (:ghpull:`582`).
+- New option ``run[source].run_values(inc_timestamps=False)`` to get a dict of
+  run values excluding timestamps (:ghpull:`581`).
+- Avoid memory errors & improve performance of reading XTDF detector data with
+  a pulse selection (:ghpull:`576`).
+- Fix ``det.masked_data().select_pulses()`` in XTDF detector components
+  (:ghpull:`571`)
+- Fix using ``file_filter`` parameter when opening a run (:ghpull:`566`)
+- PyYAML is now a full dependency (:ghpull:`577`).
+
 1.18
 ----
 
