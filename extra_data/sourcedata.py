@@ -66,6 +66,8 @@ class SourceData:
             res = self._has_exact_key(key + '.value')
         return res
 
+    __iter__ = None  # Disable iteration
+
     def __getitem__(self, key):
         if (
             isinstance(key, (by_id, by_index, list, np.ndarray, slice)) or
@@ -501,3 +503,9 @@ class SourceData:
             is_single_run=same_run(self, *others),
             inc_suspect_trains=self.inc_suspect_trains
         )
+
+    def __or__(self, other):
+        return self.union(other)
+
+    def __ior__(self, other):
+        return self.union(other)

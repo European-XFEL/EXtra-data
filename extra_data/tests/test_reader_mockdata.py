@@ -843,6 +843,26 @@ def test_union(mock_fxe_raw_run):
     assert joined[xgm].train_ids == expected_tids
     assert joined[camera].train_ids == expected_tids
 
+    # Try via operators.
+    sel1 = run.select(xgm, 'beamPosition.ixPos')
+    sel2 = run.select(xgm, 'beamPosition.iyPos')
+
+    joined = sel1 | sel2
+    assert joined.selection == {
+        xgm: {
+            'beamPosition.ixPos.value',
+            'beamPosition.iyPos.value',
+        }
+    }
+
+    sel1 |= sel2
+    assert sel1.selection == {
+        xgm: {
+            'beamPosition.ixPos.value',
+            'beamPosition.iyPos.value',
+        }
+    }
+
 
 def test_union_raw_proc(mock_spb_raw_run, mock_spb_proc_run):
     raw_run = RunDirectory(mock_spb_raw_run)
@@ -1050,3 +1070,14 @@ def test_proc_legacy_sources(mock_modern_spb_proc_run):
         assert run.get_dtype(det_mod0, 'image.data') == np.float32
 
     assert run.select(det_mod0).all_sources == {det_mod0}
+
+
+def test_datacollection_contains(mock_fxe_control_data):
+    run = H5File(mock_fxe_control_data)
+
+    assert 'FXE_XAD_GEC/CAM/CAMERA:daqOutput' in run
+    assert 'MY/LITTLE/PONY' not in run
+    assert ('MY/LITTLE/PONY', 'actualPosition') not in run
+    assert ('SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos') in run
+    assert ('SPB_XTD9/XGM/DOOCS/MAIN', '42') not in run
+    assert 42 not in run
