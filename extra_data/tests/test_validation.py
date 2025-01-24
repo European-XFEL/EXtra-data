@@ -50,7 +50,7 @@ def test_zeros_in_train_ids(agipd_file):
 
     with raises(ValidationError) as excinfo:
         FileValidator(FileAccess(agipd_file)).validate()
-    problem = excinfo.value.problems.pop()
+    problem = excinfo.value.problems[0]
     assert problem['msg'] == 'Zeroes in trainId index before last train ID'
     assert problem['dataset'] == 'INDEX/trainId'
     assert 'RAW-R0239-AGIPD00-S00000.h5' in problem['file']
