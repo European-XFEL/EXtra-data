@@ -1634,6 +1634,9 @@ class AGIPD1M(XtdfDetectorBase):
       if the dataset includes more than one AGIPD detector.
     min_modules: int
       Include trains where at least n modules have data. Default is 1.
+    raw: bool
+      True to access raw data, False for corrected. The default is to use
+      corrected if available & raw otherwise.
     """
     _det_name_pat = r'[^/]+_AGIPD1M[^/]*'
     _source_raw_pat = r'/DET/(?P<modno>\d+)CH'
@@ -1683,6 +1686,9 @@ class DSSC1M(XtdfDetectorBase):
       if the dataset includes more than one DSSC detector.
     min_modules: int
       Include trains where at least n modules have data. Default is 1.
+    raw: bool
+      True to access raw data, False for corrected. The default is to use
+      corrected if available & raw otherwise.
     """
     _det_name_pat = r'[^/]+_DSSC1M[^/]*'
     _source_raw_pat = r'/DET/(?P<modno>\d+)CH'
@@ -1706,6 +1712,9 @@ class LPD1M(XtdfDetectorBase):
       if the dataset includes more than one LPD detector.
     min_modules: int
       Include trains where at least n modules have data. Default is 1.
+    raw: bool
+      True to access raw data, False for corrected. The default is to use
+      corrected if available & raw otherwise.
     parallel_gain: bool
       Set to True to read this data as parallel gain data, where high, medium
       and low gain data are stored sequentially within each train. This will
@@ -1827,6 +1836,9 @@ class JUNGFRAU(MultimodDetectorBase):
     first_modno: int
       The module number in the source name for the first detector module.
       e.g. FXE_XAD_JF500K/DET/JNGFR03:daqOutput should have first_modno = 3
+    raw: bool
+      True to access raw data, False for corrected. The default is to use
+      corrected if available & raw otherwise.
     """
     # We appear to have a few different formats for source names:
     # SPB_IRDA_JNGFR/DET/MODULE_1:daqOutput  (e.g. in p 2566, r 61)
