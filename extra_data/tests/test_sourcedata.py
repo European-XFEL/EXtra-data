@@ -164,6 +164,14 @@ def test_run_value(mock_spb_raw_run):
     value = xgm.run_value('pulseEnergy.conversion.value')
     assert isinstance(value, np.float64)
 
+    run_dict = xgm.run_values()
+    assert 'pulseEnergy.conversion.value' in run_dict
+    assert 'pulseEnergy.conversion.timestamp' in run_dict
+
+    values_dict = xgm.run_values(inc_timestamps=False)
+    assert 'pulseEnergy.conversion' in values_dict
+    assert 'pulseEnergy.conversion.timestamp' not in values_dict
+
     with pytest.raises(ValueError):
         # no run values for instrument sources
         am0.run_values()
