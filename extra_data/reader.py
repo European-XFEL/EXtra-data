@@ -296,7 +296,8 @@ class DataCollection:
             len(item) == 2 and
             all(isinstance(e, str) for e in item)
         ):
-            return item[1] in self._get_source_data(item[0])
+            return item[0] in self.all_sources and \
+                item[1] in self._get_source_data(item[0])
         elif isinstance(item, str):
             return item in self.all_sources
 
