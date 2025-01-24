@@ -1077,7 +1077,7 @@ def test_datacollection_contains(mock_fxe_control_data):
 
     assert 'FXE_XAD_GEC/CAM/CAMERA:daqOutput' in run
     assert 'MY/LITTLE/PONY' not in run
-    assert 'MY/LITTLE/PONY', 'actualPosition' not in run
-    assert 'SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos' in run
-    assert 'SPB_XTD9/XGM/DOOCS/MAIN', '42' not in run
+    assert ('MY/LITTLE/PONY', 'actualPosition') not in run
+    assert ('SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos') in run
+    assert ('SPB_XTD9/XGM/DOOCS/MAIN', '42') not in run
     assert 42 not in run
