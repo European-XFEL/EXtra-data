@@ -24,6 +24,8 @@ Release Notes
   :meth:`~.DataCollection.union` methods (:ghpull:`582`).
 - New option ``run[source].run_values(inc_timestamps=False)`` to get a dict of
   run values excluding timestamps (:ghpull:`581`).
+- Specific parts of :doc:`validation <validation>` can now be skipped with a new
+  :option:`extra-data-validate --skip` option (:ghpull:`522`).
 - Avoid memory errors & improve performance of reading XTDF detector data with
   a pulse selection (:ghpull:`576`).
 - Fix ``det.masked_data().select_pulses()`` in XTDF detector components

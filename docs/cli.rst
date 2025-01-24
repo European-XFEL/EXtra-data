@@ -44,6 +44,17 @@ Check the structure of an EuXFEL run or HDF5 file:
 If it finds problems with the data, the program will produce a list of them and
 exit with status 1. See :doc:`validation` for details of what it checks.
 
+.. program:: extra-data-validate
+
+.. option:: --skip <check-name>
+
+   Skip a specific check. This option can be used more than once.
+
+.. option:: -l, --list
+
+   List the available checks for :option:`--skip`. The list is shown instead
+   of checking any files.
+
 .. _cmd-serve-run:
 
 ``karabo-bridge-serve-run``
