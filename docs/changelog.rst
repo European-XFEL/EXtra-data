@@ -4,7 +4,7 @@ Release Notes
 1.19
 ----
 
-2025-01-??
+2025-01-24
 
 - :func:`~.open_run` now combines raw & corrected data by default, preferring
   raw for source names found in both (:ghpull:`569`). This means corrected
