@@ -1,14 +1,20 @@
+import threading
+from copy import copy
+from multiprocessing.pool import ThreadPool
+
 import h5py
 import numpy as np
 from zlib_into import decompress_into
+
 
 def filter_ids(dset: h5py.Dataset):
     dcpl = dset.id.get_create_plist()
     return [dcpl.get_filter(i)[0] for i in range(dcpl.get_nfilters())]
 
+
 class DeflateDecompressor:
     def __init__(self, deflate_filter_idx=0):
-        self.deflate_filter_bit = (1 << deflate_filter_idx)
+        self.deflate_filter_bit = 1 << deflate_filter_idx
 
     @classmethod
     def for_dataset(cls, dset: h5py.Dataset):
@@ -16,11 +22,15 @@ class DeflateDecompressor:
         if filters == [h5py.h5z.FILTER_DEFLATE]:
             return cls()
         if dset.dtype.itemsize == 1 and filters == [
-            h5py.h5z.FILTER_SHUFFLE, h5py.h5z.FILTER_DEFLATE
+            h5py.h5z.FILTER_SHUFFLE,
+            h5py.h5z.FILTER_DEFLATE,
         ]:
             # The shuffle filter doesn't change single byte values, so we can
             # skip it.
             return cls(deflate_filter_idx=1)
+
+    def clone(self):
+        return copy(self)
 
     def apply_filters(self, data, filter_mask, out):
         if filter_mask & self.deflate_filter_bit:
@@ -32,6 +42,8 @@ class DeflateDecompressor:
 
 class ShuffleDeflateDecompressor:
     def __init__(self, chunk_shape, dtype):
+        self.chunk_shape = chunk_shape
+        self.dtype = dtype
         chunk_nbytes = dtype.itemsize
         for l in chunk_shape:
             chunk_nbytes *= l
@@ -50,6 +62,9 @@ class ShuffleDeflateDecompressor:
         if filter_ids(dset) == [h5py.h5z.FILTER_SHUFFLE, h5py.h5z.FILTER_DEFLATE]:
             return cls(dset.chunks, dset.dtype)
 
+    def clone(self):
+        return type(self)(self.chunk_shape, self.dtype)
+
     def apply_filters(self, data, filter_mask, out):
         if filter_mask & 2:
             # The deflate filter is skipped
@@ -63,3 +78,39 @@ class ShuffleDeflateDecompressor:
         else:
             # Numpy does the shuffling by copying data between views
             out.reshape((-1, 1)).view(np.uint8)[:] = self.shuffled_view
+
+
+def dataset_decompressor(dset):
+    for cls in [DeflateDecompressor, ShuffleDeflateDecompressor]:
+        if (inst := cls.for_dataset(dset)) is not None:
+            return inst
+
+
+def multi_dataset_decompressor(dsets):
+    if not dsets:
+        return None
+
+    chunk = dsets[0].chunks
+    dtype = dsets[0]
+    filters = filter_ids(dsets[0])
+    for d in dsets[1:]:
+        if d.chunks != chunk or d.dtype != dtype or filter_ids(d) != filters:
+            return None  # Datasets are not consistent
+
+    return dataset_decompressor(dsets[0])
+
+
+def parallel_decompress_chunks(tasks, decompressor_proto, threads=16):
+    tlocal = threading.local()
+
+    def load_one(dset_id, coord, dest):
+        try:
+            decomp = tlocal.decompressor
+        except AttributeError:
+            tlocal.decompressor = decomp = decompressor_proto.clone()
+
+        filter_mask, compdata = dset_id.read_direct_chunk(coord)
+        decomp.apply_filters(compdata, filter_mask, dest)
+
+    with ThreadPool(threads) as pool:
+        pool.starmap(load_one, tasks)
