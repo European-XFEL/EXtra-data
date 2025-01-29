@@ -1216,7 +1216,55 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
                 axis=0, out=mod_out[tgt_pulse_sel]
             )
 
-    def ndarray(self, *, fill_value=None, out=None, roi=(), astype=None, module_gaps=False):
+    def _read_parallel_decompress(self, out, module_gaps, threads=16):
+        from .compression import multi_dataset_decompressor, parallel_decompress_chunks
+
+        modno_to_keydata_no_virtual = {}
+        all_datasets = []
+        for (m, vkd) in self.modno_to_keydata.items():
+            modno_to_keydata_no_virtual[m] = kd = vkd._without_virtual_overview()
+            all_datasets.extend([f.file[kd.hdf5_data_path] for f in kd.files])
+
+        if any(d.chunks != (1,) + d.shape[1:] for d in all_datasets):
+            return False  # Chunking not as we expect
+
+        decomp_proto = multi_dataset_decompressor(all_datasets)
+        if decomp_proto is None:
+            return False  # No suitable fast decompression path
+
+        load_tasks = []
+        for i, (modno, kd) in enumerate(sorted(modno_to_keydata_no_virtual.items())):
+            mod_ix = (modno - self.det._modnos_start_at) if module_gaps else i
+            # 'chunk' in the lines below means a range of consecutive indices
+            # in one HDF5 dataset, as elsewhere in EXtra-data.
+            # We use this to build a list of HDF5 chunks (1 frame per chunk)
+            # to be loaded & decompressed. Sorry about that.
+            for chunk in kd._data_chunks:
+                dset = chunk.dataset
+
+                for tgt_slice, chunk_slice in self.det._split_align_chunk(
+                        chunk, self.det.train_ids_perframe,
+                ):
+                    inc_pulses_chunk = self._sel_frames[tgt_slice]
+                    if inc_pulses_chunk.sum() == 0:  # No data from this chunk selected
+                        continue
+
+                    dataset_ixs = np.nonzero(inc_pulses_chunk)[0] + chunk_slice.start
+
+                    # Where does this data go in the target array?
+                    tgt_start_ix = self._sel_frames[:tgt_slice.start].sum()
+
+                    # Each task is a h5py.h5d.DatasetID, coordinates & array destination
+                    load_tasks.extend([
+                        (dset.id, (ds_ix, 0, 0), out[mod_ix, tgt_start_ix + i])
+                        for i, ds_ix in enumerate(dataset_ixs)]
+                    )
+
+        parallel_decompress_chunks(load_tasks, decomp_proto, threads=threads)
+
+        return True
+
+    def ndarray(self, *, fill_value=None, out=None, roi=(), astype=None, module_gaps=False, decompress_threads=1):
         """Get an array of per-pulse data (image.*) for xtdf detector"""
         out_shape = self.buffer_shape(module_gaps=module_gaps, roi=roi)
 
@@ -1225,6 +1273,10 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             out = _out_array(out_shape, dtype, fill_value=fill_value)
         elif out.shape != out_shape:
             raise ValueError(f'requires output array of shape {out_shape}')
+
+        if decompress_threads > 1 and roi == () and astype is None:  # TODO
+            if self._read_parallel_decompress(out, module_gaps, decompress_threads):
+                return out
 
         reading_view = out.view()
         if self._extraneous_dim:
