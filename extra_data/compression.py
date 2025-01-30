@@ -1,3 +1,5 @@
+from copy import copy
+
 import h5py
 import numpy as np
 from zlib_into import decompress_into
@@ -22,6 +24,14 @@ class DeflateDecompressor:
             # skip it.
             return cls(deflate_filter_idx=1)
 
+    def clone(self):
+        return copy(self)
+
+    def __eq__(self, other):
+        return (isinstance(other, DeflateDecompressor)
+                and self.deflate_filter_bit == other.deflate_filter_bit
+        )
+
     def apply_filters(self, data, filter_mask, out):
         if filter_mask & self.deflate_filter_bit:
             # The deflate filter is skipped, so just copy the data
@@ -32,6 +42,8 @@ class DeflateDecompressor:
 
 class ShuffleDeflateDecompressor:
     def __init__(self, chunk_shape, dtype):
+        self.chunk_shape = chunk_shape
+        self.dtype = dtype
         chunk_nbytes = dtype.itemsize
         for l in chunk_shape:
             chunk_nbytes *= l
@@ -50,6 +62,15 @@ class ShuffleDeflateDecompressor:
         if filter_ids(dset) == [h5py.h5z.FILTER_SHUFFLE, h5py.h5z.FILTER_DEFLATE]:
             return cls(dset.chunks, dset.dtype)
 
+    def clone(self):
+        return type(self)(self.chunk_shape, self.dtype)
+
+    def __eq__(self, other):
+        return (isinstance(other, ShuffleDeflateDecompressor)
+            and self.chunk_shape == other.chunk_shape
+            and self.dtype == other.dtype
+        )
+
     def apply_filters(self, data, filter_mask, out):
         if filter_mask & 2:
             # The deflate filter is skipped
@@ -63,6 +84,11 @@ class ShuffleDeflateDecompressor:
         else:
             # Numpy does the shuffling by copying data between views
             out.reshape((-1, 1)).view(np.uint8)[:] = self.shuffled_view
+
+def dataset_decompressor(dset):
+    for cls in [DeflateDecompressor, ShuffleDeflateDecompressor]:
+        if (inst := cls.for_dataset(dset)) is not None:
+            return inst
 
 from multiprocessing.pool import ThreadPool
 from threading import Thread, local
