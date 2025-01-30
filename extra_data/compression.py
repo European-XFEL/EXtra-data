@@ -67,6 +67,7 @@ class ShuffleDeflateDecompressor:
 from multiprocessing.pool import ThreadPool
 from threading import Thread, local
 from queue import Queue
+import os
 
 
 def load_v1(kd, threads):
@@ -76,9 +77,10 @@ def load_v1(kd, threads):
     dset_ix_out_ix = []
     dest_cursor = 0
     for chunk in kd._data_chunks_nonempty:
+        dset = chunk.dataset
         for i in range(chunk.total_count):
             dset_ix_out_ix.append((
-                chunk.dataset, (chunk.first + i, 0, 0), out[dest_cursor + i]
+                dset, (chunk.first + i, 0, 0), out[dest_cursor + i]
             ))
 
         dest_cursor += chunk.total_count
@@ -105,14 +107,16 @@ def load_v2(kd, threads):
     out = np.empty(kd.shape, dtype=kd.dtype)
     data_q = Queue(1024)
 
-    workers = [DecompressorThread(data_q, kd._data_chunks[0].dataset) for _ in range(threads)]
+    eg_dataset = kd._data_chunks[0].dataset
+    workers = [DecompressorThread(data_q, eg_dataset) for _ in range(threads)]
     for w in workers:
         w.start()
 
     dest_cursor = 0
     for chunk in kd._data_chunks_nonempty:
+        dset_id = chunk.dataset.id
         for i in range(chunk.total_count):
-            filter_mask, compdata = chunk.dataset.id.read_direct_chunk((chunk.first + i, 0, 0))
+            filter_mask, compdata = dset_id.read_direct_chunk((chunk.first + i, 0, 0))
             data_q.put((compdata, filter_mask, out[dest_cursor + i]))
 
         dest_cursor += chunk.total_count
@@ -122,6 +126,8 @@ def load_v2(kd, threads):
 
     for w in workers:
         w.join(timeout=5)
+
+    return out
 
 
 class DecompressorThread(Thread):
@@ -137,3 +143,71 @@ class DecompressorThread(Thread):
 
             compdata, filter_mask, out = recv
             self.decomp.apply_filters(compdata, filter_mask, out)
+
+
+def load_v3(kd, threads):
+    # Read & decompress in each thread, reading outside HDF5
+    out = np.empty(kd.shape, dtype=kd.dtype)
+
+    chunk_shape = kd._data_chunks[0].dataset.chunks
+
+    fd_chunkinf_outix = []
+    dest_cursor = 0
+    for chunk in kd._data_chunks_nonempty:
+        fd = chunk.file.file.id.get_vfd_handle()
+        dset_id = chunk.dataset.id
+        for i in range(chunk.total_count):
+            chunk_info = dset_id.get_chunk_info_by_coord((chunk.first + i, 0, 0))
+            fd_chunkinf_outix.append((
+                fd, chunk_info, out[dest_cursor + i]
+            ))
+
+        dest_cursor += chunk.total_count
+
+    tlocal = local()
+
+    def load_frame(fd, chunk_info, out):
+        try:
+            decomp = tlocal.decompressor
+        except AttributeError:
+            tlocal.decompressor = decomp = ShuffleDeflateDecompressor(chunk_shape, kd.dtype)
+
+        compdata = os.pread(fd, chunk_info.size, chunk_info.byte_offset)
+        decomp.apply_filters(compdata, chunk_info.filter_mask, out)
+
+    with ThreadPool(threads) as pool:
+        pool.starmap(load_frame, fd_chunkinf_outix)
+
+    return out
+
+
+def load_v4(kd, threads):
+    # Read in serial up front, then decompress in parallel
+    out = np.empty(kd.shape, dtype=kd.dtype)
+
+    chunk_shape = kd._data_chunks[0].dataset.chunks
+
+    dest_cursor = 0
+    decomp_tasks = []
+    for chunk in kd._data_chunks_nonempty:
+        dset_id = chunk.dataset.id
+        for i in range(chunk.total_count):
+            filter_mask, compdata = dset_id.read_direct_chunk((chunk.first + i, 0, 0))
+            decomp_tasks.append((compdata, filter_mask, out[dest_cursor + i]))
+
+        dest_cursor += chunk.total_count
+
+    tlocal = local()
+
+    def expand_frame(compdata, filter_mask, out):
+        try:
+            decomp = tlocal.decompressor
+        except AttributeError:
+            tlocal.decompressor = decomp = ShuffleDeflateDecompressor(chunk_shape, kd.dtype)
+    
+        decomp.apply_filters(compdata, filter_mask, out)
+
+    with ThreadPool(threads) as pool:
+        pool.starmap(expand_frame, decomp_tasks)
+
+    return out
