@@ -1268,7 +1268,7 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             except AttributeError:
                 tlocal.decompressor = decomp = decomp_proto.clone()
 
-            filter_mask, compdata = dset.id.read_direct_chunk((ds_ix, 0, 0))
+            filter_mask, compdata = dset_id.read_direct_chunk((ds_ix, 0, 0))
             decomp.apply_filters(compdata, filter_mask, dest)
 
         with ThreadPool(threads) as pool:
