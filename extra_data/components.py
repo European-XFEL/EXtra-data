@@ -1216,12 +1216,12 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
                 axis=0, out=mod_out[tgt_pulse_sel]
             )
 
-    def _read_parallel_decompress(self, out, threads=16):
+    def _read_parallel_decompress(self, out, module_gaps, threads=16):
         from .compression import dataset_decompressor, filter_ids
         from multiprocessing.pool import ThreadPool
         from threading import local
 
-        chunk_shape, filters = None, None, None
+        chunk_shape, filters = None, None
         decomp_proto = None
 
         load_tasks = []
@@ -1244,7 +1244,7 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
                         return False  # Data is not homogeneous
 
                 for tgt_slice, chunk_slice in self.det._split_align_chunk(
-                        chunk, self.det.train_ids_perframe, length_limit=frame_limit
+                        chunk, self.det.train_ids_perframe,
                 ):
                     inc_pulses_chunk = self._sel_frames[tgt_slice]
                     if inc_pulses_chunk.sum() == 0:  # No data from this chunk selected
@@ -1268,8 +1268,8 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             except AttributeError:
                 tlocal.decompressor = decomp = decomp_proto.clone()
 
-            filter_mask, compdata = dset.id.read_direct_chunk(ds_ix)
-            decomp.apply_filters(compdata, filter_mask, out)
+            filter_mask, compdata = dset.id.read_direct_chunk((ds_ix, 0, 0))
+            decomp.apply_filters(compdata, filter_mask, dest)
 
         with ThreadPool(threads) as pool:
             pool.starmap(load_one, load_tasks)
@@ -1286,6 +1286,10 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         elif out.shape != out_shape:
             raise ValueError(f'requires output array of shape {out_shape}')
 
+        if decompress_threads > 1 and roi == () and astype is None:  # TODO
+            if self._read_parallel_decompress(out, module_gaps, decompress_threads):
+                return out
+
         reading_view = out.view()
         if self._extraneous_dim:
             reading_view.shape = out.shape[:2] + (1,) + out.shape[2:]
@@ -1293,9 +1297,7 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             # dim in raw data (except AGIPD, where it is data/gain)
             roi = np.index_exp[:] + roi
 
-        if decompress_threads > 1 and roi == (slice(None, None),):  # TODO
-            if self._read_parallel_decompress(out, decompress_threads):
-                return out
+        
 
 
         for i, (modno, kd) in enumerate(sorted(self.modno_to_keydata.items())):
