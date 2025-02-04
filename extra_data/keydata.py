@@ -435,12 +435,14 @@ class KeyData:
 
         # Train ID index
         coords = {'trainId': self.train_id_coordinates()}
+        # xarray attributes
+        attrs = {'units': self.units}
 
         if ndarr.dtype.names is not None:
             # Structured dtype.
             return xarray.Dataset(
                 {field: (dims, ndarr[field]) for field in ndarr.dtype.names},
-                coords=coords)
+                coords=coords, attrs=attrs)
         else:
             if name is None:
                 name = f'{self.source}.{self.key}'
@@ -450,7 +452,7 @@ class KeyData:
 
             # Primitive dtype.
             return xarray.DataArray(
-                ndarr, dims=dims, coords=coords, name=name)
+                ndarr, dims=dims, coords=coords, name=name, attrs=attrs)
 
     def series(self):
         """Load this data as a pandas Series. Only for 1D data.
