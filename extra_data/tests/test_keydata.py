@@ -396,3 +396,6 @@ def test_units(mock_sa3_control_data):
 
     # Check that it still works after selecting 0 trains
     assert xgm_intensity.select_trains(np.s_[:0]).units == 'μJ'
+    
+    # units are added to xarray's attributes
+    assert xgm_intensity.xarray().attrs['units'] == 'μJ'
