@@ -1217,31 +1217,30 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             )
 
     def _read_parallel_decompress(self, out, module_gaps, threads=16):
-        from .compression import dataset_decompressor, filter_ids
-        from multiprocessing.pool import ThreadPool
-        from threading import local
+        from .compression import multi_dataset_decompressor, parallel_decompress_chunks
 
-        chunk_shape, filters = None, None
-        decomp_proto = None
+        modno_to_keydata_no_virtual = {}
+        all_datasets = []
+        for (m, vkd) in self.modno_to_keydata.items():
+            modno_to_keydata_no_virtual[m] = kd = vkd._without_virtual_overview()
+            all_datasets.extend([f[kd.hdf5_data_path] for f in kd.files])
+
+        if any(d.chunks != (1,) + d.shape[1:] for d in all_datasets):
+            return False  # Chunking not as we expect
+
+        decomp_proto = multi_dataset_decompressor(all_datasets)
+        if decomp_proto is None:
+            return False  # No suitable fast decompression path
 
         load_tasks = []
-        for i, (modno, kd) in enumerate(sorted(self.modno_to_keydata.items())):
-            kd = kd._without_virtual_overview()
+        for i, (modno, kd) in enumerate(sorted(modno_to_keydata_no_virtual.items())):
             mod_ix = (modno - self.det._modnos_start_at) if module_gaps else i
+            # 'chunk' in the lines below means a range of consecutive indices
+            # in one HDF5 dataset, as elsewhere in EXtra-data.
+            # We use this to build a list of HDF5 chunks (1 frame per chunk)
+            # to be loaded & decompressed. Sorry about that.
             for chunk in kd._data_chunks:
                 dset = chunk.dataset
-
-                if decomp_proto is None:
-                    decomp_proto = dataset_decompressor(dset)
-                    if decomp_proto is None:
-                        return False  # Decompression not implemented
-                    chunk_shape = dset.chunks
-                    if chunk_shape != (1,) + dset.shape[1:]:
-                        return False
-                    filters = filter_ids(dset)
-                else:
-                    if dset.chunks != chunk_shape or filter_ids(dset) != filters:
-                        return False  # Data is not homogeneous
 
                 for tgt_slice, chunk_slice in self.det._split_align_chunk(
                         chunk, self.det.train_ids_perframe,
@@ -1250,29 +1249,18 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
                     if inc_pulses_chunk.sum() == 0:  # No data from this chunk selected
                         continue
 
-                    dataset_sel = np.nonzero(inc_pulses_chunk)[0] + chunk_slice.start
+                    dataset_ixs = np.nonzero(inc_pulses_chunk)[0] + chunk_slice.start
 
                     # Where does this data go in the target array?
                     tgt_start_ix = self._sel_frames[:tgt_slice.start].sum()
 
+                    # Each task is a h5py.h5d.DatasetID, coordinates & array destination
                     load_tasks.extend([
-                        (dset.id, ds_ix, out[mod_ix, tgt_start_ix + i])
-                        for i, ds_ix in enumerate(dataset_sel)]
+                        (dset.id, (ds_ix, 0, 0), out[mod_ix, tgt_start_ix + i])
+                        for i, ds_ix in enumerate(dataset_ixs)]
                     )
 
-        tlocal = local()
-
-        def load_one(dset_id, ds_ix, dest):
-            try:
-                decomp = tlocal.decompressor
-            except AttributeError:
-                tlocal.decompressor = decomp = decomp_proto.clone()
-
-            filter_mask, compdata = dset_id.read_direct_chunk((ds_ix, 0, 0))
-            decomp.apply_filters(compdata, filter_mask, dest)
-
-        with ThreadPool(threads) as pool:
-            pool.starmap(load_one, load_tasks)
+        parallel_decompress_chunks(load_tasks, decomp_proto, threads=threads)
 
         return True
 
