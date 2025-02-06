@@ -58,6 +58,7 @@ setup(name="EXtra-data",
           'pandas',
           'xarray',
           'pyyaml',
+          'zlib_into',
       ],
       extras_require={
           'bridge': [
