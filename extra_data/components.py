@@ -1223,7 +1223,7 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         all_datasets = []
         for (m, vkd) in self.modno_to_keydata.items():
             modno_to_keydata_no_virtual[m] = kd = vkd._without_virtual_overview()
-            all_datasets.extend([f[kd.hdf5_data_path] for f in kd.files])
+            all_datasets.extend([f.file[kd.hdf5_data_path] for f in kd.files])
 
         if any(d.chunks != (1,) + d.shape[1:] for d in all_datasets):
             return False  # Chunking not as we expect
