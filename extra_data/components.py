@@ -1304,8 +1304,13 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         })
 
     def xarray(self, *, pulses=None, fill_value=None, roi=(), astype=None,
-               subtrain_index='pulseId', unstack_pulses=False):
-        arr = self.ndarray(fill_value=fill_value, roi=roi, astype=astype)
+               subtrain_index='pulseId', unstack_pulses=False, decompress_threads=1):
+        arr = self.ndarray(
+            fill_value=fill_value,
+            roi=roi,
+            astype=astype,
+            decompress_threads=decompress_threads,
+        )
         out = self._wrap_xarray(arr, subtrain_index)
 
         if unstack_pulses:
