@@ -436,7 +436,9 @@ class KeyData:
         # Train ID index
         coords = {'trainId': self.train_id_coordinates()}
         # xarray attributes
-        attrs = {'units': self.units}
+        attrs = {}
+        if (units := self.units):
+            attrs['units'] = units
 
         if ndarr.dtype.names is not None:
             # Structured dtype.
