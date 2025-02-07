@@ -29,6 +29,8 @@ class DeflateDecompressor:
             # skip it.
             return cls(deflate_filter_idx=1)
 
+        return None
+
     def clone(self):
         return copy(self)
 
@@ -62,6 +64,8 @@ class ShuffleDeflateDecompressor:
         if filter_ids(dset) == [h5py.h5z.FILTER_SHUFFLE, h5py.h5z.FILTER_DEFLATE]:
             return cls(dset.chunks, dset.dtype)
 
+        return None
+
     def clone(self):
         return type(self)(self.chunk_shape, self.dtype)
 
@@ -84,6 +88,8 @@ def dataset_decompressor(dset):
     for cls in [DeflateDecompressor, ShuffleDeflateDecompressor]:
         if (inst := cls.for_dataset(dset)) is not None:
             return inst
+
+    return None
 
 
 def multi_dataset_decompressor(dsets):
