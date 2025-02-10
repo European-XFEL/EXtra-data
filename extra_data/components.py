@@ -1264,7 +1264,8 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
 
         return True
 
-    def ndarray(self, *, fill_value=None, out=None, roi=(), astype=None, module_gaps=False, decompress_threads=1):
+    def ndarray(self, *, fill_value=None, out=None, roi=(), astype=None,
+                module_gaps=False, decompress_threads=16):
         """Get an array of per-pulse data (image.*) for xtdf detector"""
         out_shape = self.buffer_shape(module_gaps=module_gaps, roi=roi)
 
@@ -1274,7 +1275,7 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         elif out.shape != out_shape:
             raise ValueError(f'requires output array of shape {out_shape}')
 
-        if decompress_threads > 1 and roi == () and astype is None:  # TODO
+        if decompress_threads > 1 and roi == () and astype is None:
             if self._read_parallel_decompress(out, module_gaps, decompress_threads):
                 return out
 
