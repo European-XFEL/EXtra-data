@@ -1,6 +1,8 @@
 """Interfaces to data from specific instruments
 """
 import logging
+import os
+
 import math
 import re
 from collections.abc import Iterable
@@ -13,6 +15,7 @@ import pandas as pd
 from .exceptions import SourceNameError
 from .reader import DataCollection, by_id, by_index
 from .read_machinery import DataChunk, roi_shape, split_trains
+from .utils import default_num_threads
 from .writer import FileWriter
 from .write_cxi import XtdfCXIWriter, JUNGFRAUCXIWriter
 
@@ -1265,7 +1268,7 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         return True
 
     def ndarray(self, *, fill_value=None, out=None, roi=(), astype=None,
-                module_gaps=False, decompress_threads=16):
+                module_gaps=False, decompress_threads=None):
         """Get an array of per-pulse data (image.*) for xtdf detector"""
         out_shape = self.buffer_shape(module_gaps=module_gaps, roi=roi)
 
@@ -1275,9 +1278,13 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         elif out.shape != out_shape:
             raise ValueError(f'requires output array of shape {out_shape}')
 
-        if decompress_threads > 1 and roi == () and astype is None:
-            if self._read_parallel_decompress(out, module_gaps, decompress_threads):
-                return out
+        if roi == () and astype is None:
+            if decompress_threads is None:
+                decompress_threads = default_num_threads(fixed_limit=16)
+
+            if decompress_threads > 1:
+                if self._read_parallel_decompress(out, module_gaps, decompress_threads):
+                    return out
 
         reading_view = out.view()
         if self._extraneous_dim:
@@ -1305,7 +1312,7 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         })
 
     def xarray(self, *, pulses=None, fill_value=None, roi=(), astype=None,
-               subtrain_index='pulseId', unstack_pulses=False, decompress_threads=1):
+               subtrain_index='pulseId', unstack_pulses=False, decompress_threads=None):
         arr = self.ndarray(
             fill_value=fill_value,
             roi=roi,
