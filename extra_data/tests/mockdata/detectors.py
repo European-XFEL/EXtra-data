@@ -38,18 +38,22 @@ class DetectorModule:
     def image_keys(self):
         if self.raw:
             return [
-                ('data', 'u2', self.image_dims),
-                ('length', 'u4', (1,)),
-                ('status', 'u2', (1,)),
+                ('data', 'u2', self.image_dims, {}),
+                ('length', 'u4', (1,), {}),
+                ('status', 'u2', (1,), {}),
             ]
 
         else:
             return [
-                ('data', 'f4', self.image_dims),
-                ('mask', 'u4', self.image_dims),
-                ('gain', 'u1', self.image_dims),
-                ('length', 'u4', (1,)),
-                ('status', 'u2', (1,)),
+                ('data', 'f4', self.image_dims, {}),
+                ('mask', 'u4', self.image_dims, {
+                    'compression': 'gzip', 'compression_opts': 1
+                }),
+                ('gain', 'u1', self.image_dims, {
+                    'compression': 'gzip', 'compression_opts': 1
+                }),
+                ('length', 'u4', (1,), {}),
+                ('status', 'u2', (1,), {}),
             ]
 
     @property
@@ -138,9 +142,16 @@ class DetectorModule:
             )
 
         max_len = None if self.raw else nframes
-        for (key, datatype, dims) in self.image_keys:
-            f.create_dataset(f'INSTRUMENT/{inst_source}/image/{key}',
-                             (nframes,) + dims, datatype, maxshape=((max_len,) + dims))
+        for (key, datatype, dims, kw) in self.image_keys:
+            if dims == self.image_dims and 'chunks' not in kw:
+                kw['chunks'] = (1,) + dims
+            f.create_dataset(
+                f'INSTRUMENT/{inst_source}/image/{key}',
+                shape=(nframes,) + dims,
+                dtype=datatype,
+                maxshape=((max_len,) + dims),
+                **kw
+            )
 
 
         # INSTRUMENT (other parts)
