@@ -1,8 +1,6 @@
 """Interfaces to data from specific instruments
 """
 import logging
-import os
-
 import math
 import re
 from collections.abc import Iterable

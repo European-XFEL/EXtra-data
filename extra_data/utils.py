@@ -28,7 +28,7 @@ def default_num_threads(fixed_limit=16):
     threads_limits = ([fixed_limit, available_cpu_cores()])
     try:
         threads_limits.append(int(os.environ['OMP_NUM_THREADS']))
-    except (KeyError, ValueError):
+    except (KeyError, ValueError):  # Not set, or not an integer
         pass
     return min(threads_limits)
 
