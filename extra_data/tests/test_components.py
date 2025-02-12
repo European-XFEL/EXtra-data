@@ -592,6 +592,23 @@ def test_modern_corr_sources(mock_modern_spb_proc_run, mock_spb_raw_run_fmt1):
     assert 'image.mask' in agipd_dflt
 
 
+def test_decompress_threads(mock_modern_spb_proc_run):
+    run = RunDirectory(mock_modern_spb_proc_run)
+
+    agipd = AGIPD1M(run[:1])
+    # Load
+    ref = agipd['image.mask'].ndarray(decompress_threads=1)
+    print(ref.shape)
+    print(ref[15, 0, :10, :10])
+    assert ref[15, 0, 0, 0] == 0
+    assert ref[15, 0, 0, 5] == 1
+
+    import h5py
+    h5py._errors.unsilence_errors()
+    arr = agipd['image.mask'].ndarray(decompress_threads=16)
+    np.testing.assert_array_equal(arr, ref)
+
+
 def test_write_virtual_cxi(mock_spb_proc_run, tmpdir):
     run = RunDirectory(mock_spb_proc_run)
     det = AGIPD1M(run)
