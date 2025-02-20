@@ -355,6 +355,11 @@ def make_modern_spb_proc_run(dir_path, format_version='1.2'):
                         legacy_name=f'SPB_DET_AGIPD1M-1/DET/{modno}CH0')
             ], ntrains=64, chunksize=32, format_version=format_version)
 
+    # Ensure one chunk of mask data is actually written
+    with h5py.File(path, 'r+') as f:
+        ds = f['INSTRUMENT/SPB_DET_AGIPD1M-1/CORR/15CH0:output/image/mask']
+        ds[0, 0, 5] = 1
+
 
 def make_agipd1m_run(
     dir_path,
