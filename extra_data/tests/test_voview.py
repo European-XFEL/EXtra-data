@@ -66,6 +66,11 @@ def test_use_voview(mock_spb_raw_run, tmp_path):
     assert xgm_intens.units == 'μJ'
     assert xgm_intens.units_name == 'microjoule'
 
+    xgm_src = run['SA1_XTD2_XGM/DOOCS/MAIN:output']
+    src_grp = xgm_src.files[0].file[f'INSTRUMENT/{xgm_src.source}']
+    assert src_grp.attrs['source_files'][:].tolist() == [
+        str(new_run_dir / f'RAW-R0238-DA01-S{i:05}.h5') for i in range(2)
+    ]
 
 
 def open_run_with_voview(run_src, new_run_dir):

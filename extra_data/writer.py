@@ -228,15 +228,19 @@ class VirtualFileWriter(FileWriter):
     copy_keys = {'image.pulseId', 'image.cellId'}
 
     def prepare_source(self, source):
-        for key in self.data.keys_for_source(source):
+        srcdata = self.data[source]
+        grp_out = self.file.require_group(f'{srcdata.section}/{source}')
+        grp_out.attrs['source_files'] = sorted([f.filename for f in srcdata.files])
+
+        for key in srcdata.keys():
             if key in self.copy_keys:
                 self.copy_dataset(source, key)
             else:
                 self.add_dataset(source, key)
 
         # Add a link in RUN for control sources
-        if source in self.data.control_sources:
-            src_file = self.data[source].files[0]
+        if srcdata.is_control:
+            src_file = srcdata.files[0]
             run_path = f'RUN/{source}'
             self.file[run_path] = h5py.ExternalLink(src_file.filename, run_path)
 
