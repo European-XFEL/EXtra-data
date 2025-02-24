@@ -255,7 +255,21 @@ class VirtualFileWriter(FileWriter):
         keydata = self.data[source, key]
 
         if keydata.shape[0] == 0:  # No data
-            self.file.create_dataset(keydata.hdf5_data_path, shape=keydata.shape, dtype=keydata.dtype)
+            # Make the dataset virtual even with no source data to map.
+            # This workaround will hopefully become unnecessary from h5py 3.14
+            parent_path, name = keydata.hdf5_data_path.rsplit('/', 1)
+            group = self.file.require_group(parent_path)
+
+            dcpl = h5py.h5p.create(h5py.h5p.DATASET_CREATE)
+            dcpl.set_layout(h5py.h5d.VIRTUAL)
+
+            h5py.h5d.create(
+                group.id,
+                name=name.encode(),
+                tid=h5py.h5t.py_create(keydata.dtype, logical=1),
+                space=h5py.h5s.create_simple(keydata.shape),
+                dcpl=dcpl
+            )
         else:
             layout = self._assemble_data(keydata)
             self.file.create_virtual_dataset(keydata.hdf5_data_path, layout)

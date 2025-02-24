@@ -147,7 +147,8 @@ class KeyData:
         paths = []
         for chunk in self._data_chunks:
             if chunk.dataset.is_virtual:
-                for vspace, filename, _, _ in chunk.dataset.virtual_sources():
+                mappings = chunk.dataset.virtual_sources()
+                for vspace, filename, _, _ in mappings:
                     if filename in paths:
                         continue  # Already got it
 
@@ -159,8 +160,19 @@ class KeyData:
                     ck = chunk.slice
                     if (map_stop > ck.start) and (map_start < ck.stop):
                         paths.append(filename)
+
+                # Include 1 source file even if no trains are selected
+                if (not paths) and mappings:
+                    paths.append(mappings[0][1])
             else:
                 paths.append(chunk.file.filename)
+
+        # Fallback for virtual overview files where no data was recorded for
+        # this source, so there's no mapping to point to.
+        if not paths:
+            source_grp = self.files[0].file[f"{self.section}/{self.source}"]
+            if 'source_files' in source_grp.attrs:
+                paths.append(source_grp.attrs['source_files'][0])
 
         from pathlib import Path
         return [Path(p) for p in paths]
