@@ -207,25 +207,18 @@ class VirtualFileWriter(FileWriter):
 
     def _assemble_data(self, keydata):
         """Assemble chunks of data into a virtual layout"""
-        # First, get a list of all non-empty data chunks
-        chunks = keydata._data_chunks
-
         # Create the layout, which will describe what data is where
-        n_total = np.sum([c.counts.sum() for c in chunks])
-        ds0 = chunks[0].dataset
-        layout = h5py.VirtualLayout(shape=(n_total,) + ds0.shape[1:],
-                                    dtype=ds0.dtype)
+        layout = h5py.VirtualLayout(shape=keydata.shape, dtype=keydata.dtype)
 
         # Map each chunk into the relevant part of the layout
         output_cursor = 0
-        for chunk in chunks:
-            n = int(chunk.counts.sum())
+        for chunk in keydata._data_chunks_nonempty:
+            n = chunk.total_count
             src = h5py.VirtualSource(chunk.dataset)
-            src = src[chunk.slice]
-            layout[output_cursor : output_cursor + n] = src
+            layout[output_cursor : output_cursor + n] = src[chunk.slice]
             output_cursor += n
 
-        assert output_cursor == n_total
+        assert output_cursor == layout.shape[0]
 
         return layout
 
