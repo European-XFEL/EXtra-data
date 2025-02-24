@@ -106,7 +106,7 @@ class SourceData:
             # This property is an empty list if no trains are selected.
             sample_path = first_kd.source_file_paths[0]
         except IndexError:
-            raise NoDataError(self.source) from None
+            sample_path = first_kd.files[0].filename
 
         return FileAccess(sample_path)
 
