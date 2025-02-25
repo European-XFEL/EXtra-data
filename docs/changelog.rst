@@ -1,6 +1,18 @@
 Release Notes
 =============
 
+1.20
+----
+
+2025-02-26
+
+- Loading data as an xarray object will now include the units symbol as a
+  attribute called ``units`` (:ghpull:`592`).
+- Some improvements to virtual overview files when one sequence file is missing
+  data (:ghpull:`600`) or when no data was recorded for a particular source in
+  an entire run (:ghpull:`601`, :ghpull:`602`).
+- EXtra-data now requires Python 3.10 or above (:ghpull:`294`).
+
 1.19
 ----
 
