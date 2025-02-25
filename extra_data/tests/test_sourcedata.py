@@ -201,11 +201,14 @@ def test_euxfel_path_infos(mock_spb_raw_run):
     assert xgm.data_category == 'RAW'
     assert xgm.aggregator == 'DA01'
 
+    # Changed to preserve the behaviour of above, as using a voview
+    # file with 0-len datasets anyway causes a return of None. It
+    # therefore attempts to use the regular .files property instead,
+    # either suceeding or failing as badly as it would with a voview.
     run = RunDirectory(mock_spb_raw_run).select_trains(np.s_[:0])
     xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
-
-    with pytest.raises(NoDataError):
-        xgm.storage_class
+    assert xgm.storage_class is None
+    assert xgm.aggregator == 'DA01'
 
 
 @pytest.mark.parametrize('source', [
