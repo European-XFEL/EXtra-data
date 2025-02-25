@@ -228,15 +228,19 @@ class VirtualFileWriter(FileWriter):
     copy_keys = {'image.pulseId', 'image.cellId'}
 
     def prepare_source(self, source):
-        for key in self.data.keys_for_source(source):
+        srcdata = self.data[source]
+        grp_out = self.file.require_group(f'{srcdata.section}/{source}')
+        grp_out.attrs['source_files'] = sorted([f.filename for f in srcdata.files])
+
+        for key in srcdata.keys():
             if key in self.copy_keys:
                 self.copy_dataset(source, key)
             else:
                 self.add_dataset(source, key)
 
         # Add a link in RUN for control sources
-        if source in self.data.control_sources:
-            src_file = self.data[source].files[0]
+        if srcdata.is_control:
+            src_file = srcdata.files[0]
             run_path = f'RUN/{source}'
             self.file[run_path] = h5py.ExternalLink(src_file.filename, run_path)
 
@@ -251,7 +255,21 @@ class VirtualFileWriter(FileWriter):
         keydata = self.data[source, key]
 
         if keydata.shape[0] == 0:  # No data
-            self.file.create_dataset(keydata.hdf5_data_path, shape=keydata.shape, dtype=keydata.dtype)
+            # Make the dataset virtual even with no source data to map.
+            # This workaround will hopefully become unnecessary from h5py 3.14
+            parent_path, name = keydata.hdf5_data_path.rsplit('/', 1)
+            group = self.file.require_group(parent_path)
+
+            dcpl = h5py.h5p.create(h5py.h5p.DATASET_CREATE)
+            dcpl.set_layout(h5py.h5d.VIRTUAL)
+
+            h5py.h5d.create(
+                group.id,
+                name=name.encode(),
+                tid=h5py.h5t.py_create(keydata.dtype, logical=1),
+                space=h5py.h5s.create_simple(keydata.shape),
+                dcpl=dcpl
+            )
         else:
             layout = self._assemble_data(keydata)
             self.file.create_virtual_dataset(keydata.hdf5_data_path, layout)

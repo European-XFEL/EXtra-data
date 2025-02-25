@@ -1,8 +1,9 @@
+from pathlib import Path
 from shutil import copytree
 
 from testpath import assert_isfile
 
-from extra_data import RunDirectory, voview
+from extra_data import H5File, RunDirectory, voview
 
 def test_main(mock_spb_raw_run, tmp_path):
     voview_file = tmp_path / 'run_overview.h5'
@@ -63,9 +64,34 @@ def test_use_voview(mock_spb_raw_run, tmp_path):
     assert {p.name for p in xgm_intens[:30].source_file_paths} == {
         'RAW-R0238-DA01-S00000.h5'
     }
+    assert {p.name for p in xgm_intens[:0].source_file_paths} == {
+        'RAW-R0238-DA01-S00000.h5'
+    }
     assert xgm_intens.units == 'μJ'
     assert xgm_intens.units_name == 'microjoule'
 
+    xgm_src = run['SA1_XTD2_XGM/DOOCS/MAIN:output']
+    src_grp = xgm_src.files[0].file[f'INSTRUMENT/{xgm_src.source}']
+    assert src_grp.attrs['source_files'][:].tolist() == [
+        str(new_run_dir / f'RAW-R0238-DA01-S{i:05}.h5') for i in range(2)
+    ]
+
+
+def test_make_voview_missing_data(mock_fxe_raw_run, tmp_path):
+    run_orig = RunDirectory(mock_fxe_raw_run)
+    voview_file = tmp_path / 'overview.h5'
+
+    vofw = voview.VirtualOverviewFileWriter(voview_file, run_orig)
+    vofw.write()
+
+    vf = H5File(voview_file)
+    cam_src = vf['FXE_XAD_GEC/CAM/CAMERA_NODATA:daqOutput']
+    assert cam_src.aggregator == 'DA01'
+    cam_data = cam_src['data.image.pixels']
+    assert cam_data.shape[0] == 0
+    assert cam_data.source_file_paths == [
+        Path(mock_fxe_raw_run, 'RAW-R0450-DA01-S00000.h5')
+    ]
 
 
 def open_run_with_voview(run_src, new_run_dir):
