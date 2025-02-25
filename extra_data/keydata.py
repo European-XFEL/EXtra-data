@@ -163,7 +163,7 @@ class KeyData:
 
                 # Include 1 source file even if no trains are selected
                 if (not paths) and mappings:
-                    paths.append(mappings[0][1])
+                    paths.append(mappings[0].file_name)
             else:
                 paths.append(chunk.file.filename)
 
