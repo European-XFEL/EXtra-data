@@ -23,6 +23,16 @@ def available_cpu_cores():
         return min(ncpu, 8)
 
 
+def default_num_threads(fixed_limit=16):
+    # Default to 16, EXTRA_NUM_THREADS, or available CPU cores (picking lowest)
+    threads_limits = ([fixed_limit, available_cpu_cores()])
+    try:
+        threads_limits.append(int(os.environ['EXTRA_NUM_THREADS']))
+    except (KeyError, ValueError):  # Not set, or not an integer
+        pass
+    return min(threads_limits)
+
+
 def progress_bar(done, total, suffix=" "):
     line = f"Progress: {done}/{total}{suffix}[{{}}]"
     length = min(get_terminal_size().columns - len(line), 50)

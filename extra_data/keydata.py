@@ -177,6 +177,21 @@ class KeyData:
         from pathlib import Path
         return [Path(p) for p in paths]
 
+    def _without_virtual_overview(self):
+        if not self.files[0].file[self.hdf5_data_path].is_virtual:
+            # We're already looking at regular source files
+            return self
+
+        return KeyData(
+            self.source, self.key,
+            train_ids=self.train_ids,
+            files=[FileAccess(p) for p in self.source_file_paths],
+            section=self.section,
+            dtype=self.dtype,
+            eshape=self.entry_shape,
+            inc_suspect_trains=self.inc_suspect_trains,
+        )
+
     def _find_attributes(self, dset):
         """Find Karabo attributes belonging to a dataset."""
         attrs = dict(dset.attrs)
