@@ -24,10 +24,10 @@ def available_cpu_cores():
 
 
 def default_num_threads(fixed_limit=16):
-    # Default to 16, OMP_NUM_THREADS, or available CPU cores (picking lowest)
+    # Default to 16, EXTRA_NUM_THREADS, or available CPU cores (picking lowest)
     threads_limits = ([fixed_limit, available_cpu_cores()])
     try:
-        threads_limits.append(int(os.environ['OMP_NUM_THREADS']))
+        threads_limits.append(int(os.environ['EXTRA_NUM_THREADS']))
     except (KeyError, ValueError):  # Not set, or not an integer
         pass
     return min(threads_limits)
