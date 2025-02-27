@@ -40,8 +40,9 @@ jobs:
         MPLBACKEND: agg
 
     - name: Upload coverage to Codecov
-      # This specific version uses Node 20 - see codecov-action#1293
-      uses: codecov/codecov-action@v3.1.5
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
 
   publish:
     runs-on: ubuntu-latest
