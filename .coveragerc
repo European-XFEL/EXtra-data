@@ -1,6 +1,6 @@
 [run]
 omit = */tests/*
-concurrency = multiprocessing
+concurrency = multiprocessing,thread
 
 [paths]
 source =
