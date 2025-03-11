@@ -1117,11 +1117,17 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
 
     def pulse_id_coordinates(self):
         """Get an array of pulse IDs per-frame for this data"""
-        return self.det._collect_inner_ids('pulseId')
+        a = self.det._collect_inner_ids('pulseId')
+        if not self._all_pulses():
+            a = a[self._sel_frames]
+        return a
 
     def cell_id_coordinates(self):
         """Get an array of memory cell IDs per-frame for this data"""
-        return self.det._collect_inner_ids('cellId')
+        a = self.det._collect_inner_ids('cellId')
+        if not self._all_pulses():
+            a = a[self._sel_frames]
+        return a
 
     @property
     def dimensions(self):

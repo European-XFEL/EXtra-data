@@ -403,6 +403,13 @@ def test_pulse_id_cell_id(mock_lpd_mini_gap_run):
         kd.cell_id_coordinates(), np.tile(np.arange(10), 5)
     )
 
+    np.testing.assert_array_equal(
+        kd.select_pulses(np.s_[2:5]).pulse_id_coordinates(), np.tile(np.arange(2, 5), 5)
+    )
+    np.testing.assert_array_equal(
+        kd.select_pulses(np.s_[2:5]).cell_id_coordinates(), np.tile(np.arange(2, 5), 5)
+    )
+
 def test_pulse_id_cell_id_reduced(mock_reduced_spb_proc_run):
     run = RunDirectory(mock_reduced_spb_proc_run)
     det = AGIPD1M(run)
