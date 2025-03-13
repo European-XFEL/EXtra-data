@@ -382,14 +382,14 @@ def main(argv=None):
     ap.add_argument('path', help="HDF5 file or run directory of HDF5 files.")
     ap.add_argument('-l', '--list', action=ListAction, nargs=0,
                     help="List available checks (options for --skip)")
-    ap.add_argument('--skip', action='append',
+    ap.add_argument('--skip', action='append', default=[],
                     help="Skip a named check (may be used several times)")
     args = ap.parse_args(argv)
 
     available_checks = {
         f.__name__ for f in FileValidator.check_funcs + RunValidator.check_funcs
     }
-    bad_skips = set(args.skip or []) - available_checks
+    bad_skips = set(args.skip) - available_checks
     if bad_skips:
         print("Unknown names passed to --skip:", ", ".join(sorted(bad_skips)))
         return 1
