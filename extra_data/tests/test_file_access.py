@@ -71,6 +71,7 @@ _empty_cache_info = dict(
     instrument_sources=frozenset(),
     flag=np.zeros(0, dtype=np.int32),
     legacy_sources={},
+    index_groups={},
 )
 
 
