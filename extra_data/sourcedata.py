@@ -397,7 +397,7 @@ class SourceData:
                     raise ValueError('source has index groups with differing '
                                      'data counts')
 
-            index_group = self.index_groups.pop()
+            index_group = next(iter(self.index_groups))
 
         return self[self.one_key(index_group)].train_id_coordinates()
 
