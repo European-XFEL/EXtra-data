@@ -161,6 +161,10 @@ class RunFilesMap:
                 'instrument_sources': frozenset(d['instrument_sources']),
                 'legacy_sources': dict(d['legacy_sources']),
             }
+            if 'index_groups' in d:
+                res['index_groups'] = {
+                    source: set(groups) for source, groups in d['index_groups'].items()}
+
             res['flag'] = flag = np.ones_like(d['train_ids'], dtype=np.bool_)
             flag[d['suspect_train_indices']] = 0
             return res
@@ -202,6 +206,8 @@ class RunFilesMap:
                     'instrument_sources': sorted(file_access.instrument_sources),
                     'legacy_sources': {k: file_access.legacy_sources[k]
                                        for k in sorted(file_access.legacy_sources)},
+                    'index_groups': {k: sorted(file_access._index_groups[k])
+                                     for k in sorted(file_access._index_groups)},
                     'suspect_train_indices': [
                         int(i) for i in (~file_access.validity_flag).nonzero()[0]
                     ],
