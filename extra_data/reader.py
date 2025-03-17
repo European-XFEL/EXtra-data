@@ -161,7 +161,7 @@ class DataCollection:
 
         for path in paths:
             cache_info = _files_map and _files_map.get(path)
-            if cache_info and ('flag' in cache_info):
+            if cache_info and ('flag' in cache_info) and ('index_groups' in cache_info):
                 filename, fa = cls._open_file(path, cache_info=cache_info)
                 handle_open_file_attempt(filename, fa)
             else:

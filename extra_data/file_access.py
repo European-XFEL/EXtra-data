@@ -147,6 +147,7 @@ class FileAccess(metaclass=MetaFileAccess):
             self.control_sources = _cache_info['control_sources']
             self.instrument_sources = _cache_info['instrument_sources']
             self.legacy_sources = _cache_info['legacy_sources']
+            self._index_groups = _cache_info['index_groups']
             self.validity_flag = _cache_info['flag']
         else:
             try:
@@ -156,8 +157,8 @@ class FileAccess(metaclass=MetaFileAccess):
 
             self.train_ids = tid_data[tid_data != 0]
 
-            self.control_sources, self.instrument_sources, self.legacy_sources \
-                = self._read_data_sources()
+            self.control_sources, self.instrument_sources, self.legacy_sources, \
+                self._index_groups = self._read_data_sources()
 
             self.validity_flag = None
 
@@ -297,6 +298,7 @@ class FileAccess(metaclass=MetaFileAccess):
 
     def _read_data_sources(self):
         control_sources, instrument_sources, legacy_sources = set(), set(), dict()
+        index_groups = {}
 
         # The list of data sources moved in file format 1.0
         if self.format_version == '0.5':
@@ -331,7 +333,9 @@ class FileAccess(metaclass=MetaFileAccess):
                         legacy_sources[source] = item.path[1:].partition('/')[2]
 
                     instrument_sources.add(source)
-                # TODO: Do something with groups?
+
+                source_index_groups = index_groups.setdefault(source, set())
+                source_index_groups.add(group)
             elif category == 'CONTROL':
                 control_sources.add(h5_source)
             elif category == 'Karabo_TimerServer':
@@ -342,7 +346,7 @@ class FileAccess(metaclass=MetaFileAccess):
                 raise ValueError("Unknown data category %r" % category)
 
         return frozenset(control_sources), frozenset(instrument_sources), \
-            legacy_sources
+            legacy_sources, index_groups
 
     def _guess_valid_trains(self):
         # File format version 1.0 includes a flag which is 0 if a train ID
@@ -432,7 +436,7 @@ class FileAccess(metaclass=MetaFileAccess):
         if source in self.control_sources:
             return {''}
         elif source in self.instrument_sources:
-            return set(self.file[f'/INDEX/{source}'].keys())
+            return self._index_groups[source]
         else:
             raise SourceNameError(source)
 
@@ -465,20 +469,25 @@ class FileAccess(metaclass=MetaFileAccess):
         except KeyError:
             pass
 
+        res = set()
+
         if source in self.control_sources:
-            group = '/CONTROL/' + source
+            def add_control_key(key, value):
+                if isinstance(value, h5py.Dataset):
+                    res.add(key.replace('/', '.'))
+
+            self.file['/CONTROL/' + source].visititems(add_control_key)
         elif source in self.instrument_sources:
-            group = '/INSTRUMENT/' + source
+            def add_instrument_key(group, key, value):
+                if isinstance(value, h5py.Dataset):
+                    res.add(group + '.' + key.replace('/', '.'))
+
+            for group in self._index_groups[source]:
+                self.file[f'/INSTRUMENT/{source}/{group}'].visititems(
+                    lambda k, v: add_instrument_key(group, k, v))
         else:
             raise SourceNameError(source)
 
-        res = set()
-
-        def add_key(key, value):
-            if isinstance(value, h5py.Dataset):
-                res.add(key.replace('/', '.'))
-
-        self.file[group].visititems(add_key)
         self._keys_cache[source] = res
         return res
 
@@ -495,7 +504,6 @@ class FileAccess(metaclass=MetaFileAccess):
 
             # _keys_cache is a complete set, so this point can only be
             # reached for a key-less source (currently assumed to no
-            # exist) or a non-existing index group was passed.
             raise ValueError(f'{index_group} not an index group of `{source}`')
 
         if self._known_keys[source]:
@@ -507,6 +515,8 @@ class FileAccess(metaclass=MetaFileAccess):
             root = 'CONTROL'
         elif source in self.instrument_sources:
             root = 'INSTRUMENT'
+            if index_group not in self._index_groups[source]:
+                raise ValueError(f'{index_group} not an index group of `{source}`')
         else:
             raise SourceNameError(source)
 
@@ -567,6 +577,9 @@ class FileAccess(metaclass=MetaFileAccess):
         if source in self.control_sources:
             path = '/CONTROL/{}/{}'.format(source, key.replace('.', '/'))
         elif source in self.instrument_sources:
+            index_group = key.partition('.')[0]
+            if index_group not in self._index_groups[source]:
+                return False
             path = '/INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
         else:
             raise SourceNameError(source)
