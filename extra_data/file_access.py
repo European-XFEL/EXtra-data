@@ -515,8 +515,15 @@ class FileAccess(metaclass=MetaFileAccess):
             root = 'CONTROL'
         elif source in self.instrument_sources:
             root = 'INSTRUMENT'
-            if index_group not in self._index_groups[source]:
-                raise ValueError(f'{index_group} not an index group of `{source}`')
+            index_groups = self._index_groups[source]
+            if index_group:
+                if index_group not in index_groups:
+                    raise ValueError(f'{index_group} not an index group of `{source}`')
+            else:
+                if not index_groups:
+                    raise ValueError(f'`{source}` has no keys')
+                index_group = next(iter(index_groups))
+                prefix = index_group + '.'
         else:
             raise SourceNameError(source)
 
