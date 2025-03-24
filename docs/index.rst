@@ -12,7 +12,7 @@ EXtra-data is available on our Anaconda installation on the Maxwell cluster::
     module load exfel exfel-python
 
 You can also install it `from PyPI <https://pypi.org/project/EXtra-data/>`__
-to use in other environments with Python 3.7 or later::
+to use in other environments with Python 3::
 
     pip install extra_data
 
