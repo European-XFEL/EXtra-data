@@ -7,7 +7,7 @@ produced at `European XFEL <https://www.xfel.eu/>`_.
 Installation
 ------------
 
-EXtra-data is available on our Anaconda installation on the Maxwell cluster::
+EXtra-data is available in our Python environment on the Maxwell cluster::
 
     module load exfel exfel-python
 

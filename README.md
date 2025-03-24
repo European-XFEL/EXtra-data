@@ -10,7 +10,7 @@ See also: [European XFEL data analysis documentation](https://rtd.xfel.eu/docs/d
 Installing
 ==========
 
-*EXtra-data* is available on our Anaconda installation on the Maxwell cluster:
+*EXtra-data* is available in our Python environment on the Maxwell cluster:
 
     module load exfel exfel-python
 
