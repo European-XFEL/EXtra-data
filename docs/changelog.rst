@@ -1,6 +1,22 @@
 Release Notes
 =============
 
+1.21
+----
+
+2025-03-24
+
+- Detector data classes such as :class:`~.AGIPD1M` can now decompress data in
+  parallel, providing a significant speedup for reading compressed data
+  (:ghpull:`593`). This is used by default with 16 threads on suitable data,
+  and can be controlled by passing ``decompress_threads=N`` to ``.ndarray()``
+  or ``.xarray()`` methods, or setting the ``EXTRA_NUM_THREADS`` environment
+  variable. Specify 1 thread to use HDF5's single-threaded decompression.
+- The ``.pulse_id_coordinates()`` and ``.cell_id_coordinates()`` methods on
+  AGIPD, DSSC & LPD data objects now respect pulse selections (:ghpull:`604`).
+- Fix running the :ref:`cmd-validate` command with no ``--skip`` parameter
+  (:ghpull:`606`).
+
 1.20
 ----
 
