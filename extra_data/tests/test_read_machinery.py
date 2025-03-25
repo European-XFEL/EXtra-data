@@ -4,6 +4,7 @@ from unittest import mock
 
 import numpy as np
 import pytest
+import xarray as xr
 
 from extra_data import RunDirectory, by_id, by_index, read_machinery
 from extra_data.read_machinery import select_train_ids
@@ -128,3 +129,36 @@ def test_select_train_ids():
     with pytest.warns(UserWarning):
         result = select_train_ids(train_ids, by_id[1000010])
     assert result == []
+
+    # Test with boolean numpy array
+    bool_array = np.zeros(len(train_ids), dtype=np.bool_)
+    bool_array[[1, 3, 5]] = True
+    assert select_train_ids(train_ids, bool_array) == [1000001, 1000003, 1000005]
+
+    # Test with boolean numpy array of wrong length
+    bool_array_wrong_size = np.ones(len(train_ids) + 2, dtype=np.bool_)
+    with pytest.raises(ValueError, match="Boolean selector length"):
+        select_train_ids(train_ids, bool_array_wrong_size)
+
+
+def test_select_train_ids_xarray():
+    train_ids = list(range(1000000, 1000010))
+    
+    # Create a boolean xarray with trainId coordinate
+    trainid_coord = np.array([1000001, 1000003, 1000005, 1000007, 1000009])
+    data = np.ones(len(trainid_coord), dtype=bool)
+    data[-1] = False
+    xr_sel = xr.DataArray(data, coords={'trainId': trainid_coord}, dims=['trainId'])
+
+    # Test filtering with xarray
+    assert select_train_ids(train_ids, xr_sel) == [1000001, 1000003, 1000005, 1000007]
+
+    # Test with non-boolean xarray
+    non_bool_xr = xr.DataArray(np.ones(5, dtype=float), coords={'trainId': trainid_coord}, dims=['trainId'])
+    with pytest.raises(TypeError, match="xarray selector must be boolean"):
+        select_train_ids(train_ids, non_bool_xr)
+
+    # Test with xarray missing trainId coordinate
+    wrong_coord_xr = xr.DataArray(np.ones(5, dtype=bool), coords={'time': np.arange(5)}, dims=['time'])
+    with pytest.raises(ValueError, match="xarray selector must have a 'trainId' coordinate"):
+        select_train_ids(train_ids, wrong_coord_xr)
