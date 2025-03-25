@@ -11,6 +11,7 @@ from .keydata import KeyData
 from .read_machinery import (by_id, by_index, glob_wildcards_re, is_int_like,
                              same_run, select_train_ids, split_trains,
                              trains_files_index)
+from .utils import isinstance_no_import
 
 
 class SourceData:
@@ -71,6 +72,7 @@ class SourceData:
     def __getitem__(self, key):
         if (
             isinstance(key, (by_id, by_index, list, np.ndarray, slice)) or
+            isinstance_no_import(key, 'xarray', 'DataArray') or
             is_int_like(key)
         ):
             return self.select_trains(key)
