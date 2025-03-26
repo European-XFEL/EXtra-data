@@ -9,6 +9,7 @@ program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 """
 
 import os
+import sys
 from shutil import get_terminal_size
 
 
@@ -39,3 +40,12 @@ def progress_bar(done, total, suffix=" "):
     filled = int(length * done // total)
     bar = "#" * filled + " " * (length - filled)
     return line.format(bar)
+
+
+def isinstance_no_import(obj, mod: str, cls: str):
+    """Check if isinstance(obj, mod.cls) without loading mod"""
+    m = sys.modules.get(mod)
+    if m is None:
+        return False
+
+    return isinstance(obj, getattr(m, cls))

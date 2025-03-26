@@ -43,7 +43,7 @@ from .read_machinery import (DETECTOR_SOURCE_RE, by_id, by_index,
                              same_run, select_train_ids)
 from .run_files_map import RunFilesMap
 from .sourcedata import SourceData
-from .utils import available_cpu_cores
+from .utils import available_cpu_cores, isinstance_no_import
 
 __all__ = [
     'H5File',
@@ -284,6 +284,7 @@ class DataCollection:
             return self._get_source_data(item)
         elif (
             isinstance(item, (by_id, by_index, list, np.ndarray, slice)) or
+            isinstance_no_import(item, 'xarray', 'DataArray') or
             is_int_like(item)
         ):
             return self.select_trains(item)
