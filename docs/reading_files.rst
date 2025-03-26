@@ -277,6 +277,14 @@ of the data matching the train selection. For example, You can do::
     # key data
     key = key[np.s_[10:20]]  # data for the 10th to the 20th trains
 
+Train selection can additionally be done with boolean arrays or xarray
+DataArrays with a `trainId` coordinate. This is useful for selecting a subset
+of the data that matches a condition::
+
+    # XGM energy
+    xgm = run['SA1_XTD2_XGM/XGM/DOOCS', 'pulseEnergy.photonFlux'].xarray()
+    sel = run[xgm > 1000]
+
 Some kinds of data, e.g. from AGIPD, are too big to load a whole run into
 memory at once. In these cases, it's convenient to load one train at a time.
 
