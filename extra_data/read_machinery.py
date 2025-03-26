@@ -152,6 +152,8 @@ def select_train_ids(train_ids, sel):
         # Select a list of trains by index in this collection
         return sorted(np.asarray(train_ids)[sel])
     elif isinstance_no_import(sel, 'xarray', 'DataArray'):
+        if sel.dtype != bool:
+            raise TypeError(f"xarray selector must be boolean, got {sel.dtype}")
         if 'trainId' not in sel.coords:
             raise ValueError("xarray selector must have a 'trainId' coordinate")
 

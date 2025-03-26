@@ -143,19 +143,20 @@ def test_select_train_ids():
 
 def test_select_train_ids_xarray():
     train_ids = list(range(1000000, 1000010))
-
+    
     # Create a boolean xarray with trainId coordinate
     trainid_coord = np.array([1000001, 1000003, 1000005, 1000007, 1000009])
     data = np.ones(len(trainid_coord), dtype=bool)
     data[-1] = False
     xr_sel = xr.DataArray(data, coords={'trainId': trainid_coord}, dims=['trainId'])
+
+    # Test filtering with xarray
     assert select_train_ids(train_ids, xr_sel) == [1000001, 1000003, 1000005, 1000007]
 
-    # Test with xarray that isn't boolean dtype
-    float_trainid_coord = np.array([1000002, 1000004, 1000006])
-    float_data = np.array([1.5, 0.0, 3.2])  # Only non-zero values should be selected
-    float_xr_sel = xr.DataArray(float_data, coords={'trainId': float_trainid_coord}, dims=['trainId'])
-    assert select_train_ids(train_ids, float_xr_sel) == [1000002, 1000006]
+    # Test with non-boolean xarray
+    non_bool_xr = xr.DataArray(np.ones(5, dtype=float), coords={'trainId': trainid_coord}, dims=['trainId'])
+    with pytest.raises(TypeError, match="xarray selector must be boolean"):
+        select_train_ids(train_ids, non_bool_xr)
 
     # Test with xarray missing trainId coordinate
     wrong_coord_xr = xr.DataArray(np.ones(5, dtype=bool), coords={'time': np.arange(5)}, dims=['time'])
