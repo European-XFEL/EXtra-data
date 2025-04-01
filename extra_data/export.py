@@ -121,6 +121,8 @@ def _drop_object_arrays(data):
         for k, v in d.items():
             if isinstance(v, np.ndarray) and v.dtype == np.dtype(object):
                 to_delete.append(k)
+                if k.endswith('.value') and (tsk := k[:-6] + '.timestamp') in d:
+                    to_delete.append(tsk)
 
         for k in to_delete:
             del d[k]
