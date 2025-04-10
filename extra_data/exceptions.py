@@ -6,11 +6,13 @@ class FileStructureError(Exception):
 
 
 class SourceNameError(KeyError):
-    def __init__(self, source):
+    # If `custom_message=True`, then `source` is treated as the full error message
+    def __init__(self, source, custom_message=False):
         self.source = source
+        self.custom_message = custom_message
 
     def __str__(self):
-        return (
+        return self.source if self.custom_message else (
             "This data has no source named {!r}.\n"
             "See data.all_sources for available sources.".format(self.source)
         )
