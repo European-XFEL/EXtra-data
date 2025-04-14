@@ -1224,7 +1224,10 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             )
 
     def _read_parallel_decompress(self, out, module_gaps, threads=16):
-        from .compression import multi_dataset_decompressor, parallel_decompress_chunks
+        try:
+            from .compression import multi_dataset_decompressor, parallel_decompress_chunks
+        except ImportError:
+            return False
 
         modno_to_keydata_no_virtual = {}
         all_datasets = []
