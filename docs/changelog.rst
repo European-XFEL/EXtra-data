@@ -1,6 +1,8 @@
 Release Notes
 =============
 
+.. _rel-1.21:
+
 1.21
 ----
 
@@ -17,6 +19,8 @@ Release Notes
 - Fix running the :ref:`cmd-validate` command with no ``--skip`` parameter
   (:ghpull:`606`).
 
+.. _rel-1.20:
+
 1.20
 ----
 
@@ -28,6 +32,8 @@ Release Notes
   data (:ghpull:`600`) or when no data was recorded for a particular source in
   an entire run (:ghpull:`601`, :ghpull:`602`).
 - EXtra-data now requires Python 3.10 or above (:ghpull:`294`).
+
+.. _rel-1.19:
 
 1.19
 ----
@@ -61,6 +67,8 @@ Release Notes
 - Fix using ``file_filter`` parameter when opening a run (:ghpull:`566`)
 - PyYAML is now a full dependency (:ghpull:`577`).
 
+.. _rel-1.18:
+
 1.18
 ----
 
@@ -90,6 +98,8 @@ Release Notes
    present (:ghpull:`511`).
 -  Fix the message shown when skipping files because of how they're stored
    (:ghpull:`525`).
+
+.. _rel-1.17:
 
 1.17
 ----
@@ -121,6 +131,8 @@ Release Notes
 -  Return a copy of the array for ``detector_key.train_id_coordinates()``
    (:ghpull:`502`)
 
+.. _rel-1.16:
+
 1.16
 ----
 
@@ -136,6 +148,8 @@ Release Notes
 -  Add a development tool to copy the structure of EuXFEL data files
    without the data (:ghpull:`467`).
 
+.. _rel-1.15.1:
+
 1.15.1
 ------
 
@@ -143,6 +157,8 @@ Release Notes
 
 - :class:`~.JUNGFRAU` recognises some additional naming patterns seen in new
   detector instances (:ghpull:`464`).
+
+.. _rel-1.15:
 
 1.15
 ----
@@ -157,6 +173,8 @@ Release Notes
    long run into  many pieces (:ghpull:`459`).
 -  Include XTDF sources in :ref:`cmd-lsxfel` when details are enabled (:ghpull:`440`).
 
+.. _rel-1.14:
+
 1.14
 ----
 
@@ -168,6 +186,8 @@ Release Notes
    conveniently see how much data is present for a given source & key
    (:ghpull:`430`).
 -  Fix ``.ndarray(module_gaps=True)`` for xtdf detector data (:ghpull:`432`).
+
+.. _rel-1.13:
 
 1.13
 ----
@@ -220,6 +240,8 @@ Release Notes
 - Fix creating virtual overview files with extended metadata when source files
   are format version 1.1 or newer (:ghpull:`332`).
 
+.. _rel-1.12:
+
 1.12
 ----
 
@@ -241,6 +263,8 @@ Release Notes
 - Fix errors opening runs with ``data='all'`` with an empty proc folder
   (:ghpull:`317`).
 - The ``QuickView`` class deprecated in version 1.9 was removed.
+
+.. _rel-1.11:
 
 1.11
 ----
@@ -264,6 +288,7 @@ Release Notes
 - Fix a race condition where files were closed in one thread as they were opened
   in another (:ghpull:`289`).
 
+.. _rel-1.10:
 
 1.10
 ----
@@ -286,6 +311,8 @@ Release Notes
   (:ghpull:`274`).
 - Fixes to ensure that files are not unnecessarily reopened (:ghpull:`264`).
 
+.. _rel-1.9.1
+
 1.9.1
 -----
 
@@ -294,6 +321,8 @@ Release Notes
 - Fix errors from :meth:`~.KeyData.data_counts` and
   :meth:`~.KeyData.drop_empty_trains` when different train IDs exist for
   different sources (:ghpull:`257`).
+
+.. _rel-1.9:
 
 1.9
 ---
@@ -323,6 +352,8 @@ Deprecations & potentially breaking changes:
 - Removed the ``h5index`` module and the ``hdf5_paths`` function, which were
   deprecated in 1.7.
 
+.. _rel-1.8.1:
+
 1.8.1
 -----
 
@@ -333,6 +364,8 @@ Deprecations & potentially breaking changes:
   modules captured data for a given train (:ghpull:`234`).
 - Fix ``open_run(..., data='all')`` when all sources in the raw data are copied
   to the corrected run folder (:ghpull:`236`).
+
+.. _rel-1.8:
 
 1.8
 ---
@@ -365,6 +398,8 @@ Deprecations & potentially breaking changes:
   along with EXtra-data by default (:ghpull:`211`). Install with
   ``pip install extra-data[bridge]`` if you need this functionality.
 
+.. _rel-1.7:
+
 1.7
 ---
 
@@ -390,6 +425,7 @@ Deprecations & potentially breaking changes:
 - Deprecated some functions for converting data to CBF format, and the
   ``h5index`` module (:ghpull:`197`). We believe these were unused.
 
+.. _rel-1.6.1:
 
 1.6.1
 -----
@@ -398,6 +434,8 @@ Deprecations & potentially breaking changes:
 
 - Fix a check which made it very slow to open runs with thousands of files
   (:ghpull:`183`).
+
+.. _rel-1.6:
 
 1.6
 ---
@@ -422,6 +460,8 @@ Deprecations & potentially breaking changes:
 - Several fixes for handling 'suspect' train IDs (:ghpull:`172`).
 - h5py >= 2.10 is now required (:ghpull:`177`).
 
+.. _rel-1.5:
+
 1.5
 ---
 
@@ -443,6 +483,8 @@ Deprecations & potentially breaking changes:
 - Some fixes to make the test suite more robust (:ghpull:`156`, :ghpull:`167`,
   :ghpull:`169`).
 
+.. _rel-1.4.1:
+
 1.4.1
 -----
 
@@ -451,6 +493,8 @@ Deprecations & potentially breaking changes:
 - Fix :meth:`~.LPD1M.get_array` for raw DSSC & LPD data with multiple sequence
   files per module (:ghpull:`155`).
 - Drop unnecessary dependency on scipy (:ghpull:`147`).
+
+.. _rel-1.4:
 
 1.4
 ---
@@ -507,6 +551,8 @@ Fixes and improvements
 - Fix ``extra-data-validate`` when a file cannot be opened (:ghpull:`93`).
 - Fix name of ``extra-data-validate`` in its own help info (:ghpull:`90`).
 
+.. _rel-1.3:
+
 1.3
 ---
 
@@ -544,6 +590,8 @@ Fixes and improvements:
 - The :meth:`~.DataCollection.trains` iterator no longer includes zero-length
   arrays when a source has no data for that train (:ghpull:`75`).
 - Fix a test which failed when run as root (:ghpull:`67`).
+
+.. _rel-1.2:
 
 1.2
 ---
@@ -591,6 +639,8 @@ Fixes and improvements:
 - Test coverage measurement fixed with multiprocessing (:ghpull:`37`).
 - Tests switched from ``mock`` module to ``unittest.mock`` (:ghpull:`52`).
 
+.. _rel-1.1:
+
 1.1
 ---
 
@@ -605,6 +655,8 @@ Fixes and improvements:
 - :ref:`Run map cache files <run-map-caching>` can be saved on the EuXFEL online
   cluster, which speeds up reopening runs there (:ghpull:`36`).
 - Added tests with simulated bad files for the validation code (:ghpull:`23`).
+
+.. _rel-1.0:
 
 1.0
 ---
@@ -628,6 +680,8 @@ Fixes and improvements:
 - Documentation reorganised to emphasise tutorials and examples (:ghpull:`10`).
 
 This version requires Python 3.6 or above.
+
+.. _rel-0.8:
 
 0.8
 ---
