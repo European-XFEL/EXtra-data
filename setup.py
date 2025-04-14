@@ -58,7 +58,6 @@ setup(name="EXtra-data",
           'pandas',
           'xarray',
           'pyyaml',
-          'zlib_into',
       ],
       extras_require={
           'bridge': [
@@ -69,6 +68,7 @@ setup(name="EXtra-data",
               'dask[array]',
               'extra_data[bridge]',
               'tomli; python_version < "3.11"',
+              'zlib_into',
           ],
           'docs': [
               'extra_data[bridge]',  # For autodoc of ZMQStreamer
