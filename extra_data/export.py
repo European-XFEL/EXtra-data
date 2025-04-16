@@ -16,6 +16,7 @@ from collections import deque
 from socket import AF_INET
 from warnings import warn
 
+import numpy as np
 from karabo_bridge import ServerInThread
 from karabo_bridge.server import Sender
 from psutil import net_if_addrs
@@ -109,6 +110,24 @@ def _iter_trains(data, merge_detector=False):
         yield tid, train_data
 
 
+def _drop_object_arrays(data):
+    """Drop arrays of Python objects (e.g. strings) from the data.
+
+    E.g. availableScenes, interfaces properties. These break serialisation and
+    are unlikely to be useful.
+    """
+    for d in data.values():
+        to_delete = []
+        for k, v in d.items():
+            if isinstance(v, np.ndarray) and v.dtype == np.dtype(object):
+                to_delete.append(k)
+                if k.endswith('.value') and (tsk := k[:-6] + '.timestamp') in d:
+                    to_delete.append(tsk)
+
+        for k in to_delete:
+            del d[k]
+
+
 def serve_files(path, port, source_glob='*', key_glob='*', **kwargs):
     """Stream data from files through a TCP socket.
 
@@ -188,6 +207,7 @@ def serve_data(data, port, append_detector_modules=False,
         print(f'Sent {count}/{ntrains} trains - Train ID {tid} - {rate:.1f} Hz', end=end)
 
     for tid, data in _iter_trains(data, merge_detector=append_detector_modules):
+        _drop_object_arrays(data)
         sender.send(data)
         count += 1
         new_time = time.monotonic()
