@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 import h5py
 import numpy as np
 
-from .exceptions import MultiRunError, NoDataError, PropertyNameError
+from .exceptions import MultiRunError, PropertyNameError, FileStructureError
 from .file_access import FileAccess
 from .keydata import KeyData
 from .read_machinery import (by_id, by_index, glob_wildcards_re, is_int_like,
@@ -76,6 +76,8 @@ class SourceData:
             is_int_like(key)
         ):
             return self.select_trains(key)
+        elif not isinstance(key, str):
+            raise TypeError('Expected data[key] or data[train_selection]')
 
         if key not in self:
             raise PropertyNameError(key, self.source)
