@@ -144,28 +144,10 @@ class KeyData:
 
     @property
     def source_file_paths(self):
-        paths = []
+        paths = dict()
         for chunk in self._data_chunks:
-            if chunk.dataset.is_virtual:
-                mappings = chunk.dataset.virtual_sources()
-                for vspace, filename, _, _ in mappings:
-                    if filename in paths:
-                        continue  # Already got it
-
-                    # Does the mapping overlap with this chunk of selected data?
-                    # We can assume that each mapping is a simple, contiguous
-                    # block, and only selection on the first dimension matters.
-                    starts, ends = vspace.get_select_bounds()
-                    map_start, map_stop = starts[0], ends[0]
-                    ck = chunk.slice
-                    if (map_stop > ck.start) and (map_start < ck.stop):
-                        paths.append(filename)
-
-                # Include 1 source file even if no trains are selected
-                if (not paths) and mappings:
-                    paths.append(mappings[0].file_name)
-            else:
-                paths.append(chunk.file.filename)
+            paths |= dict.fromkeys(chunk.source_file_paths)
+        paths = list(paths.keys())
 
         # Fallback for virtual overview files where no data was recorded for
         # this source, so there's no mapping to point to.
