@@ -104,11 +104,31 @@ class SourceData:
         return list(self.keys(inc_timestamps=False))
 
     def _get_first_source_file(self):
-        first_kd = self[self.one_key()]
-
         try:
-            # This property is an empty list if no trains are selected.
+            # May throw TypeError if there are only RUN keys.
+            first_kd = self[self.one_key()]
+
+            # May throw IndexError if no trains are selected.
             sample_path = first_kd.source_file_paths[0]
+
+        except TypeError:
+            if not self.is_control:
+                raise FileStructureError(f'No keys present for non-CONTROL '
+                                         f'source {source}')
+
+            for file in self.files:
+                link = file.file['RUN'].get(self.source, None, getlink=True)
+                if link is not None:
+                    break
+            else:
+                raise FileStructureError(f'No CONTROL or RUN keys present '
+                                         f'for {source}')
+
+            if isinstance(link, h5py.ExternalLink):
+                sample_path = link.filename
+            else:
+                sample_path = self.files[0].filename
+
         except IndexError:
             sample_path = first_kd.files[0].filename
 
