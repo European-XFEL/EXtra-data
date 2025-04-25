@@ -52,6 +52,10 @@ class DeviceBase:
         if self.no_ctrl_data:
             N = 0
 
+        if self.control_keys or self.extra_run_values:
+            # Ensure the source is present in CONTROL.
+            f.create_group(f'CONTROL/{self.device_id}')
+
         for (topic, datatype, dims) in self.control_keys:
             f.create_dataset('CONTROL/%s/%s/timestamp' % (self.device_id, topic),
                              (N,), 'u8', maxshape=(None,))
@@ -64,7 +68,14 @@ class DeviceBase:
             f.create_dataset('RUN/%s/%s/value' % (self.device_id, topic),
                              (1,)+dims, datatype, maxshape=((None,)+dims))
 
-        for (topic, datatype, value) in self.extra_run_values:
+        for row in self.extra_run_values:
+            if len(row) == 3:
+                # Compatibility for legacy 3-tuples implying scalar dims.
+                topic, datatype, value = row
+                dims = ()
+            elif len(row) == 4:
+                topic, datatype, value, dims = row
+
             if isinstance(value, str):
                 datatype = h5py.string_dtype('ascii')
             f.create_dataset('RUN/%s/%s/timestamp' % (self.device_id, topic),
@@ -128,7 +139,7 @@ class DeviceBase:
                                  (Npad,) + dims, datatype, maxshape=((None,) + dims))
 
     def datasource_ids(self):
-        if self.control_keys:
+        if self.control_keys or self.extra_run_values:
             yield 'CONTROL/' + self.device_id
         if self.instrument_keys:
             for channel in self.output_channels:
