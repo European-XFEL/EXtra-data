@@ -342,3 +342,13 @@ def test_legacy_sourcedata(mock_modern_spb_proc_run):
     assert sd.source == det_mod0
     assert sd.canonical_name == corr_mod0
     assert sd.is_legacy
+
+
+def test_no_control_keys(mock_remi_run):
+    run = RunDirectory(mock_remi_run)
+    sd = run['SQS_REMI_DLD6/DET/TOP']
+
+    assert sd.is_control
+    assert not sd.keys()
+    assert sd.one_key() is None
+    assert sd.aggregator == 'REMI01'
