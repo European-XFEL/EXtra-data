@@ -27,3 +27,5 @@ class ReconstructedDLD6(DeviceBase):
     output_channels = ('output/rec',)
     instrument_keys = [('signals', signals_dt, (50,)),
                        ('hits', hits_dt, (50,))]
+
+    extra_run_values = [('digitizer/baseline_region', None, ':1000', ())]
