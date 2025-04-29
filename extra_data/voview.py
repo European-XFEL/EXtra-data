@@ -132,8 +132,8 @@ def write_atomic(path, data):
     with TemporaryDirectory(prefix=".create-voview-", dir=dirname) as td:
         tmp_filename = osp.join(td, basename)
         try:
-            vofw = VirtualOverviewFileWriter(tmp_filename, data)
-            vofw.write()
+            with VirtualOverviewFileWriter(tmp_filename, data) as vofw:
+                vofw.write()
             os.replace(tmp_filename, path)
         except:
             os.unlink(tmp_filename)

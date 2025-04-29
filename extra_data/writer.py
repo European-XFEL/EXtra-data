@@ -18,6 +18,12 @@ class FileWriter:
         self.indexes = {}  # {path: (first, count)}
         self.data_sources = set()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.file.close()
+
     def prepare_source(self, source):
         """Prepare all the datasets for one source.
 
