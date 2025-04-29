@@ -340,7 +340,13 @@ class KeyData:
         the first value encountered. By default, 'median' is used.
 
         If within tolerances, the reduced value is returned.
+
+        For non-numerical keys like strings, the method behaves
+        identically to .as_unique_value() and ignores all arguments.
         """
+
+        if not np.issubdtype(self.dtype, np.number):
+            return self.as_unique_value()
 
         data = self.ndarray()
 
@@ -365,6 +371,26 @@ class KeyData:
                              f'(absolute: {adev:.3g}, relative: {rdev:.3g})')
 
         return value
+
+    def as_unique_value(self):
+        """Retrieve a single value if unique.
+
+        Returns the single unique of this key for all trains provided
+        there is a single one.
+        """
+
+        data = self.ndarray()
+
+        if len(data) == 0:
+            raise NoDataError(self.source, self.key)
+
+        axis = 0 if np.issubdtype(self.dtype, np.number) else None
+        unique_values = np.unique(data, axis=axis)
+
+        if len(unique_values) > 1:
+            raise ValueError(f'data values are not unique: {unique_values}')
+
+        return unique_values[0]
 
     # Getting data as different kinds of array: -------------------------------
 
