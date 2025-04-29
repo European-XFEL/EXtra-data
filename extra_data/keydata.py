@@ -327,7 +327,7 @@ class KeyData:
 
             return res
 
-    def as_single_value(self, rtol=1e-5, atol=0.0, reduce_by='median'):
+    def as_single_value(self, rtol=1e-5, atol=0.0, reduce_by=None):
         """Retrieve a single reduced value if within tolerances.
 
         The relative and absolute tolerances *rtol* and *atol* work the
@@ -340,12 +340,32 @@ class KeyData:
         the first value encountered. By default, 'median' is used.
 
         If within tolerances, the reduced value is returned.
+
+        For non-numerical keys like strings, the method instead always
+        checks for uniqueness and returns such a value, if present.
         """
 
         data = self.ndarray()
 
         if len(data) == 0:
             raise NoDataError(self.source, self.key)
+
+        if not np.issubdtype(self.dtype, np.number):
+            # Handle non-numeric types first.
+
+            if reduce_by is not None:
+                raise TypeError('custom reduce method not supported for '
+                                'non-numeric type')
+
+            unique_values = np.unique(data, axis=None)
+
+            if len(unique_values) > 1:
+                raise ValueError(f'str values are not unique: {unique_values}')
+
+            return unique_values[0]
+
+        elif reduce_by is None:
+            reduce_by = 'median'
 
         if callable(reduce_by):
             value = reduce_by(data)
