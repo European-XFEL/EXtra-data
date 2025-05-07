@@ -383,10 +383,13 @@ class SourceData:
         if index_group is None:
             # Collect data counts for a sample key per index group.
             data_counts = {
-                index_group: self[self.one_key(index_group)].data_counts(
-                    labelled=labelled)
+                index_group: self[key].data_counts(labelled=labelled)
                 for index_group in self.index_groups
+                if (key := self.one_key(index_group)) is not None
             }
+
+            if not data_counts:
+                data_counts = {None: np.zeros(len(self.train_ids), dtype=int)}
 
             if labelled:
                 import pandas as pd
