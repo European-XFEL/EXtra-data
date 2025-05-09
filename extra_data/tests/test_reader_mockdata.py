@@ -98,7 +98,8 @@ def test_train_info(mock_lpd_data, capsys):
 
 def test_info(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
-    run.info(details_for_sources='*/DOOCS/*')  # Smoketest
+    run.info(details_for_sources='*/DOOCS/*',
+             with_aggregators=True)  # Smoketest
 
 
 def test_iterate_trains_fxe(mock_fxe_control_data):
