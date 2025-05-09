@@ -1264,7 +1264,7 @@ class DataCollection:
         return f"<extra_data.DataCollection for {len(self.all_sources)} " \
                f"sources and {len(self.train_ids)} trains>"
 
-    def info(self, details_for_sources=()):
+    def info(self, details_for_sources=(), with_aggregators=False):
         """Show information about the selected data.
         """
         details_sources_re = [re.compile(fnmatch.translate(p))
@@ -1377,7 +1377,8 @@ class DataCollection:
             print(len(displayed_inst_srcs), 'instrument sources (excluding XTDF detectors):')
 
         for s in sorted(displayed_inst_srcs):
-            print('  -', s, src_alias_list(s))
+            agg_str = f' [{self[s].aggregator}]' if with_aggregators else ''
+            print('  -' + agg_str, s, src_alias_list(s))
             if not any(p.match(s) for p in details_sources_re):
                 continue
 
@@ -1392,7 +1393,8 @@ class DataCollection:
         print()
         print(len(self.control_sources), 'control sources:')
         for s in sorted(self.control_sources):
-            print('  -', s, src_alias_list(s))
+            agg_str = f' [{self[s].aggregator}]' if with_aggregators else ''
+            print('  -' + agg_str, s, src_alias_list(s))
             if any(p.match(s) for p in details_sources_re):
                 # Detail for control sources: list keys
                 ctrl_keys = self[s].keys(inc_timestamps=False)
