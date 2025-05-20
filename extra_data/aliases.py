@@ -4,6 +4,8 @@ from collections.abc import Iterable
 from .exceptions import AliasError
 
 class AliasIndexer:
+    """Enables item access via source and key aliases."""
+
     __slots__ = ('data',)
 
     def __init__(self, data):
