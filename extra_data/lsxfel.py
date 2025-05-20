@@ -11,13 +11,13 @@ from .read_machinery import FilenameInfo
 from .reader import H5File, RunDirectory
 
 
-def describe_file(path, details_for_sources=()):
+def describe_file(path, details_for_sources=(), with_aggregators=False):
     """Describe a single HDF5 data file"""
     basename = os.path.basename(path)
     print(basename, ": Data file")
 
     h5file = H5File(path)
-    h5file.info(details_for_sources)
+    h5file.info(details_for_sources, with_aggregators)
 
 
 def summarise_file(path):
@@ -28,13 +28,13 @@ def summarise_file(path):
     print(f"  {len(f.train_ids)} trains, {len(f.all_sources)} sources")
 
 
-def describe_run(path, details_for_sources=()):
+def describe_run(path, details_for_sources=(), with_aggregators=False):
     basename = os.path.basename(path)
     print(basename, ": Run directory")
     print()
 
     run = RunDirectory(path)
-    run.info(details_for_sources)
+    run.info(details_for_sources, with_aggregators)
 
 
 def summarise_run(path, indent=''):
@@ -80,6 +80,9 @@ def main(argv=None):
              "Can be used more than once to include several patterns. "
              "Only used when inspecting a single run or file."
     )
+    ap.add_argument('--aggregators', '-g', action='store_true',
+        help="Include the aggregator each source is saved in. "
+             "This can slow down lsxfel considerably. ")
     args = ap.parse_args(argv)
     paths = args.paths or [os.path.abspath(os.getcwd())]
 
@@ -91,7 +94,7 @@ def main(argv=None):
             contents = sorted(os.listdir(path))
             if any(f.endswith('.h5') for f in contents):
                 # Run directory
-                describe_run(path, args.detail)
+                describe_run(path, args.detail, args.aggregators)
             elif any(re.match(r'r\d+', f) for f in contents):
                 # Proposal directory, containing runs
                 print(basename, ": Proposal data directory")
@@ -112,7 +115,7 @@ def main(argv=None):
                 print(basename, ": Unrecognised directory")
         elif os.path.isfile(path):
             if path.endswith('.h5'):
-                describe_file(path, args.detail)
+                describe_file(path, args.detail, args.aggregators)
             else:
                 print(basename, ": Unrecognised file")
                 return 2
