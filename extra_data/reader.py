@@ -118,6 +118,7 @@ class DataCollection:
         self._sources_data = sources_data
 
         self._aliases = aliases or {}
+        self.alias = AliasIndexer(self)
 
         # Throw an error if we have conflicting data for the same source
         self._check_source_conflicts()
@@ -876,11 +877,6 @@ class DataCollection:
             inc_suspect_trains=self.inc_suspect_trains,
             is_single_run=self.is_single_run
         )
-
-    @property
-    def alias(self):
-        """Enables item access via source and key aliases."""
-        return AliasIndexer(self)
 
     def _expand_selection(self, selection):
         if isinstance(selection, dict):

@@ -72,7 +72,9 @@ to refer to all data associated with that 0.1 second window.
 
    .. automethod:: info
 
-   .. autoattribute:: alias
+   .. attribute:: alias
+
+      Enables item access via source and key aliases.
 
    .. automethod:: with_aliases
 
