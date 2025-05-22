@@ -42,7 +42,7 @@ setup(name="EXtra-data",
       },
       entry_points={
           "console_scripts": [
-              "lsxfel = extra_data.lsxfel:main",
+              "lsxfel = extra_data.cli.lsxfel:main",
               "karabo-bridge-serve-files = extra_data.cli.serve_files:main",
               "karabo-bridge-serve-run = extra_data.cli.serve_run:main",
               "extra-data-validate = extra_data.validation:main",
