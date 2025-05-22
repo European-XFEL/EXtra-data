@@ -75,8 +75,8 @@ def main(argv=None):
     ap.add_argument('--detail', action='append', default=[],
         help="Show details on keys & data for specified sources. "
              "This can slow down lsxfel considerably. "
-             "Wildcard patterns like '*/XGM/*' are allowed, though you may "
-             "need single quotes to prevent the shell processing them. "
+             "Wildcard patterns like '*XGM/*:output' are allowed, or partial "
+             "matches for the source name like 'XGM' with no wildcards. "
              "Can be used more than once to include several patterns. "
              "Only used when inspecting a single run or file."
     )
@@ -86,6 +86,10 @@ def main(argv=None):
     args = ap.parse_args(argv)
     paths = args.paths or [os.path.abspath(os.getcwd())]
 
+    # If --detail doesn't contain glob wildcards, treat it as a substring
+    detail_patterns = [p if re.search(r'[*?[]', p) else f'*{p}*'
+                       for p in args.detail]
+
     if len(paths) == 1:
         path = paths[0]
         basename = os.path.basename(os.path.abspath(path.rstrip('/')))
@@ -94,7 +98,7 @@ def main(argv=None):
             contents = sorted(os.listdir(path))
             if any(f.endswith('.h5') for f in contents):
                 # Run directory
-                describe_run(path, args.detail, args.aggregators)
+                describe_run(path, detail_patterns, args.aggregators)
             elif any(re.match(r'r\d+', f) for f in contents):
                 # Proposal directory, containing runs
                 print(basename, ": Proposal data directory")
@@ -115,7 +119,7 @@ def main(argv=None):
                 print(basename, ": Unrecognised directory")
         elif os.path.isfile(path):
             if path.endswith('.h5'):
-                describe_file(path, args.detail, args.aggregators)
+                describe_file(path, detail_patterns, args.aggregators)
             else:
                 print(basename, ": Unrecognised file")
                 return 2
