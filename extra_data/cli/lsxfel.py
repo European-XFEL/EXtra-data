@@ -7,8 +7,8 @@ import os.path as osp
 import re
 import sys
 
-from .read_machinery import FilenameInfo
-from .reader import H5File, RunDirectory
+from ..read_machinery import FilenameInfo
+from ..reader import H5File, RunDirectory
 
 
 def describe_file(path, details_for_sources=(), with_aggregators=False):

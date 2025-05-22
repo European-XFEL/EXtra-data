@@ -1,4 +1,4 @@
-from extra_data import lsxfel
+from extra_data.cli import lsxfel
 
 
 def test_lsxfel_file(mock_lpd_data, capsys):
