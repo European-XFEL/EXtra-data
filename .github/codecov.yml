@@ -6,3 +6,5 @@ coverage:
     patch:
       default:
         threshold: 20  # Changed code can have t% lower coverage than overall
+
+comment: false
