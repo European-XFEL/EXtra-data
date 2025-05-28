@@ -54,6 +54,11 @@ class SourceData:
         """Whether this source is a legacy name for another source."""
         return self.canonical_name != self.source
 
+    @property
+    def is_run_only(self):
+        """Whether this source only has RUN keys."""
+        return self.is_control and self.one_key() is None
+
     def _has_exact_key(self, key):
         if self.sel_keys is not None:
             return key in self.sel_keys

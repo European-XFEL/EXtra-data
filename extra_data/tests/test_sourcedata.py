@@ -12,12 +12,14 @@ def test_get_sourcedata(mock_spb_raw_run):
     assert am0.section == 'INSTRUMENT'
     assert am0.is_instrument
     assert not am0.is_control
+    assert not am0.is_run_only
     assert am0.index_groups == {'header', 'detector', 'image', 'trailer'}
 
     xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
     assert len(xgm.files) == 2
     assert xgm.section == 'CONTROL'
     assert xgm.is_control
+    assert not xgm.is_run_only
     assert not xgm.is_instrument
     assert xgm.index_groups == {''}
 
@@ -281,7 +283,6 @@ def test_drop_empty_trains(mock_reduced_spb_proc_run):
 def test_train_id_coordinates(mock_reduced_spb_proc_run):
     run = RunDirectory(mock_reduced_spb_proc_run)
 
-
     # control data.
     xgm = run['SPB_XTD9_XGM/DOOCS/MAIN']
 
@@ -349,6 +350,7 @@ def test_no_control_keys(mock_remi_run):
     sd = run['SQS_REMI_DLD6/DET/TOP']
 
     assert sd.is_control
+    assert sd.is_run_only
     assert not sd.keys()
     assert sd.one_key() is None
     assert sd.aggregator == 'REMI01'
