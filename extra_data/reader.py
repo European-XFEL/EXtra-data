@@ -1054,6 +1054,9 @@ class DataCollection:
                 train_ids = np.empty(0, dtype=np.uint64)
 
             for source, srcdata in sources_data.items():
+                if srcdata.is_run_only:
+                    continue
+
                 n_trains_prev = len(train_ids)
                 for group in srcdata.index_groups:
                     source_tids = np.empty(0, dtype=np.uint64)
@@ -1485,7 +1488,7 @@ class DataCollection:
                 for group in srcdata.index_groups:
                     counts[f"{best_src_name(src)} {group}.*"] = \
                         srcdata.data_counts(labelled=False, index_group=group)
-            else:
+            elif not srcdata.is_run_only:
                 counts[best_src_name(src)] = srcdata.data_counts(labelled=False)
 
             # Warn the user if the function will take longer than a couple seconds
