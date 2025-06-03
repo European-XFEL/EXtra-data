@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 import h5py
 import numpy as np
 
-from .exceptions import MultiRunError, NoDataError, PropertyNameError
+from .exceptions import MultiRunError, PropertyNameError, FileStructureError
 from .file_access import FileAccess
 from .keydata import KeyData
 from .read_machinery import (by_id, by_index, glob_wildcards_re, is_int_like,
@@ -54,6 +54,11 @@ class SourceData:
         """Whether this source is a legacy name for another source."""
         return self.canonical_name != self.source
 
+    @property
+    def is_run_only(self):
+        """Whether this source only has RUN keys."""
+        return self.is_control and self.one_key() is None
+
     def _has_exact_key(self, key):
         if self.sel_keys is not None:
             return key in self.sel_keys
@@ -76,6 +81,8 @@ class SourceData:
             is_int_like(key)
         ):
             return self.select_trains(key)
+        elif not isinstance(key, str):
+            raise TypeError('Expected data[key] or data[train_selection]')
 
         if key not in self:
             raise PropertyNameError(key, self.source)
@@ -102,11 +109,31 @@ class SourceData:
         return list(self.keys(inc_timestamps=False))
 
     def _get_first_source_file(self):
-        first_kd = self[self.one_key()]
-
         try:
-            # This property is an empty list if no trains are selected.
+            # May throw TypeError if there are only RUN keys.
+            first_kd = self[self.one_key()]
+
+            # May throw IndexError if no trains are selected.
             sample_path = first_kd.source_file_paths[0]
+
+        except TypeError:
+            if not self.is_control:
+                raise FileStructureError(f'No keys present for non-CONTROL '
+                                         f'source {source}')
+
+            for file in self.files:
+                link = file.file['RUN'].get(self.source, None, getlink=True)
+                if link is not None:
+                    break
+            else:
+                raise FileStructureError(f'No CONTROL or RUN keys present '
+                                         f'for {source}')
+
+            if isinstance(link, h5py.ExternalLink):
+                sample_path = link.filename
+            else:
+                sample_path = self.files[0].filename
+
         except IndexError:
             sample_path = first_kd.files[0].filename
 
@@ -361,10 +388,13 @@ class SourceData:
         if index_group is None:
             # Collect data counts for a sample key per index group.
             data_counts = {
-                index_group: self[self.one_key(index_group)].data_counts(
-                    labelled=labelled)
+                index_group: self[key].data_counts(labelled=labelled)
                 for index_group in self.index_groups
+                if (key := self.one_key(index_group)) is not None
             }
+
+            if not data_counts:
+                data_counts = {None: np.zeros(len(self.train_ids), dtype=int)}
 
             if labelled:
                 import pandas as pd

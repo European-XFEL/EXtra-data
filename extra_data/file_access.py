@@ -494,9 +494,11 @@ class FileAccess(metaclass=MetaFileAccess):
                     return key
 
             # _keys_cache is a complete set, so this point can only be
-            # reached for a key-less source (currently assumed to no
-            # exist) or a non-existing index group was passed.
-            raise ValueError(f'{index_group} not an index group of `{source}`')
+            # reached for a key-less source or a non-existing index
+            # group was passed.
+            if self._keys_cache[source]:
+                raise ValueError(f'{index_group} not an index group of '
+                                 f'`{source}`')
 
         if self._known_keys[source]:
             for key in self._known_keys[source]:

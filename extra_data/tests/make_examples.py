@@ -194,6 +194,7 @@ def make_sa3_da_file(path, ntrains=500, format_version='0.5'):
         IMGFELMotor('SA3_XTD10_IMGFEL/MOTOR/FILTER'),
         IMGFELMotor('SA3_XTD10_IMGFEL/MOTOR/SCREEN'),
         MPOD('SA3_XTD10_MCP/MCPS/MPOD'),
+        ReconstructedDLD6('SA3_REMI_DLD6/DET/TOP'),  # RUN-only source.
     ], ntrains=ntrains, chunksize=50, format_version=format_version)
 
 def make_da_file_with_empty_source(path, ntrains=500, format_version='0.5'):
