@@ -4,7 +4,7 @@ from multiprocessing.pool import ThreadPool
 
 import h5py
 import numpy as np
-from zlib_into import decompress_into
+from zlib_into import decompress_into, unshuffle
 
 
 def filter_ids(dset: h5py.Dataset):
@@ -49,15 +49,8 @@ class ShuffleDeflateDecompressor:
         chunk_nbytes = dtype.itemsize
         for l in chunk_shape:
             chunk_nbytes *= l
-        # This will hold the decompressed data before shuffling
+        # This will hold the decompressed data before unshuffling
         self.chunk_buf = np.zeros(chunk_nbytes, dtype=np.uint8)
-        self.shuffled_view = (     # E.g. for int32 data with chunks (10, 5):
-                self.chunk_buf                  # (200,) uint8
-                .reshape((dtype.itemsize, -1))  # (4, 50)
-                .transpose()                    # (50, 4)
-        )
-        # Check this is still a view on the buffered data
-        assert self.shuffled_view.base is self.chunk_buf
 
     @classmethod
     def for_dataset(cls, dset: h5py.Dataset):
@@ -80,8 +73,7 @@ class ShuffleDeflateDecompressor:
             # The shuffle filter is skipped
             memoryview(out)[:] = self.chunk_buf
         else:
-            # Numpy does the shuffling by copying data between views
-            out.reshape((-1, 1)).view(np.uint8)[:] = self.shuffled_view
+            unshuffle(self.chunk_buf, out, self.dtype.itemsize)
 
 
 def dataset_decompressor(dset):
