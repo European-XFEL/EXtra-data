@@ -22,7 +22,7 @@ import tempfile
 import time
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from itertools import groupby
+from itertools import groupby, chain
 from multiprocessing import Pool
 from operator import index
 from pathlib import Path
@@ -80,6 +80,7 @@ class DataCollection:
     def __init__(
             self, files, sources_data=None, train_ids=None, aliases=None,
             ctx_closes=False, *, inc_suspect_trains=True, is_single_run=False,
+            alias_files=None
     ):
         self.files = list(files)
         self.ctx_closes = ctx_closes
@@ -117,6 +118,9 @@ class DataCollection:
             }
         self._sources_data = sources_data
 
+        # Note that _alias_files is only for tracking where the aliases came
+        # from, the actual aliases are stored in _aliases.
+        self._alias_files = [] if alias_files is None else alias_files
         self._aliases = aliases or {}
         self.alias = AliasIndexer(self)
 
@@ -629,6 +633,10 @@ class DataCollection:
 
         return new_aliases
 
+    def _merge_alias_files(self, *alias_files):
+        all_files = chain.from_iterable(alias_files)
+        return sorted(set(all_files))
+
     def union(self, *others):
         """Join the data in this collection with one or more others.
 
@@ -653,6 +661,8 @@ class DataCollection:
 
         aliases = self._merge_aliases(
             [self._aliases] + [dc._aliases for dc in others])
+        alias_files = self._merge_alias_files(self._alias_files,
+                                              *[dc._alias_files for dc in others])
 
         train_ids = sorted(set().union(*[sd.train_ids for sd in sources_data.values()]))
         # Update the internal list of train IDs for the sources
@@ -664,7 +674,7 @@ class DataCollection:
         return DataCollection(
             files, sources_data=sources_data, train_ids=train_ids,
             aliases=aliases, inc_suspect_trains=self.inc_suspect_trains,
-            is_single_run=same_run(self, *others),
+            is_single_run=same_run(self, *others), alias_files=alias_files
         )
 
     def __or__(self, other):
@@ -677,6 +687,7 @@ class DataCollection:
         """Parse alias definitions into alias dictionaries."""
 
         alias_dicts = []
+        alias_files = []
 
         def is_valid_alias(k, v):
             return (isinstance(k, str) and (
@@ -693,10 +704,11 @@ class DataCollection:
                 alias_dicts.append(alias_def)
             elif isinstance(alias_def, (str, os.PathLike)):
                 # From a file.
+                alias_files.append(Path(alias_def))
                 alias_dicts.append(
                     self._load_aliases_from_file(Path(alias_def)))
 
-        return alias_dicts
+        return alias_dicts, alias_files
 
     def _load_aliases_from_file(self, aliases_path):
         """Load alias definitions from file."""
@@ -786,14 +798,15 @@ class DataCollection:
         """
 
         # Check for conflicts within these definitions
-        new_aliases = self._merge_aliases(
-            [self._aliases] + self._parse_aliases(alias_defs))
+        new_aliases, new_alias_files = self._parse_aliases(alias_defs)
+        new_aliases = self._merge_aliases([self._aliases] + new_aliases)
+        alias_files = self._merge_alias_files(self._alias_files, new_alias_files)
 
         return DataCollection(
             self.files, sources_data=self._sources_data,
             train_ids=self.train_ids, aliases=new_aliases,
             inc_suspect_trains=self.inc_suspect_trains,
-            is_single_run=self.is_single_run
+            is_single_run=self.is_single_run, alias_files=alias_files
         )
 
     def only_aliases(self, *alias_defs, strict=False, require_all=False):
@@ -818,8 +831,9 @@ class DataCollection:
         """
 
         # Create new aliases.
-        aliases = self._merge_aliases(
-            [self._aliases] + self._parse_aliases(alias_defs))
+        new_aliases, new_alias_files = self._parse_aliases(alias_defs)
+        aliases = self._merge_aliases([self._aliases] + new_aliases)
+        alias_files = self._merge_alias_files(self._alias_files, new_alias_files)
 
         # Set of sources aliased.
         aliased_sources = {literal for literal in aliases.values()
@@ -865,6 +879,7 @@ class DataCollection:
         # Create a new DataCollection from selecting and add the aliases.
         new_data = self.select(selection, require_all=require_all)
         new_data._aliases = aliases
+        new_data._alias_files = alias_files
 
         return new_data
 
@@ -1092,7 +1107,7 @@ class DataCollection:
         return DataCollection(
             files, sources_data, train_ids=train_ids, aliases=self._aliases,
             inc_suspect_trains=self.inc_suspect_trains,
-            is_single_run=self.is_single_run
+            is_single_run=self.is_single_run, alias_files=self._alias_files
         )
 
     def deselect(self, seln_or_source_glob, key_glob='*'):
@@ -1129,7 +1144,7 @@ class DataCollection:
         return DataCollection(
             files, sources_data=sources_data, train_ids=self.train_ids,
             aliases=self._aliases, inc_suspect_trains=self.inc_suspect_trains,
-            is_single_run=self.is_single_run,
+            is_single_run=self.is_single_run, alias_files=self._alias_files
         )
 
     def select_trains(self, train_range):
@@ -1164,7 +1179,7 @@ class DataCollection:
         return DataCollection(
             files, sources_data=sources_data, train_ids=new_train_ids,
             aliases=self._aliases, inc_suspect_trains=self.inc_suspect_trains,
-            is_single_run=self.is_single_run,
+            is_single_run=self.is_single_run, alias_files=self._alias_files
         )
 
     def split_trains(self, parts=None, trains_per_part=None):
@@ -1207,7 +1222,7 @@ class DataCollection:
             yield DataCollection(
                 files, sources_data=sources_data_part, train_ids=train_ids,
                 aliases=self._aliases, inc_suspect_trains=self.inc_suspect_trains,
-                is_single_run=self.is_single_run,
+                is_single_run=self.is_single_run, alias_files=self._alias_files
             )
 
     def _check_source_conflicts(self):

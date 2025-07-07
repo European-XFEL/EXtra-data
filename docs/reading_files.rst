@@ -132,8 +132,10 @@ will print something like this (note the ✗ for an invalid alias)::
       agipd3-data: image.data
       agipd3-mask: image.mask
 
-Aliases can be used for selections as well, see
-:meth:`DataCollection.AliasIndexer.select` for more details.
+If aliases were loaded from a file, then clickable links to them will be
+displayed in the ``run.alias`` output (or you can call
+``run.alias.jhub_links()`` explicitly). Aliases can be used for selections as
+well, see :meth:`DataCollection.AliasIndexer.select` for more details.
 
 
 

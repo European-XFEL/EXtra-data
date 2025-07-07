@@ -5,8 +5,20 @@ import h5py
 import numpy as np
 import pytest
 from tempfile import TemporaryDirectory
+import yaml
 
 from . import make_examples
+
+
+# Make Pyyaml write tuples as regular lists, otherwise it adds a tag to the
+# element that makes it impossible to deserialize without a custom constructor.
+def tuple_representer(dumper, data):
+    return dumper.represent_list(list(data))
+
+class SafeDumperWithTuples(yaml.SafeDumper):
+     pass
+
+yaml.add_representer(tuple, tuple_representer, Dumper=SafeDumperWithTuples)
 
 
 @pytest.fixture(scope='session', params=['0.5', '1.0', '1.2'])
@@ -77,6 +89,14 @@ def mock_sa3_control_aliases():
         'bogus-source': 'SA4_XTD20_XGM/XGM/DOOCS',
         'bogus-key': ('SA3_XTD10_XGM/XGM/DOOCS', 'foo')
     }
+
+@pytest.fixture
+def mock_sa3_control_aliases_yaml(mock_sa3_control_aliases, tmp_path):
+    aliases_path = tmp_path / "mock_sa3_control_aliases.yaml"
+    with aliases_path.open("w") as f:
+        yaml.dump(mock_sa3_control_aliases, f, Dumper=SafeDumperWithTuples)
+
+    return aliases_path
 
 
 @pytest.fixture(scope='module')

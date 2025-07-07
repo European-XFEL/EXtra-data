@@ -93,8 +93,21 @@ class AliasIndexer:
         if len(source_key_aliases) == 0:
             return "No aliases have been loaded."
 
+        # Print links to the alias files
+        output_lines = []
+        n_files = len(self.file_paths())
+        links = self.jhub_links()
+        if n_files == 1:
+            path = self.file_paths()[0]
+            output_lines.append(f"Alias file: {links.get(path, path)}\n")
+        elif n_files > 1:
+            output_lines.append(f"Alias files:")
+            for i, path in enumerate(self.file_paths()):
+                line_end = "\n" if i == n_files - 1 else ""
+                output_lines.append(f"- {links.get(path, path)}{line_end}")
+
         # Print the aliases
-        output_lines = ["Loaded aliases:"]
+        output_lines.append("Loaded aliases:")
         for source, alias_keys in source_key_aliases.items():
             if len(alias_keys) == 0:
                 # If there are no keys then this is a plain source alias
@@ -166,6 +179,23 @@ class AliasIndexer:
                 res.append(item)
 
         return res
+
+    def file_paths(self):
+        """Return any file paths that were used to add aliases."""
+        return self.data._alias_files
+
+    def jhub_links(self):
+        """Return a dict of alias file paths to clickable Jupyterhub links.
+
+        Note that a link will only be generated if the file path is under ``/gpfs``.
+        """
+        links = { }
+        for p in self.file_paths():
+            path_from_home = str(p).replace("/gpfs", "GPFS")
+            if path_from_home.startswith("GPFS"):
+                links[p] = f"https://max-jhub.desy.de/hub/user-redirect/lab/tree/{path_from_home}"
+
+        return links
 
     def select(self, seln_or_alias, key_glob='*', require_all=False,
                require_any=False):
