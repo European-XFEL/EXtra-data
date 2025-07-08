@@ -33,6 +33,11 @@ def test_open_run(mock_spb_raw_and_proc_run):
         run = open_run(proposal=np.int64(2012), run=np.uint16(238))
         assert {f.filename for f in run.files} == paths
 
+        # With a proposal path
+        prop_path = Path(mock_data_root, 'SPB', '201830', 'p002012')
+        run = open_run(proposal=prop_path, run=238)
+        assert {f.filename for f in run.files} == paths
+
         # Proc folder
         proc_run = open_run(proposal=2012, run=238, data='proc')
 

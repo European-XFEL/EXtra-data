@@ -2067,14 +2067,17 @@ def open_run(
 
         return base_dc
 
-    if isinstance(proposal, str):
-        if ('/' not in proposal) and not proposal.startswith('p'):
-            proposal = 'p' + proposal.rjust(6, '0')
+    if isinstance(proposal, os.PathLike):
+        prop_dir = os.fsdecode(proposal)
     else:
-        # Allow integers, including numpy integers
-        proposal = 'p{:06d}'.format(index(proposal))
+        if isinstance(proposal, str):
+            if ('/' not in proposal) and not proposal.startswith('p'):
+                proposal = 'p' + proposal.rjust(6, '0')
+        else:
+            # Allow integers, including numpy integers
+            proposal = 'p{:06d}'.format(index(proposal))
 
-    prop_dir = find_proposal(proposal)
+        prop_dir = find_proposal(proposal)
 
     if isinstance(run, str):
         if run.startswith('r'):
