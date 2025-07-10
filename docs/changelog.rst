@@ -1,6 +1,33 @@
 Release Notes
 =============
 
+.. _rel-1.22:
+
+1.22
+----
+
+2025-07-11
+
+- Train selection now accepts boolean arrays, either Numpy arrays of suitable
+  length or xarray arrays with a ``trainId`` coordinate (:ghpull:`612`).
+- The ``run.alias`` repr now includes links to edit any alias files in use, via
+  max-jhub (:ghpull:`640`).
+- The :option:`--detail` option to :ref:`cmd-lsxfel` will do a substring match
+  if the argument doesn't look like a glob pattern (containing ``*?[``) (:ghpull:`628`).
+- :ref:`cmd-lsxfel` has a new :option:`--aggregator` option to show the data
+  aggregator saving each source (:ghpull:`625`).
+- Fix tab completion on aliases (:ghpull:`626`).
+- Fix handling of CONTROL sources with only RUN keys (:ghpull:`622`).
+- Fix streaming karabo-bridge data from files including control data with arrays
+  of strings (:ghpull:`616`).
+- :func:`open_run` accepts a path-like object for ``proposal=`` (:ghpull:`641`).
+- Make ``zlib_into`` an optional dependency rather than absolutely required
+  (:ghpull:`621`).
+- Fix a rare race condition when creating a virtual overview file, which could
+  allow something to read a partially written file (:ghpull:`624`).
+- Support for custom error messages in :exc:`SourceNameError` (:ghpull:`619`).
+
+
 .. _rel-1.21:
 
 1.21
