@@ -12,10 +12,10 @@ Release Notes
   length or xarray arrays with a ``trainId`` coordinate (:ghpull:`612`).
 - The ``run.alias`` repr now includes links to edit any alias files in use, via
   max-jhub (:ghpull:`640`).
-- The :option:`--detail` option to :ref:`cmd-lsxfel` will do a substring match
-  if the argument doesn't look like a glob pattern (containing ``*?[``) (:ghpull:`628`).
-- :ref:`cmd-lsxfel` has a new :option:`--aggregator` option to show the data
-  aggregator saving each source (:ghpull:`625`).
+- The :option:`lsxfel --detail` option will do a substring match if the argument
+  doesn't look like a glob pattern (containing ``*?[``) (:ghpull:`628`).
+- New :option:`lsxfel --aggregators` option to show the data aggregator saving
+  each source (:ghpull:`625`).
 - Fix tab completion on aliases (:ghpull:`626`).
 - Fix handling of CONTROL sources with only RUN keys (:ghpull:`622`).
 - Fix streaming karabo-bridge data from files including control data with arrays
