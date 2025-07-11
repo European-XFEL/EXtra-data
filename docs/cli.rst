@@ -30,6 +30,11 @@ file:
 
    This option can make ``lsxfel`` considerably slower.
 
+.. option:: --aggregators, -g
+
+   Show the data aggregator in which each source is saved. This option
+   can make ``lsxfel`` considerably slower.
+
 .. _cmd-validate:
 
 ``extra-data-validate``
