@@ -313,6 +313,7 @@ def test_alias_deselect(mock_sa3_control_data, mock_sa3_control_aliases):
     ])
     assert subrun.all_sources == run.all_sources
     assert subrun.alias['sa3-xgm'].keys() == {
+        'state.value', 'state.timestamp',
         'beamPosition.ixPos.value', 'beamPosition.ixPos.timestamp',
         'beamPosition.iyPos.value', 'beamPosition.iyPos.timestamp',
         'pollingInterval.value', 'pollingInterval.timestamp'}

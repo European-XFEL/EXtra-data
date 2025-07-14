@@ -1,9 +1,11 @@
 import numpy as np
+import h5py
 
 from .base import DeviceBase
 
 class XGM(DeviceBase):
     control_keys = [
+        ('state', h5py.string_dtype(), ()),
         ('beamPosition/ixPos', 'f4', ()),
         ('beamPosition/iyPos', 'f4', ()),
         ('current/bottom/output', 'f4', ()),
@@ -83,3 +85,7 @@ class XGM(DeviceBase):
         ds = grp['value']
         ds.attrs['alias'] = b'IX.POS'
         ds.attrs['daqPolicy'] = np.array([1], dtype=np.int32)
+
+        grp = f[f'CONTROL/{self.device_id}/state']
+        grp['value'][:self.ntrains] = b'ON'
+        grp['value'][:5] = b'OFF'

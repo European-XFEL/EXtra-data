@@ -396,6 +396,16 @@ class KeyData:
             )
             dest_cursor = dest_chunk_end
 
+        if out.dtype.hasobject:
+            # Can current only occur for string properties, convert from
+            # object array of bytes to to object array of strings.
+            # This will fail for structured dtypes containing strings,
+            # but such are not known to us yet.
+            out = np.array(
+                [x.decode('utf8', 'surrogateescape') for x in out.flat],
+                dtype=object
+            ).reshape(out.shape)
+
         return out
 
     def train_id_coordinates(self):

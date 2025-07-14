@@ -332,6 +332,15 @@ def test_ndarray_out(mock_spb_raw_run):
     assert buf_in is buf_out
 
 
+def test_string_arrays(mock_spb_raw_run):
+    f = RunDirectory(mock_spb_raw_run)
+    state = f['SPB_XTD9_XGM/DOOCS/MAIN', 'state']
+
+    for data in [state.ndarray(), state.xarray(), state.series()]:
+        assert data.dtype.hasobject
+        assert (data[3:8] == ['OFF', 'OFF', 'ON', 'ON', 'ON']).all()
+
+
 def test_xarray_structured_data(mock_remi_run):
     run = RunDirectory(mock_remi_run)
     dset = run['SQS_REMI_DLD6/DET/TOP:output', 'rec.hits'].xarray()
