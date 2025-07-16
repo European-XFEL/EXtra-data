@@ -6,7 +6,7 @@ Release Notes
 1.22
 ----
 
-2025-07-11
+2025-07-16
 
 - Train selection now accepts boolean arrays, either Numpy arrays of suitable
   length or xarray arrays with a ``trainId`` coordinate (:ghpull:`612`).
@@ -16,7 +16,10 @@ Release Notes
   doesn't look like a glob pattern (containing ``*?[``) (:ghpull:`628`).
 - New :option:`lsxfel --aggregators` option to show the data aggregator saving
   each source (:ghpull:`625`).
+- Reading compressed detector data in parallel (added in :ref:`rel-1.21`) can
+  now work around 15% faster (:ghpull:`633`)
 - Fix tab completion on aliases (:ghpull:`626`).
+- Fix :meth:`~.as_single_value` with string data (:ghpull:`623`).
 - Fix handling of CONTROL sources with only RUN keys (:ghpull:`622`).
 - Fix streaming karabo-bridge data from files including control data with arrays
   of strings (:ghpull:`616`).
@@ -26,6 +29,12 @@ Release Notes
 - Fix a rare race condition when creating a virtual overview file, which could
   allow something to read a partially written file (:ghpull:`624`).
 - Support for custom error messages in :exc:`SourceNameError` (:ghpull:`619`).
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+- String data stored from control sources is now returned as ``str`` objects
+  rather than ``bytes`` from various methods (:ghpull:`623`).
 
 
 .. _rel-1.21:
