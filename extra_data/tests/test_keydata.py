@@ -11,6 +11,7 @@ from . import make_examples
 from .mockdata import write_file
 from .mockdata.xgm import XGM
 
+
 def test_get_keydata(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
     print(run.instrument_sources)
@@ -42,6 +43,7 @@ def test_get_keydata(mock_spb_raw_run):
     # Ensure KeyData is not accidentally iterable
     with pytest.raises(TypeError):
         iter(xgm_beam_x)
+
 
 def test_select_trains(mock_spb_raw_run):
     run = RunDirectory(mock_spb_raw_run)
@@ -277,6 +279,7 @@ def test_single_value(mock_sa3_control_data, monkeypatch):
 
     imager = f['SA3_XTD10_IMGFEL/CAM/BEAMVIEW:daqOutput', 'data.image.pixels']
     flux = f['SA3_XTD10_XGM/XGM/DOOCS', 'pulseEnergy.photonFlux']
+    state = f['SA3_XTD10_XGM/XGM/DOOCS', 'state']
 
     # Try without data for a source and key.
     with pytest.raises(NoDataError):
@@ -309,6 +312,17 @@ def test_single_value(mock_sa3_control_data, monkeypatch):
     assert flux.as_single_value(rtol=1, reduce_by=np.mean) == np.mean(data)
     assert flux.as_single_value(atol=len(data)-1, reduce_by='first') == 0
 
+    # Try strings.
+    assert state[5:].as_single_value() == 'ON'
+
+    with pytest.raises(ValueError):
+        # Contains two unique values.
+        state.as_single_value()
+
+    with pytest.raises(TypeError):
+        # Does not accept reduce_by
+        state.as_single_value(reduce_by='mean')
+
     # Try vector data.
     intensity = f['SA3_XTD10_XGM/XGM/DOOCS:output', 'data.intensityTD']
     data = np.repeat(data, intensity.shape[1]).reshape(-1, intensity.shape[-1])
@@ -330,6 +344,15 @@ def test_ndarray_out(mock_spb_raw_run):
 
     np.testing.assert_allclose(buf_new, buf_out)
     assert buf_in is buf_out
+
+
+def test_string_arrays(mock_spb_raw_run):
+    f = RunDirectory(mock_spb_raw_run)
+    state = f['SPB_XTD9_XGM/DOOCS/MAIN', 'state']
+
+    for data in [state.ndarray(), state.xarray(), state.series()]:
+        assert data.dtype.hasobject
+        assert (data[3:8] == ['OFF', 'OFF', 'ON', 'ON', 'ON']).all()
 
 
 def test_xarray_structured_data(mock_remi_run):
@@ -396,6 +419,6 @@ def test_units(mock_sa3_control_data):
 
     # Check that it still works after selecting 0 trains
     assert xgm_intensity.select_trains(np.s_[:0]).units == 'μJ'
-    
+
     # units are added to xarray's attributes
     assert xgm_intensity.xarray().attrs['units'] == 'μJ'
