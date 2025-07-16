@@ -23,7 +23,7 @@ Release Notes
 - Fix handling of CONTROL sources with only RUN keys (:ghpull:`622`).
 - Fix streaming karabo-bridge data from files including control data with arrays
   of strings (:ghpull:`616`).
-- :func:`open_run` accepts a path-like object for ``proposal=`` (:ghpull:`641`).
+- :func:`~.open_run` accepts a path-like object for ``proposal=`` (:ghpull:`641`).
 - Make ``zlib_into`` an optional dependency rather than absolutely required
   (:ghpull:`621`).
 - Fix a rare race condition when creating a virtual overview file, which could
