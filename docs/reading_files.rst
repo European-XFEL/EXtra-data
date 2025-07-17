@@ -110,6 +110,7 @@ You can then access sources and keys by aliases through the
 .. code-block:: yaml
 
    xgm: SA2_XTD1_XGM/XGM/DOOCS
+   energy-kev: [MID_XTD1_UND/DOOCS/ENERGY, actualPosition]
    MID_DET_AGIPD1M-1/DET/3CH0:xtdf:
        agipd3-data: image.data
        agipd3-mask: image.mask
@@ -117,6 +118,7 @@ You can then access sources and keys by aliases through the
 Then we would be able to run::
 
    run.alias["xgm"]         # SourceData of the XGM
+   run.alias["energy-kev"]  # KeyData for the undulator actualPosition property
    run.alias["agipd3-data"] # KeyData for image.data
    run.alias["agipd3-mask"] # KeyData for image.mask
 
