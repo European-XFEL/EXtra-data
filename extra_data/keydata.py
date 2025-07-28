@@ -103,6 +103,9 @@ class KeyData:
         """
         return (sum(c.total_count for c in self._data_chunks),) + self.entry_shape
 
+    def __len__(self):
+        return self.shape[0]
+
     @property
     def nbytes(self):
         """The number of bytes this data would take up in memory."""
