@@ -53,6 +53,11 @@ def test_keys(mock_spb_raw_run):
     xgm_output = run['SPB_XTD9_XGM/DOOCS/MAIN:output']
     assert xgm_output.one_key() in xgm_output.keys()
 
+    # one_key() may be called with an empty index group for CONTROL
+    # sources, which had a bug in combination with a key selection.
+    assert xgm.one_key('') in xgm.keys()
+    assert xgm.select_keys('beamPosition.*').one_key('') in xgm.keys()
+
     # Test one_key() with index group.
     am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf']
     assert am0.one_key('image').startswith('image.')
