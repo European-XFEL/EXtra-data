@@ -130,14 +130,14 @@ class FileAccess(metaclass=MetaFileAccess):
     # Regular expressions to extract path and filename information for HDF5
     # files saved on the EuXFEL computing infrastructure.
     euxfel_path_pattern = re.compile(
-        # A path may have three different prefixes depending on the storage location.
-        r'\/(gpfs\/exfel\/exp|gpfs\/exfel\/d|pnfs\/xfel.eu\/exfel\/archive\/XFEL)'
+        # A path may have four different prefixes depending on the storage location.
+        r'\/(gpfs\/exfel\/exp|gpfs\/exfel\/d|gpfs\/exfel\/u|pnfs\/xfel.eu\/exfel\/archive\/XFEL)'
 
         # The first prefix above uses the pattern <instrument>/<cycle>/<proposal>/<class>/<run>,
-        # the other two use <class>/<instrument>/<cycle>/<proposal>
-        r'\/(\w+)\/(\d{6}|\w+)\/(\d{6}|p\d{6})\/(p\d{6}|[a-z]+)\/r\d{4}')
+        # all others use <class>/<instrument>/<cycle>/<proposal>
+        r'\/(\w+)\/(\d{6}|\w+)\/(\d{6}|p\d{6})\/(p\d{6}|[a-z]+)\/(?:r(\d{4})|.extra_data)')
 
-    euxfel_filename_pattern = re.compile(r'([A-Z]+)-R\d{4}-(\w+)-S(\d{5}).h5')
+    euxfel_filename_pattern = re.compile(r'([A-Z]+)-R(\d{4})-(\w+)(?:-S(\d{5}))?.h5')
 
     def __init__(self, filename, _cache_info=None):
         self.filename = osp.abspath(filename)
@@ -213,19 +213,19 @@ class FileAccess(metaclass=MetaFileAccess):
 
         if m:
             if m[1] == 'gpfs/exfel/exp':
-                self._path_infos = (m[5], m[2], m[3])  # ONC path.
+                self._path_infos = (m[5], m[2], m[3], int(m[4][1:]))  # ONC path.
             else:
-                self._path_infos = (m[2], m[3], m[4])  # Maxwell path.
+                self._path_infos = (m[2], m[3], m[4], int(m[5][1:]))  # Maxwell path.
         else:
-            self._path_infos = (None, None, None)
+            self._path_infos = (None, None, None, None)
 
     def _evaluate_filename_infos(self):
         m = self.euxfel_filename_pattern.match(osp.basename(self.filename))
 
         if m:
-            self._filename_infos = (m[1], m[2], int(m[3]))
+            self._filename_infos = (m[1], int(m[2][1:]), m[3], int(m[4]) if m[3] != 'OVERVIEW' else 0)
         else:
-            self._filename_infos = (None, None, None)
+            self._filename_infos = (None, None, None, None)
 
     @property
     def storage_class(self):
@@ -246,22 +246,34 @@ class FileAccess(metaclass=MetaFileAccess):
         return self._path_infos[2]
 
     @property
+    def proposal(self):
+        if self._path_infos is None:
+            self._evaluate_path_infos()
+        return self._path_infos[3]
+
+    @property
     def data_category(self):
         if self._filename_infos is None:
             self._evaluate_filename_infos()
         return self._filename_infos[0]
 
     @property
-    def aggregator(self):
+    def run(self):
         if self._filename_infos is None:
             self._evaluate_filename_infos()
         return self._filename_infos[1]
 
     @property
-    def sequence(self):
+    def aggregator(self):
         if self._filename_infos is None:
             self._evaluate_filename_infos()
         return self._filename_infos[2]
+
+    @property
+    def sequence(self):
+        if self._filename_infos is None:
+            self._evaluate_filename_infos()
+        return self._filename_infos[3]
 
     @property
     def valid_train_ids(self):
