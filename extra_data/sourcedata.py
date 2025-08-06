@@ -195,7 +195,7 @@ class SourceData:
         any index group.
         """
         if self.sel_keys is not None:
-            if index_group is None:
+            if index_group is None or self.is_control:
                 return next(iter(self.sel_keys))
 
             prefix = f'{index_group}.'
