@@ -153,6 +153,20 @@ def write_metadata(h5file, data_sources, chunksize=16, format_version='0.5'):
     if N % chunksize:
         N += chunksize - (N % chunksize)
 
+    # Split off auxiliary sources.
+    all_sources = data_sources.copy()
+    data_sources.clear()
+    reduction_sources = []
+    errata_sources = []
+
+    for ds in all_sources:
+        if ds.startswith('REDUCTION'):
+            reduction_sources.append(ds)
+        elif ds.startswith('ERRATA'):
+            errata_sources.append(ds)
+        else:
+            data_sources.append(ds)
+
     root = [ds.split('/', 1)[0] for ds in data_sources]
     devices = [ds.split('/', 1)[1] for ds in data_sources]
 
@@ -170,6 +184,13 @@ def write_metadata(h5file, data_sources, chunksize=16, format_version='0.5'):
     devices_ds = data_sources_grp.create_dataset('deviceId', (N,),
                                        dtype=vlen_bytes, maxshape=(None,))
     devices_ds[:len(data_sources)] = devices
+
+    if reduction_sources or errata_sources:
+        aux_group = h5file.create_group('METADATA/auxiliarySources')
+        aux_group.create_dataset('REDUCTION', data=reduction_sources,
+                                 dtype=vlen_bytes, maxshape=(None,))
+        aux_group.create_dataset('ERRATA', data=errata_sources,
+                                 dtype=vlen_bytes, maxshape=(None,))
 
     if format_version != '0.5':
         h5file['METADATA/dataFormatVersion'] = [format_version.encode('ascii')]

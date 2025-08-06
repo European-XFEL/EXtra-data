@@ -7,6 +7,9 @@ import numpy as np
 from .mockdata import write_file
 from .mockdata.adc import ADC
 from .mockdata.agipd import AGIPD1MFPGA, AGIPD1MPSC, AGIPD500KFPGA, AGIPDMDL
+from .mockdata.auxiliary import (
+    AgipdPulseSelection, LitFrameFinderAux, TrainsOutsideBufferRange
+)
 from .mockdata.base import write_base_index
 from .mockdata.basler_camera import BaslerCamera as BaslerCam
 from .mockdata.dctrl import DCtrl
@@ -324,7 +327,9 @@ def make_reduced_spb_run(dir_path, raw=True, rng=None, format_version='0.5'):
                         '{}-R0238-AGIPD{:0>2}-S00000.h5'.format(prefix, modno))
         write_file(path, [
             AGIPDModule('SPB_DET_AGIPD1M-1/DET/{}CH0'.format(modno), raw=raw,
-                         frames_per_train=frame_counts)
+                         frames_per_train=frame_counts),
+            AgipdPulseSelection(f'PULSE_REDUCTION/SPB_DET_AGIPD1M-1/DET/{modno}CH0'),
+            LitFrameFinderAux('SPB_IRU_AGIPD1M1/REDU/LITFRM')
             ], ntrains=64, chunksize=32, format_version=format_version)
 
         if modno == 9 and not raw:
@@ -336,13 +341,15 @@ def make_reduced_spb_run(dir_path, raw=True, rng=None, format_version='0.5'):
     write_file(osp.join(dir_path, '{}-R0238-DA01-S00000.h5'.format(prefix)),
                [ XGM('SA1_XTD2_XGM/DOOCS/MAIN'),
                  XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
-                 BaslerCam('SPB_IRU_CAM/CAM/SIDEMIC', sensor_size=(1024, 768))
+                 BaslerCam('SPB_IRU_CAM/CAM/SIDEMIC', sensor_size=(1024, 768)),
+                 TrainsOutsideBufferRange('TRAINS_OUTSIDE_BUFFER_RANGE')
                ], ntrains=32, chunksize=32, format_version=format_version)
 
     write_file(osp.join(dir_path, '{}-R0238-DA01-S00001.h5'.format(prefix)),
                [ XGM('SA1_XTD2_XGM/DOOCS/MAIN'),
                  XGM('SPB_XTD9_XGM/DOOCS/MAIN'),
-                 BaslerCam('SPB_IRU_CAM/CAM/SIDEMIC', sensor_size=(1024, 768))
+                 BaslerCam('SPB_IRU_CAM/CAM/SIDEMIC', sensor_size=(1024, 768)),
+                 TrainsOutsideBufferRange('TRAINS_OUTSIDE_BUFFER_RANGE')
                ], ntrains=32, firsttrain=10032, chunksize=32,
                format_version=format_version)
 
