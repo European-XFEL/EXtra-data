@@ -36,7 +36,8 @@ class SourceData:
         self.inc_suspect_trains = inc_suspect_trains
 
     def __repr__(self):
-        return f"<extra_data.SourceData source={self.source!r} " \
+        section_str = f' section={self.section}' if self.is_auxiliary else ''
+        return f"<extra_data.SourceData{section_str} source={self.source!r} " \
                f"for {len(self.train_ids)} trains>"
 
     @property
@@ -48,6 +49,21 @@ class SourceData:
     def is_instrument(self):
         """Whether this source is an instrument source."""
         return self.section == 'INSTRUMENT'
+
+    @property
+    def is_reduction(self):
+        """Whether this source is a reduction source."""
+        return self.section == 'REDUCTION'
+
+    @property
+    def is_errata(self):
+        """Whether this source is an errata source."""
+        return self.section == 'ERRATA'
+
+    @property
+    def is_auxiliary(self):
+        """Whether this source is an auxiliary source."""
+        return self.is_reduction or self.is_errata
 
     @property
     def is_legacy(self):
@@ -213,8 +229,8 @@ class SourceData:
     @property
     def index_groups(self) -> set:
         """The part of keys needed to look up index data."""
-        if self.is_instrument:
-            # For INSTRUMENT sources, the INDEX is saved by
+        if not self.is_control:
+            # For non-CONTROL sources, the INDEX is saved by
             # key group, which is the first hash component. In
             # many cases this is 'data', but not always.
             if self.sel_keys is None:
@@ -456,9 +472,9 @@ class SourceData:
         if not (self.is_single_run or allow_multi_run):
             raise MultiRunError()
 
-        if self.is_instrument:
+        if not self.is_control:
             raise ValueError('Only CONTROL sources have run values, '
-                             f'{self.source} is an INSTRUMENT source')
+                             f'{self.source} is a/an {self.section} source')
 
         # Arbitrary file - should be the same across a run
         ds = self.files[0].file['RUN'][self.source].get(key.replace('.', '/'))
@@ -481,9 +497,9 @@ class SourceData:
         if not self.is_single_run:
             raise MultiRunError()
 
-        if self.is_instrument:
+        if not self.is_control:
             raise ValueError('Only CONTROL sources have run values, '
-                             f'{self.source} is an INSTRUMENT source')
+                             f'{self.source} is a/an {self.section} source')
 
         res = {}
         def visitor(path, obj):
