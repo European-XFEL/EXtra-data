@@ -17,19 +17,39 @@ class AuxiliaryIndexer:
         # {(source, section) -> {aggregator -> files}}
         files_by_sources = dict()
 
-        for f in files:
-            for source in f.reduction_sources:
-                files_by_sources.setdefault((source, 'REDUCTION'), []).append(f)
+        for fa in files:
+            aggregator = fa.aggregator
 
-            for source in f.errata_sources:
-                files_by_sources.setdefault((source, 'ERRATA'), []).append(f)
+            for source in fa.reduction_sources:
+                files_by_sources.setdefault((source, 'REDUCTION'), dict()) \
+                    .setdefault(aggregator, []).append(fa)
 
-        self._sources_data = {
-            src: SourceData(src, sel_keys=None, train_ids=train_ids,
-                            files=files, section=section, canonical_name=src,
-                            is_single_run=is_single_run,
-                            inc_suspect_trains=inc_suspect_trains)
-            for ((src, section), files) in files_by_sources.items()}
+            for source in fa.errata_sources:
+                files_by_sources.setdefault((source, 'ERRATA'), dict()) \
+                    .setdefault(aggregator, []).append(fa)
+
+        self._sources_data = dict()
+
+        for (src, section), files_by_aggregator in files_by_sources.items():
+            with_prefix = True
+
+            if len(files_by_aggregator) == 1:
+                # Don't prefix aggregator if there is exactly one
+                # aggregator with this source and it's the suffix of an
+                # actual source in the same aggregator.
+                for fa in next(iter(files_by_aggregator.values())):
+                    for real_src in fa.all_sources:
+                        if src.endswith(real_src):
+                            with_prefix = False
+                            break
+
+            self._sources_data.update({
+                f'{aggregator}@{src}' if with_prefix else src: SourceData(
+                    src, sel_keys=None, train_ids=train_ids,
+                    files=files, section=section, canonical_name=src,
+                    is_single_run=is_single_run,
+                    inc_suspect_trains=inc_suspect_trains)
+                for aggregator, files in files_by_aggregator.items()})
 
     @staticmethod
     def _resolve_voview_files(files):
@@ -169,9 +189,17 @@ class AuxiliaryIndexer:
 
     def _get_source_data(self, source):
         if source not in self._sources_data:
-            msg = f'This data has no auxiliary source named {source!r}.\n' \
-                  'See data.auxiliary.all_sources for available auxiliary ' \
-                  'sources.'
+            # Check whether this source may need to be prefixed with an
+            # aggregator to display a more specific message.
+            if source in {s.partition('@')[2] for s in self._sources_data}:
+                msg = 'This data has one or more duplicates of an auxiliary ' \
+                      f'source named {source!r}.\nSee ' \
+                      'data.auxiliary.all_sources for available prefixes.'
+            else:
+                msg = f'This data has no auxiliary source named {source!r}.' \
+                      '\nSee data.auxiliary.all_sources for available ' \
+                      'auxiliary sources.'
+
             raise SourceNameError(source, msg)
 
         return self._sources_data[source]
