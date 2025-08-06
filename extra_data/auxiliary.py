@@ -16,18 +16,29 @@ class AuxiliaryIndexer:
         files_by_sources = dict()
 
         for f in files:
+            aggregator = f.aggregator
+
             for source in f.reduction_sources:
-                files_by_sources.setdefault((source, 'REDUCTION'), []).append(f)
+                files_by_sources.setdefault((source, 'REDUCTION'), dict()) \
+                    .setdefault(aggregator, []).append(f)
 
             for source in f.errata_sources:
-                files_by_sources.setdefault((source, 'ERRATA'), []).append(f)
+                files_by_sources.setdefault((source, 'ERRATA'), dict()) \
+                    .setdefault(aggregator, []).append(f)
 
-        self._sources_data = {
-            src: SourceData(src, sel_keys=None, train_ids=train_ids,
-                            files=files, section=section, canonical_name=src,
-                            is_single_run=is_single_run,
-                            inc_suspect_trains=inc_suspect_trains)
-            for ((src, section), files) in files_by_sources.items()}
+        self._sources_data = dict()
+
+        for (src, section), files_by_aggregator in files_by_sources.items():
+            # Prefix aggregator if necessary.
+            with_prefix = len(files_by_aggregator) > 1
+
+            self._sources_data.update({
+                f'{aggregator}@{src}' if with_prefix else src: SourceData(
+                    src, sel_keys=None, train_ids=train_ids,
+                    files=files, section=section, canonical_name=src,
+                    is_single_run=is_single_run,
+                    inc_suspect_trains=inc_suspect_trains)
+                for aggregator, files in files_by_aggregator.items()})
 
     @staticmethod
     def _resolve_voview_files(files):
@@ -144,9 +155,17 @@ class AuxiliaryIndexer:
 
     def _get_source_data(self, source):
         if source not in self._sources_data:
-            msg = f'This data has no auxiliary source named {source!r}.\n' \
-                  'See data.auxiliary.all_sources for available auxiliary ' \
-                  'sources.'
+            # Check whether this source may need to be prefixed with an
+            # aggregator to display a more specific message.
+            if source in {s.partition('@')[2] for s in self._sources_data}:
+                msg = 'This data has one or more duplicates of an auxiliary ' \
+                      f'source named {source!r}.\nSee ' \
+                      'data.auxiliary.all_sources for available prefixes.'
+            else:
+                msg = f'This data has no auxiliary source named {source!r}.' \
+                      '\nSee data.auxiliary.all_sources for available ' \
+                      'auxiliary sources.'
+
             raise SourceNameError(source, msg)
 
         return self._sources_data[source]
