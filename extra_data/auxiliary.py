@@ -94,7 +94,7 @@ class AuxiliaryIndexer:
         def src_data_detail(s, keys, prefix=''):
             """Detail for how much data is present for an instrument group"""
             if not keys:
-                return
+                return ''
 
             sd = self[s]
             counts = sd[list(keys)[0]].data_counts()
@@ -105,12 +105,16 @@ class AuxiliaryIndexer:
 
         def keys_detail(s, keys, prefix=''):
             """Detail for a group of keys"""
+            keys_str = ''
+
             for k in keys:
                 kd = self[s, k]
                 entry_info = f', entry shape {kd.entry_shape}'  \
                     if kd.entry_shape else ''
 
-                return f'{prefix}{k}\t[{kd.dtype}{entry_info}]\n'
+                keys_str += f'{prefix}{k}\t[{kd.dtype}{entry_info}]\n'
+
+            return keys_str
 
         info_str += f'{len(sources)} {label} sources:\n'
 
