@@ -33,7 +33,6 @@ import h5py
 import numpy as np
 
 from . import locality, voview
-from .aliases import AliasIndexer
 from .exceptions import (MultiRunError, PropertyNameError, SourceNameError,
                          TrainIDError)
 from .file_access import FileAccess
@@ -122,7 +121,12 @@ class DataCollection:
         # from, the actual aliases are stored in _aliases.
         self._alias_files = [] if alias_files is None else alias_files
         self._aliases = aliases or {}
+
+        from .aliases import AliasIndexer
         self.alias = AliasIndexer(self)
+
+        # The auxiliary indexer is created on demand.
+        self._auxiliary = None
 
         # Throw an error if we have conflicting data for the same source
         self._check_source_conflicts()
@@ -237,6 +241,17 @@ class DataCollection:
     def detector_sources(self):
         return set(filter(DETECTOR_SOURCE_RE.match, self.instrument_sources)) \
             - self.legacy_sources.keys()
+
+    @property
+    def auxiliary(self):
+        if self._auxiliary is None:
+            # Lazy import to prevent cyclical dependency.
+            from .auxiliary import AuxiliaryIndexer
+            self._auxiliary = AuxiliaryIndexer(
+                self.train_ids, self.files, self.is_single_run,
+                self.inc_suspect_trains)
+
+        return self._auxiliary
 
     def _check_field(self, source, key):
         if source not in self.all_sources:
@@ -1278,7 +1293,8 @@ class DataCollection:
         return f"<extra_data.DataCollection for {len(self.all_sources)} " \
                f"sources and {len(self.train_ids)} trains>"
 
-    def info(self, details_for_sources=(), with_aggregators=False):
+    def info(self, details_for_sources=(), with_aggregators=False,
+             with_auxiliary=False):
         """Show information about the selected data.
         """
         details_sources_re = [re.compile(fnmatch.translate(p))
@@ -1463,6 +1479,10 @@ class DataCollection:
                 print(' -', f'{legacy_det}/*', '->', f'{canonical_det}/*',
                       f'({len(legacy_sources)})')
             print()
+
+        if with_auxiliary:
+            self.auxiliary.info(details_for_sources=details_for_sources,
+                                with_aggregators=with_aggregators)
 
     def plot_missing_data(self, min_saved_pct=95, expand_instrument=False):
         """Plot sources that have missing data for some trains.
