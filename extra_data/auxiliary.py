@@ -7,6 +7,8 @@ from . import DataCollection, H5File, FileAccess, SourceData, SourceNameError
 
 
 class AuxiliaryIndexer:
+    """Enables item access to auxiliary sources."""
+
     def __init__(self, train_ids, files, is_single_run, inc_suspect_trains):
         # Resolve any voview files if present as they lack the auxiliary
         # sources present in their source files.
