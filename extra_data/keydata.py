@@ -69,7 +69,8 @@ class KeyData:
         return [c for c in self._data_chunks if c.total_count]
 
     def __repr__(self):
-        return f"<extra_data.KeyData source={self.source!r} key={self.key!r} " \
+        section_str = f' section={self.section}' if self.is_auxiliary else ''
+        return f"<extra_data.KeyData{section_str} source={self.source!r} key={self.key!r} " \
                f"for {len(self.train_ids)} trains>"
 
     @property
@@ -83,9 +84,24 @@ class KeyData:
         return self.section == 'INSTRUMENT'
 
     @property
+    def is_reduction(self):
+        """Whether this key belongs to a reduction source."""
+        return self.section == 'REDUCTION'
+
+    @property
+    def is_errata(self):
+        """Whether this key belongs to an errata source."""
+        return self.section == 'ERRATA'
+
+    @property
+    def is_auxiliary(self):
+        """Whether this keys belolngs to an auxiliary source."""
+        return self.is_reduction or self.is_errata
+
+    @property
     def index_group(self):
         """The part of the key needed to look up index data"""
-        if self.section == 'INSTRUMENT':
+        if not self.is_control:
             return self.key.partition('.')[0]
         else:
             return ''
