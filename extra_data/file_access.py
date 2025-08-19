@@ -229,6 +229,10 @@ class FileAccess(metaclass=MetaFileAccess):
             self._filename_infos = (None, None, None)
 
     @property
+    def is_voview(self):
+        return '.source_files' in self.file
+
+    @property
     def storage_class(self):
         if self._path_infos is None:
             self._evaluate_path_infos()
