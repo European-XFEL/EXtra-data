@@ -453,7 +453,7 @@ class KeyData:
             Name extra dimensions in the array. The first dimension is
             automatically called 'train'. The default for extra dimensions
             is dim_0, dim_1, ...
-        roi: numpy.s_[], slice, tuple of slices, or by_index
+        roi: numpy.s_[], slice, or tuple of slices
             The region of interest. This expression selects data in all
             dimensions apart from the first (trains) dimension. If the data
             holds a 1D array for each entry, roi=np.s_[:8] would get the
