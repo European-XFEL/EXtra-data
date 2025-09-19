@@ -386,11 +386,10 @@ def test_xarray_roi_coords(mock_spb_raw_run):
 
     # ROI with an integer to drop a dimension
     roi2 = np.s_[:, 10, 5:15]
-    darr2 = am0.xarray(roi=roi2, extra_dims=['a', 'b'])
+    darr2 = am0.xarray(roi=roi2)
     assert darr2.shape == (64, 2, 10)
-    np.testing.assert_array_equal(darr2.coords['a'], np.arange(0, 2))
-    np.testing.assert_array_equal(darr2.coords['b'], np.arange(5, 15))
-    assert 'c' not in darr2.coords
+    np.testing.assert_array_equal(darr2.coords['dim_0'], np.arange(0, 2))
+    np.testing.assert_array_equal(darr2.coords['dim_1'], np.arange(5, 15))
 
     # Short ROI
     roi3 = np.s_[:1, 10:20]
