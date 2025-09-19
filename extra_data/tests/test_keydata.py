@@ -371,6 +371,44 @@ def test_xarray_structured_data(mock_remi_run):
     np.testing.assert_equal(dset.coords['trainId'], np.arange(10000, 10100))
 
 
+def test_xarray_roi_coords(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.data'][0]
+    assert am0.entry_shape == (2, 512, 128)
+
+    # ROI with slices
+    roi1 = np.s_[:, 10:20, 5:15]
+    darr1 = am0.xarray(roi=roi1, extra_dims=['a', 'b', 'c'])
+    assert darr1.shape == (64, 2, 10, 10)
+    np.testing.assert_array_equal(darr1.coords['a'], np.arange(0, 2))
+    np.testing.assert_array_equal(darr1.coords['b'], np.arange(10, 20))
+    np.testing.assert_array_equal(darr1.coords['c'], np.arange(5, 15))
+
+    # ROI with an integer to drop a dimension
+    roi2 = np.s_[:, 10, 5:15]
+    darr2 = am0.xarray(roi=roi2, extra_dims=['a', 'b'])
+    assert darr2.shape == (64, 2, 10)
+    np.testing.assert_array_equal(darr2.coords['a'], np.arange(0, 2))
+    np.testing.assert_array_equal(darr2.coords['b'], np.arange(5, 15))
+    assert 'c' not in darr2.coords
+
+    # Short ROI
+    roi3 = np.s_[:1, 10:20]
+    darr3 = am0.xarray(roi=roi3, extra_dims=['a', 'b', 'c'])
+    assert darr3.shape == (64, 1, 10, 128)
+    np.testing.assert_array_equal(darr3.coords['a'], np.arange(0, 1))
+    np.testing.assert_array_equal(darr3.coords['b'], np.arange(10, 20))
+    np.testing.assert_array_equal(darr3.coords['c'], np.arange(0, 128))
+
+    # No ROI defined
+    roi4 = ()
+    darr4 = am0.xarray(roi=roi4, extra_dims=['a', 'b', 'c'])
+    assert darr4.shape == (64, 2, 512, 128)
+    np.testing.assert_array_equal(darr4.coords['a'], np.arange(0, 2))
+    np.testing.assert_array_equal(darr4.coords['b'], np.arange(0, 512))
+    np.testing.assert_array_equal(darr4.coords['c'], np.arange(0, 128))
+
+
 @pytest.fixture()
 def run_with_file_no_trains(mock_spb_raw_run):
     extra_file = os.path.join(mock_spb_raw_run, 'RAW-R0238-DA01-S00002.h5')
