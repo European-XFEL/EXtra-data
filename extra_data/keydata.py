@@ -474,6 +474,30 @@ class KeyData:
 
         # Train ID index
         coords = {'trainId': self.train_id_coordinates()}
+
+        if roi:
+            if not isinstance(roi, tuple):
+                roi = (roi,)
+
+            # Add coordinates for ROI
+            # We iterate through the slices in roi, and for each slice, we
+            # create a coordinate array for the corresponding dimension in the
+            # output. An integer in roi drops a dimension, so we only advance
+            # in the output dimensions when we see a slice.
+            out_dim_ax = 0
+            for i, dim_slice in enumerate(roi):
+                if isinstance(dim_slice, slice):
+                    if out_dim_ax < len(extra_dims):
+                        dim_name = extra_dims[out_dim_ax]
+                        start, stop, step = dim_slice.indices(self.entry_shape[i])
+                        coords[dim_name] = np.arange(start, stop, step)
+                    out_dim_ax += 1
+            for dim in range(len(roi), len(self.entry_shape)):
+                coords[extra_dims[dim]] = np.arange(self.entry_shape[dim])
+        else:
+            for i, dim_name in enumerate(extra_dims):
+                coords[dim_name] = np.arange(self.entry_shape[i])
+
         # xarray attributes
         attrs = {}
         if (units := self.units):
