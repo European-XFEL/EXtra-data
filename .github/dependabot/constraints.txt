@@ -1,5 +1,5 @@
 cloudpickle<=3.1.1
-coverage==7.10.6
+coverage==7.10.7
 h5py<3.15.0
 karabo-bridge==0.7.0
 msgpack<=1.1.1
@@ -8,7 +8,7 @@ numpy<2.3.0
 pandas<2.4.0
 Pillow<11.4.0
 psutil==7.1.0
-pyparsing==3.2.4
+pyparsing==3.2.5
 python-dateutil==2.9.0.post0
 pytz==2025.2
 pyzmq==27.1.0
