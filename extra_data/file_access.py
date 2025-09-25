@@ -125,6 +125,7 @@ class FileAccess(metaclass=MetaFileAccess):
     _format_version = None
     _path_infos = None
     _filename_infos = None
+    _auxiliary_sources = None
     metadata_fstat = None
 
     # Regular expressions to extract path and filename information for HDF5
@@ -264,6 +265,20 @@ class FileAccess(metaclass=MetaFileAccess):
         return self._filename_infos[2]
 
     @property
+    def reduction_sources(self):
+        if self._auxiliary_sources is None:
+            self._read_auxiliary_sources()
+
+        return self._auxiliary_sources.get('REDUCTION', frozenset())
+
+    @property
+    def errata_sources(self):
+        if self._auxiliary_sources is None:
+            self._read_auxiliary_sources()
+
+        return self._auxiliary_sources.get('ERRATA', frozenset())
+
+    @property
     def valid_train_ids(self):
         return self.train_ids[self.validity_flag]
 
@@ -343,6 +358,24 @@ class FileAccess(metaclass=MetaFileAccess):
 
         return frozenset(control_sources), frozenset(instrument_sources), \
             legacy_sources
+
+    def _read_auxiliary_sources(self):
+        self._auxiliary_sources = {}
+
+        try:
+            aux_group = self.file['METADATA/auxiliarySources']
+        except KeyError:
+            return
+
+        for section in list(aux_group):
+            sources = set()
+
+            for source_id in aux_group[section][:]:
+                source_id = source_id.decode()
+                source, _, group = source_id[len(section)+1:].rpartition('/')
+                sources.add(source)
+
+            self._auxiliary_sources[section] = frozenset(sources)
 
     def _guess_valid_trains(self):
         # File format version 1.0 includes a flag which is 0 if a train ID
@@ -431,8 +464,8 @@ class FileAccess(metaclass=MetaFileAccess):
         """Get group names for index data, to use with .get_index()"""
         if source in self.control_sources:
             return {''}
-        elif source in self.instrument_sources:
-            return set(self.file[f'/INDEX/{source}'].keys())
+        elif (g := self.file.get(f'/INDEX/{source}', None)) is not None:
+            return set(g.keys())
         else:
             raise SourceNameError(source)
 
@@ -469,6 +502,10 @@ class FileAccess(metaclass=MetaFileAccess):
             group = '/CONTROL/' + source
         elif source in self.instrument_sources:
             group = '/INSTRUMENT/' + source
+        elif source in self.reduction_sources:
+            group = '/REDUCTION/' + source
+        elif source in self.errata_sources:
+            group = '/ERRATA/' + source
         else:
             raise SourceNameError(source)
 
@@ -509,6 +546,10 @@ class FileAccess(metaclass=MetaFileAccess):
             root = 'CONTROL'
         elif source in self.instrument_sources:
             root = 'INSTRUMENT'
+        elif source in self.reduction_sources:
+            root = 'REDUCTION'
+        elif source in self.errata_sources:
+            root = 'ERRATA'
         else:
             raise SourceNameError(source)
 
@@ -570,6 +611,10 @@ class FileAccess(metaclass=MetaFileAccess):
             path = '/CONTROL/{}/{}'.format(source, key.replace('.', '/'))
         elif source in self.instrument_sources:
             path = '/INSTRUMENT/{}/{}'.format(source, key.replace('.', '/'))
+        elif source in self.reduction_sources:
+            path = '/REDUCTION/{}/{}'.format(source, key.replace('.', '/'))
+        elif source in self.errata_sources:
+            path = '/ERRATA/{}/{}'.format(source, key.replace('.', '/'))
         else:
             raise SourceNameError(source)
 
