@@ -494,9 +494,6 @@ class KeyData:
                     out_dim_ax += 1
             for dim in range(len(roi), len(self.entry_shape)):
                 coords[extra_dims[dim]] = np.arange(self.entry_shape[dim])
-        else:
-            for i, dim_name in enumerate(extra_dims):
-                coords[dim_name] = np.arange(self.entry_shape[i])
 
         # xarray attributes
         attrs = {}
