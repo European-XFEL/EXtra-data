@@ -87,24 +87,31 @@ def test_euxfel_path_infos(mock_sa3_control_data, monkeypatch):
     for filename in [
         '/gpfs/exfel/exp/SA3/202301/p001234/raw/r0100/foo.h5',
         '/gpfs/exfel/d/raw/SA3/202301/p001234/r0100/foo.h5',
-        '/pnfs/xfel.eu/exfel/archive/XFEL/raw/SA3/202301/p001234/r0100/foo.h5'
+        '/pnfs/xfel.eu/exfel/archive/XFEL/raw/SA3/202301/p001234/r0100/foo.h5',
+        '/gpfs/exfel/exp/SA3/202301/p001234/usr/.extra_data/RAW-R0100-OVERVIEW.h5'
     ]:
         fa = FileAccess(filename, _cache_info=_empty_cache_info)
 
-        assert fa.storage_class == 'raw'
+        assert fa.storage_class in {'raw', 'usr'}
         assert fa.instrument == 'SA3'
         assert fa.cycle == '202301'
+        assert fa.proposal == 1234
 
 
 def test_euxfel_filename_infos(mock_sa3_control_data, monkeypatch):
     fa = FileAccess(mock_sa3_control_data)
-
     assert fa.data_category == 'RAW'
+    assert fa.run == 450
     assert fa.aggregator == 'DA01'
     assert fa.sequence == 1
 
-    fa = FileAccess('/a/b/c/my-own-file.h5', _cache_info=_empty_cache_info)
+    fa = FileAccess('RAW-R0450-OVERVIEW.h5', _cache_info=_empty_cache_info)
+    assert fa.data_category == 'RAW'
+    assert fa.run == 450
+    assert fa.aggregator == 'OVERVIEW'
+    assert fa.sequence == 0
 
+    fa = FileAccess('/a/b/c/my-own-file.h5', _cache_info=_empty_cache_info)
     assert fa.data_category is None
     assert fa.aggregator is None
     assert fa.sequence is None
