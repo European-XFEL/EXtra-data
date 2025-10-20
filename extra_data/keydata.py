@@ -600,7 +600,7 @@ class KeyData:
                 if coord is not None and not isinstance(coord, int):
                     coords[dim] = coord
         else:
-            _extra_dims = ['dim_%d' % i for i in range(ndarr.ndim - 1)]
+            _extra_dims = extra_dims or ['dim_%d' % i for i in range(ndarr.ndim - 1)]
         dims = ['trainId'] + _extra_dims
 
         # xarray attributes
