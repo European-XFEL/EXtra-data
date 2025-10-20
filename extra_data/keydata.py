@@ -10,6 +10,119 @@ from .read_machinery import (
     trains_files_index,
 )
 
+
+def expand_indexing(shape, indexing, expand_full=True):
+    """
+    Expand numpy indexing into explicit coordinate arrays for each dimension.
+    Supports numpy indexing methods including boolean arrays.
+
+    Parameters:
+    -----------
+    shape : tuple
+        Shape of the array
+    indexing : tuple or single index
+        Indexing tuple as used in numpy arrays.
+    expand_full : bool
+        If True, expand full slices to arrays of all indices. If False, leave as None.
+
+    Returns:
+    --------
+    list of arrays, int, or None
+        One array per dimension with explicit coordinates
+    """
+    # Convert single index to tuple
+    if not isinstance(indexing, tuple):
+        indexing = (indexing,)
+
+    ndim = len(shape)
+
+    # expanding Ellipsis
+    if any(x is Ellipsis for x in indexing):
+        ellipsis_idx = indexing.index(Ellipsis)
+        # Count non-Ellipsis, non-newaxis dimensions
+        n_before = sum(1 for x in indexing[:ellipsis_idx] if x is not None)
+        n_after = sum(1 for x in indexing[ellipsis_idx + 1:] if x is not None)
+        n_ellipsis = max(0, ndim - n_before - n_after)
+
+        # Replace Ellipsis with appropriate number of colons
+        indexing = (indexing[:ellipsis_idx] + 
+                   (slice(None),) * n_ellipsis + 
+                   indexing[ellipsis_idx + 1:])
+
+    # Separate newaxis from array dimensions
+    array_indices = []
+    new_axes_indices = []
+    dim_idx = 0
+
+    for position, idx in enumerate(indexing):
+        if idx is None:
+            new_axes_indices.append(position)
+        else:
+            if dim_idx < ndim:
+                array_indices.append(idx)
+                dim_idx += 1
+
+    # Pad with slice(None) if indexing is shorter than ndim
+    while len(array_indices) < ndim:
+        array_indices.append(slice(None))
+
+    # Process each index and expand coordinates
+    result = []
+
+    for idx, size in zip(array_indices, shape):
+        if isinstance(idx, slice):
+            # slice
+            if idx == slice(None) and not expand_full:
+                result.append(None)
+            else:
+                start, stop, step = idx.indices(size)
+                result.append(np.arange(start, stop, step))
+
+        elif isinstance(idx, int):
+            # single integer
+            normalized_idx = idx if idx >= 0 else size + idx
+            result.append(normalized_idx)
+
+        elif isinstance(idx, np.ndarray) and idx.dtype == bool:
+            # boolean array
+            if idx.shape[0] != size:
+                raise IndexError(f"Boolean index size {idx.shape[0]} doesn't match dimension size {size}")
+            result.append(np.where(idx)[0])
+
+        elif isinstance(idx, (list, tuple)):
+            # Check if it's a boolean list
+            if all(isinstance(x, (bool, np.bool_)) for x in idx):
+                # Boolean list
+                if len(idx) != size:
+                    raise IndexError(f"Boolean index size {len(idx)} doesn't match dimension size {size}")
+                result.append(np.where(np.array(idx))[0])
+            else:
+                # Integer list/tuple
+                arr = np.asarray(idx)
+                # Normalize negative indices
+                arr = np.where(arr < 0, arr + size, arr)
+                result.append(arr)
+
+        elif isinstance(idx, np.ndarray):
+            # Handle integer array
+            arr = idx.copy()
+            # Normalize negative indices
+            arr = np.where(arr < 0, arr + size, arr)
+            result.append(arr)
+
+        else:
+            # Default: all indices
+            if expand_full:
+                result.append(np.arange(size))
+            else:
+                result.append(None)
+
+    for indices in new_axes_indices:
+        result.insert(indices, 0)
+
+    return result
+
+
 class KeyData:
     """Data for one key in one source
 
@@ -467,33 +580,28 @@ class KeyData:
 
         ndarr = self.ndarray(roi=roi)
 
-        # Dimension labels
-        if extra_dims is None:
-            extra_dims = ['dim_%d' % i for i in range(ndarr.ndim - 1)]
-        dims = ['trainId'] + extra_dims
-
         # Train ID index
         coords = {'trainId': self.train_id_coordinates()}
 
-        if roi:
-            if not isinstance(roi, tuple):
-                roi = (roi,)
+        def _get_dim_name(idx):
+            if extra_dims is not None:
+                return extra_dims[idx]
+            else:
+                return f'dim_{idx}'
 
-            # Add coordinates for ROI
-            # We iterate through the slices in roi, and for each slice, we
-            # create a coordinate array for the corresponding dimension in the
-            # output. An integer in roi drops a dimension, so we only advance
-            # in the output dimensions when we see a slice.
-            out_dim_ax = 0
-            for i, dim_slice in enumerate(roi):
-                if isinstance(dim_slice, slice):
-                    if out_dim_ax < len(extra_dims):
-                        dim_name = extra_dims[out_dim_ax]
-                        start, stop, step = dim_slice.indices(self.entry_shape[i])
-                        coords[dim_name] = np.arange(start, stop, step)
-                    out_dim_ax += 1
-            for dim in range(len(roi), len(self.entry_shape)):
-                coords[extra_dims[dim]] = np.arange(self.entry_shape[dim])
+        # Dimension labels after the train dimension
+        _extra_dims = []
+        if roi != ():
+            for idx, coord in enumerate(expand_indexing(self.entry_shape, roi, expand_full=False)):
+                dim = _get_dim_name(idx)
+
+                if coord is None or not isinstance(coord, int):
+                    _extra_dims.append(dim)
+                if coord is not None and not isinstance(coord, int):
+                    coords[dim] = coord
+        else:
+            _extra_dims = ['dim_%d' % i for i in range(ndarr.ndim - 1)]
+        dims = ['trainId'] + _extra_dims
 
         # xarray attributes
         attrs = {}
