@@ -98,7 +98,7 @@ class AuxiliaryIndexer:
                f'sources and {num_trains} trains>'
 
     def _source_info(self, label, sources, details_for_sources=(),
-                     with_aggregators=False):
+                     with_aggregators=False, file=None):
         details_sources_re = [re.compile(fnmatch.translate(p))
                               for p in details_for_sources]
         info_str = ''
@@ -128,33 +128,42 @@ class AuxiliaryIndexer:
 
             return keys_str
 
-        info_str += f'{len(sources)} {label} sources:\n'
+        print(f'{len(sources)} {label} sources:', file=file)
 
         for s in sorted(sources):
             agg_str = f' [{self[s].aggregator}]' if with_aggregators else ''
-            info_str += f'  - {agg_str} {s}\n'
+            print(f'  - {agg_str} {s}', file=file)
             if not any(p.match(s) for p in details_sources_re):
                 continue
 
             # Detail for instrument sources:
             for group, keys in groupby(sorted(self[s].keys()),
                                        key=lambda k: k.split('.')[0]):
-                info_str += f'    - {group}:\n'
                 keys = list(keys)
-                info_str += src_data_detail(s, keys, prefix='      ')
-                info_str += keys_detail(s, keys, prefix='      - ')
+                print(f'    - {group}:', file=file)
+                print(src_data_detail(s, keys, prefix='      '),
+                      end='', file=file)
+                print(keys_detail(s, keys, prefix='      - '),
+                      end='', file=file)
 
         return info_str
 
     def __repr__(self, details_for_source=()):
-        return self._source_info('reduction', self.reduction_sources) + \
-            '\n' + self._source_info('errata', self.errata_sources)
+        from io import StringIO
+
+        file = StringIO()
+        self._source_info('reduction', self.reduction_sources, file=file)
+        print('', file=file)
+        self._source_info('errata', self.errata_sources, file=file)
+
+        return file.getvalue()
 
     def info(self, details_for_sources=(), with_aggregators=False):
-        print(self._source_info('reduction', self.reduction_sources,
-                                details_for_sources, with_aggregators))
-        print(self._source_info('errata', self.errata_sources,
-                                 details_for_sources, with_aggregators))
+        self._source_info('reduction', self.reduction_sources,
+                          details_for_sources, with_aggregators)
+        print('')
+        self._source_info('errata', self.errata_sources,
+                          details_for_sources, with_aggregators)
 
     def __getitem__(self, item):
         if (
