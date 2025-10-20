@@ -78,7 +78,17 @@ class AuxiliaryIndexer:
         return frozenset(self._sources_data.keys())
 
     def __contains__(self, item):
-        return DataCollection.__contains__(self, item)
+        if (
+            isinstance(item, tuple) and
+            len(item) == 2 and
+            all(isinstance(e, str) for e in item)
+        ):
+            return item[0] in self.all_sources and \
+                item[1] in self._get_source_data(item[0])
+        elif isinstance(item, str):
+            return item in self.all_sources
+
+        return False
 
     def __str__(self):
         num_trains = len(next(iter(self._sources_data.values())).train_ids) \
