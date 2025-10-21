@@ -23,10 +23,10 @@ def test_auxiliary_sources(mock_reduced_spb_raw_run):
         in run.auxiliary.reduction_sources
     assert 'AGIPD11@SPB_IRU_AGIPD1M1/REDU/LITFRM:daqFilter' \
         in run.auxiliary.reduction_sources
-    assert run.auxiliary.errata_sources == {'TRAINS_OUTSIDE_BUFFER_RANGE'}
+    assert run.auxiliary.errata_sources == {'DA01@TRAINS_OUTSIDE_BUFFER_RANGE'}
     assert len(run.auxiliary.all_sources) == 33
 
-    sd = run.auxiliary['TRAINS_OUTSIDE_BUFFER_RANGE']
+    sd = run.auxiliary['DA01@TRAINS_OUTSIDE_BUFFER_RANGE']
     assert len(sd.files) == 2
     assert sd.section == 'ERRATA'
     assert sd.source == 'TRAINS_OUTSIDE_BUFFER_RANGE'

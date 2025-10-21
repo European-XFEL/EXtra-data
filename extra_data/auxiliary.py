@@ -17,22 +17,31 @@ class AuxiliaryIndexer:
         # {(source, section) -> {aggregator -> files}}
         files_by_sources = dict()
 
-        for f in files:
-            aggregator = f.aggregator
+        for fa in files:
+            aggregator = fa.aggregator
 
-            for source in f.reduction_sources:
+            for source in fa.reduction_sources:
                 files_by_sources.setdefault((source, 'REDUCTION'), dict()) \
-                    .setdefault(aggregator, []).append(f)
+                    .setdefault(aggregator, []).append(fa)
 
-            for source in f.errata_sources:
+            for source in fa.errata_sources:
                 files_by_sources.setdefault((source, 'ERRATA'), dict()) \
-                    .setdefault(aggregator, []).append(f)
+                    .setdefault(aggregator, []).append(fa)
 
         self._sources_data = dict()
 
         for (src, section), files_by_aggregator in files_by_sources.items():
-            # Prefix aggregator if necessary.
-            with_prefix = len(files_by_aggregator) > 1
+            with_prefix = True
+
+            if len(files_by_aggregator) == 1:
+                # Don't prefix aggregator if there is exactly one
+                # aggregator with this source and it's the suffix of an
+                # actual source in the same aggregator.
+                for fa in next(iter(files_by_aggregator.values())):
+                    for real_src in fa.all_sources:
+                        if src.endswith(real_src):
+                            with_prefix = False
+                            break
 
             self._sources_data.update({
                 f'{aggregator}@{src}' if with_prefix else src: SourceData(
