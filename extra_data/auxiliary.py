@@ -3,7 +3,7 @@ from itertools import groupby
 import fnmatch
 import re
 
-from . import DataCollection, H5File, FileAccess, SourceData, SourceNameError
+from . import H5File, FileAccess, SourceData, SourceNameError
 
 
 class AuxiliaryIndexer:
