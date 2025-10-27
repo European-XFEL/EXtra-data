@@ -11,7 +11,7 @@ from .read_machinery import (
 )
 
 
-def expand_indexing(shape, indexing, expand_full=True):
+def expand_indexing(shape, indexing):
     """
     Expand numpy indexing into explicit coordinate arrays for each dimension.
     Supports numpy indexing methods including boolean arrays.
@@ -22,8 +22,6 @@ def expand_indexing(shape, indexing, expand_full=True):
         Shape of the array
     indexing : tuple or single index
         Indexing tuple as used in numpy arrays.
-    expand_full : bool
-        If True, expand full slices to arrays of all indices. If False, leave as None.
 
     Returns:
     --------
@@ -50,8 +48,7 @@ def expand_indexing(shape, indexing, expand_full=True):
                    indexing[ellipsis_idx + 1:])
 
     # Pad with slice(None) if indexing is shorter than ndim
-    while len(indexing) < ndim:
-        indexing.append(slice(None))
+    indexing += (slice(None),) * (ndim - len(indexing))
 
     # Process each index and expand coordinates
     result = []
@@ -525,33 +522,36 @@ class KeyData:
     def xarray(self, extra_dims=None, roi=(), name=None, extra_coords=None):
         """Load this data as a labelled xarray array or dataset.
 
-        The first dimension is labelled with train IDs. Other dimensions
-        may be named by passing a list of names to *extra_dims*.
+        The first dimension is labelled with train IDs. Other dimensions may be
+        named by passing a list of names to *extra_dims*.
 
-        For scalar datatypes, an xarray.DataArray is returned using either
-        the supplied *name* or the concatenated source and key name if omitted.
+        For scalar datatypes, an xarray.DataArray is returned using either the
+        supplied *name* or the concatenated source and key name if omitted.
 
-        If the data is stored in a structured datatype, an xarray.Dataset
-        is returned with a variable for each field. The data of these
-        variables will be non-contiguous in memory, use
-        `Dataset.copy(deep=true)` to obtain a contiguous copy.
+        If the data is stored in a structured datatype, an xarray.Dataset is
+        returned with a variable for each field. The data of these variables
+        will be non-contiguous in memory, use `Dataset.copy(deep=true)` to
+        obtain a contiguous copy.
+
+        If extra_dims are provided or extra_coords evaluate to True, default
+        coordinate arrays will be generated.
 
         Parameters
         ----------
 
         extra_dims: list of str
             Name extra dimensions in the array. The first dimension is
-            automatically called 'train'. The default for extra dimensions
-            is dim_0, dim_1, ...
+            automatically called 'train'. The default for extra dimensions is
+            dim_0, dim_1, ...
         roi: numpy.s_[], slice, or tuple of slices
             The region of interest. This expression selects data in all
             dimensions apart from the first (trains) dimension. If the data
-            holds a 1D array for each entry, roi=np.s_[:8] would get the
-            first 8 values from every train. If the data is 2D or more at
-            each entry, selection looks like roi=np.s_[:8, 5:10] .
+            holds a 1D array for each entry, roi=np.s_[:8] would get the first 8
+            values from every train. If the data is 2D or more at each entry,
+            selection looks like roi=np.s_[:8, 5:10] .
         name: str
-            Name the array itself. The default is the source and key joined
-            by a dot. Ignored for structured data when a dataset is returned.
+            Name the array itself. The default is the source and key joined by a
+            dot. Ignored for structured data when a dataset is returned.
         extra_coords: bool or dict
             Add coordinates to the returned DataArray.
         """
@@ -564,21 +564,25 @@ class KeyData:
         dims = ['trainId']
         drop_dim = []
 
+        def _dim_name(idx):
+            if extra_dims is not None:
+                return extra_dims[idx]
+            else:
+                return f'dim_{idx}'
+
         # Dimension labels after the train dimension
-        if extra_dims is not None and extra_coords is not None:
+        if extra_dims is not None and isinstance(extra_coords, dict):
             dims += extra_dims
             coords |= extra_coords
 
-        elif extra_coords is not None:
+        elif isinstance(extra_coords, dict):
             coords |= extra_coords
             dims += ['dim_%d' % i for i in range(ndarr.ndim - 1)]
 
-        elif extra_dims is not None:
-            # add default coordinates when extra_dims is provided
-            for idx, coord in enumerate(
-                expand_indexing(self.entry_shape, roi, expand_full=False)
-            ):
-                dim = extra_dims[idx]
+        elif extra_coords or extra_dims is not None:
+            # add default coordinates if extra_coords is True or extra_dims given.
+            for idx, coord in enumerate(expand_indexing(self.entry_shape, roi)):
+                dim = _dim_name(idx)
                 dims.append(dim)
                 coords[dim] = coord
 
@@ -592,9 +596,7 @@ class KeyData:
             dims += ['dim_%d' % i for i in range(ndarr.ndim - 1)]
 
         if any(coord not in dims for coord in coords):
-            print(dims)
-            print(coords)
-            raise ValueError(f'coordinates given for non-exising dimension(s).')
+            raise ValueError(f'coordinates given for non-existing dimension(s).')
 
         # xarray attributes
         attrs = {}
@@ -613,10 +615,6 @@ class KeyData:
                 if name.endswith('.value') and self.section == 'CONTROL':
                     name = name[:-6]
 
-            # print(f'{dims=}')
-            # print(f'{coords=}')
-            # print(ndarr.shape)
-            # print('---')
             # Primitive dtype.
             out = xarray.DataArray(
                 ndarr, dims=dims, coords=coords, name=name, attrs=attrs)

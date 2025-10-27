@@ -371,189 +371,6 @@ def test_xarray_structured_data(mock_remi_run):
 
     np.testing.assert_equal(dset.coords['trainId'], np.arange(10000, 10100))
 
-# @pytest.mark.parametrize("extra_dims", [None, ("a", "b", "c")], ids=["default dims", "custom dims"])
-# def test_xarray_coords(mock_spb_raw_run, extra_dims):
-#     run = RunDirectory(mock_spb_raw_run)
-#     am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.data'][0]
-#     assert am0.entry_shape == (2, 512, 128)
-
-#     def validate_coords(data_array, coords=None):
-#         coords = coords or {}
-#         coords_names = list(coords)
-#         dims = ['trainId']
-#         if extra_dims is not None:
-#             dims += extra_dims
-#         else:
-#             dims += [f'dim_{idx}' for idx in range()
-
-#         if extra_dims is None:
-#             assert list(data_array.coords) == ['trainId']
-#         else:
-#             assert data_array.coords == {'trainId'}.union(extra_dims)
-
-#     # ROI with slices, extra_dims -> generate coords
-#     darr1 = am0.xarray(roi=np.s_[:, 10:20, 5:15], extra_dims=extra_dims)
-#     assert darr1.shape == (64, 2, 10, 10)
-#     validate_coords(darr1)
-#     np.testing.assert_array_equal(darr1.coords['b'], np.arange(10, 20))
-#     np.testing.assert_array_equal(darr1.coords['c'], np.arange(5, 15))
-
-#     # ROI with an integer to drop a dimension, no extra_dims argument -> no extra coords
-#     darr2 = am0.xarray(roi=np.s_[:, 10, 5:15])
-#     assert darr2.shape == (64, 2, 10)
-#     assert darr2.coords == {'trainId'}
-#     np.testing.assert_array_equal(darr2.coords['dim_2'], np.arange(5, 15))
-
-#     # Short ROI: explicit non-full slice
-#     darr3 = am0.xarray(roi=np.s_[:1, 10:20], extra_dims=['a', 'b', 'c'])
-#     assert darr3.shape == (64, 1, 10, 128)
-#     np.testing.assert_array_equal(darr3.coords['a'], np.arange(0, 1))
-#     np.testing.assert_array_equal(darr3.coords['b'], np.arange(10, 20))
-
-#     # No ROI defined
-#     darr4 = am0.xarray(extra_dims=['a', 'b', 'c'])
-#     assert darr4.shape == (64, 2, 512, 128)
-#     assert set(darr4.coords) == {'trainId', 'a', 'b', 'c'}
-
-#     # Ellipsis
-#     darr5 = am0.xarray(roi=np.s_[:1, 30:40, ...], extra_dims=['a', 'b', 'c'])
-#     assert darr5.shape == (64, 1, 10, 128)
-#     np.testing.assert_array_equal(darr5.coords['a'], np.arange(0, 1))
-#     np.testing.assert_array_equal(darr5.coords['b'], np.arange(30, 40))
-#     np.testing.assert_array_equal(darr5.coords['c'], np.arange(128))
-
-#     darr6 = am0.xarray(roi=np.s_[..., 30:40], extra_dims=['a', 'b', 'c'])
-#     assert darr6.shape == (64, 2, 512, 10)
-#     np.testing.assert_array_equal(darr6.coords['a'], np.arange(2))
-#     np.testing.assert_array_equal(darr6.coords['b'], np.arange(512))
-#     np.testing.assert_array_equal(darr6.coords['c'], np.arange(30, 40))
-
-#     # Integer-only ROI: drops first entry dim
-#     darr7 = am0.xarray(roi=np.s_[0])
-#     assert darr7.shape == (64, 512, 128)
-#     assert set(darr7.coords) == {'trainId'}
-#     assert darr7.dims == ('trainId', 'dim_1', 'dim_2')
-
-#     # list of indices
-#     darr8 = am0.xarray(roi=np.s_[0, [30, 33], :])
-#     assert darr8.shape == (64, 2, 128)
-#     # The first remaining dim corresponds to advanced indexer
-#     np.testing.assert_array_equal(darr8.coords['dim_1'], np.array([30, 33]))
-#     assert darr8.coords == {'trainId'}
-#     assert darr8.dims == ('trainId', 'dim_1', 'dim_2')
-
-#     # boolean indexing
-#     mask = np.zeros((512,), dtype=np.bool_)
-#     mask[30:40] = True
-#     darr9 = am0.xarray(roi=np.s_[0, mask])
-#     assert darr9.shape == (64, 10, 128)
-#     np.testing.assert_array_equal(darr9.coords['dim_1'], np.arange(30, 40))
-#     assert darr9.dims == ('trainId', 'dim_1', 'dim_2')
-
-#     darr9 = am0.xarray(roi=np.s_[[False, True], 1, 2])
-#     assert darr9.shape == (64, 1)
-#     np.testing.assert_array_equal(darr9.coords['dim_0'], np.arange(1, 2))
-#     assert darr9.dims == ('trainId', 'dim_0')
-
-#     mask = np.zeros((512,), dtype=np.bool_)
-#     mask[::2] = True
-#     darr10 = am0.xarray(roi=np.s_[1, mask, 5:15], extra_dims=['raw_proc', 'ss', 'fs'])
-#     assert darr10.shape == (64, 256, 10)
-#     np.testing.assert_array_equal(darr10.coords['ss'], np.arange(0, 512, 2))
-#     np.testing.assert_array_equal(darr10.coords['fs'], np.arange(5, 15))
-#     assert darr10.dims == ('trainId', 'ss', 'fs')
-
-#     # negative indexing
-#     darr11 = am0.xarray(roi=np.s_[:, -10:, [-10, -5, -1]], extra_dims=['a', 'b', 'c'])
-#     assert darr11.shape == (64, 2, 10, 3)
-#     np.testing.assert_array_equal(darr11.coords['b'], np.arange(502, 512))
-#     np.testing.assert_array_equal(darr11.coords['c'], np.array([118, 123, 127]))
-#     assert darr11.dims == ('trainId', 'a', 'b', 'c')
-
-
-# def test_xarray_coords(mock_spb_raw_run):
-#     run = RunDirectory(mock_spb_raw_run)
-#     am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.data'][0]
-#     assert am0.entry_shape == (2, 512, 128)
-
-#     # ROI with slices, extra_dims -> generate coords
-#     darr1 = am0.xarray(roi=np.s_[:, 10:20, 5:15], extra_dims=['a', 'b', 'c'])
-#     assert darr1.shape == (64, 2, 10, 10)
-#     assert darr1.coords == {'trainId', 'a', 'b', 'c'}
-#     np.testing.assert_array_equal(darr1.coords['b'], np.arange(10, 20))
-#     np.testing.assert_array_equal(darr1.coords['c'], np.arange(5, 15))
-
-#     # ROI with an integer to drop a dimension, no extra_dims argument -> no extra coords
-#     darr2 = am0.xarray(roi=np.s_[:, 10, 5:15])
-#     assert darr2.shape == (64, 2, 10)
-#     assert darr2.coords == {'trainId'}
-#     np.testing.assert_array_equal(darr2.coords['dim_2'], np.arange(5, 15))
-
-#     # Short ROI: explicit non-full slice
-#     darr3 = am0.xarray(roi=np.s_[:1, 10:20], extra_dims=['a', 'b', 'c'])
-#     assert darr3.shape == (64, 1, 10, 128)
-#     np.testing.assert_array_equal(darr3.coords['a'], np.arange(0, 1))
-#     np.testing.assert_array_equal(darr3.coords['b'], np.arange(10, 20))
-
-#     # No ROI defined
-#     darr4 = am0.xarray(extra_dims=['a', 'b', 'c'])
-#     assert darr4.shape == (64, 2, 512, 128)
-#     assert set(darr4.coords) == {'trainId', 'a', 'b', 'c'}
-
-#     # Ellipsis
-#     darr5 = am0.xarray(roi=np.s_[:1, 30:40, ...], extra_dims=['a', 'b', 'c'])
-#     assert darr5.shape == (64, 1, 10, 128)
-#     np.testing.assert_array_equal(darr5.coords['a'], np.arange(0, 1))
-#     np.testing.assert_array_equal(darr5.coords['b'], np.arange(30, 40))
-#     np.testing.assert_array_equal(darr5.coords['c'], np.arange(128))
-
-#     darr6 = am0.xarray(roi=np.s_[..., 30:40], extra_dims=['a', 'b', 'c'])
-#     assert darr6.shape == (64, 2, 512, 10)
-#     np.testing.assert_array_equal(darr6.coords['a'], np.arange(2))
-#     np.testing.assert_array_equal(darr6.coords['b'], np.arange(512))
-#     np.testing.assert_array_equal(darr6.coords['c'], np.arange(30, 40))
-
-#     # Integer-only ROI: drops first entry dim
-#     darr7 = am0.xarray(roi=np.s_[0])
-#     assert darr7.shape == (64, 512, 128)
-#     assert set(darr7.coords) == {'trainId'}
-#     assert darr7.dims == ('trainId', 'dim_1', 'dim_2')
-
-#     # list of indices
-#     darr8 = am0.xarray(roi=np.s_[0, [30, 33], :])
-#     assert darr8.shape == (64, 2, 128)
-#     # The first remaining dim corresponds to advanced indexer
-#     np.testing.assert_array_equal(darr8.coords['dim_1'], np.array([30, 33]))
-#     assert darr8.coords == {'trainId'}
-#     assert darr8.dims == ('trainId', 'dim_1', 'dim_2')
-
-#     # boolean indexing
-#     mask = np.zeros((512,), dtype=np.bool_)
-#     mask[30:40] = True
-#     darr9 = am0.xarray(roi=np.s_[0, mask])
-#     assert darr9.shape == (64, 10, 128)
-#     np.testing.assert_array_equal(darr9.coords['dim_1'], np.arange(30, 40))
-#     assert darr9.dims == ('trainId', 'dim_1', 'dim_2')
-
-#     darr9 = am0.xarray(roi=np.s_[[False, True], 1, 2])
-#     assert darr9.shape == (64, 1)
-#     np.testing.assert_array_equal(darr9.coords['dim_0'], np.arange(1, 2))
-#     assert darr9.dims == ('trainId', 'dim_0')
-
-#     mask = np.zeros((512,), dtype=np.bool_)
-#     mask[::2] = True
-#     darr10 = am0.xarray(roi=np.s_[1, mask, 5:15], extra_dims=['raw_proc', 'ss', 'fs'])
-#     assert darr10.shape == (64, 256, 10)
-#     np.testing.assert_array_equal(darr10.coords['ss'], np.arange(0, 512, 2))
-#     np.testing.assert_array_equal(darr10.coords['fs'], np.arange(5, 15))
-#     assert darr10.dims == ('trainId', 'ss', 'fs')
-
-#     # negative indexing
-#     darr11 = am0.xarray(roi=np.s_[:, -10:, [-10, -5, -1]], extra_dims=['a', 'b', 'c'])
-#     assert darr11.shape == (64, 2, 10, 3)
-#     np.testing.assert_array_equal(darr11.coords['b'], np.arange(502, 512))
-#     np.testing.assert_array_equal(darr11.coords['c'], np.array([118, 123, 127]))
-#     assert darr11.dims == ('trainId', 'a', 'b', 'c')
 
 @pytest.fixture()
 def run_with_file_no_trains(mock_spb_raw_run):
@@ -649,13 +466,13 @@ def test_xarray_extra_dims_and_coords(mock_spb_raw_run):
     am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.data'][0]
     assert am0.entry_shape == (2, 512, 128)
 
-    # No extra dims -> only trainId coordinate
+    # No extra dims and extra_coords==False -> only trainId coordinate
     da_default = am0.xarray()
     assert da_default.shape == (64, 2, 512, 128)
     assert da_default.dims == ('trainId', 'dim_0', 'dim_1', 'dim_2')
     assert set(da_default.coords) == {'trainId'}
 
-    # ROI with slices, with extra_dims -> generate default coords
+    # ROI with slices, with extra_dims -> generate coords
     da1 = am0.xarray(roi=np.s_[:, 10:20, 5:15], extra_dims=['raw_proc', 'ss', 'fs'])
     assert da1.shape == (64, 2, 10, 10)
     assert da1.dims == ('trainId', 'raw_proc', 'ss', 'fs')
@@ -723,5 +540,14 @@ def test_xarray_extra_dims_and_coords(mock_spb_raw_run):
     da9 = am0.xarray(roi=np.s_[:, 10:20, 5:15], extra_dims=['r/p', 'ss', 'fs'], extra_coords={'fs': np.arange(5, 15)})
     assert list(da9.coords) >= ['trainId', 'fs']
 
-    da10 = am0.xarray(roi=np.s_[:, 10:20, 5:15], extra_coords={'dim_0': [100, 200]})
-    assert list(da9.coords) >= ['trainId', 'dim_0']
+    da10 = am0.xarray(roi=np.s_[:, 15, 5:15], extra_coords={'dim_0': [100, 200]})
+    assert list(da10.coords) >= ['trainId', 'dim_0']
+
+    # extra_coords == True
+    da11 = am0.xarray(roi=np.s_[:, 15, 5:15], extra_coords=True)
+    assert da11.shape == (64, 2, 10)
+    assert da11.dims == ('trainId', 'dim_0', 'dim_2')
+    assert set(da11.coords) == {'trainId', 'dim_0', 'dim_1', 'dim_2'}
+    np.testing.assert_array_equal(da11.coords['dim_0'], np.arange(2))
+    np.testing.assert_array_equal(da11.coords['dim_1'], np.arange(15, 16))
+    np.testing.assert_array_equal(da11.coords['dim_2'], np.arange(5, 15))
