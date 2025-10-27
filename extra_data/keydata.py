@@ -49,34 +49,18 @@ def expand_indexing(shape, indexing, expand_full=True):
                    (slice(None),) * n_ellipsis + 
                    indexing[ellipsis_idx + 1:])
 
-    # Separate newaxis from array dimensions
-    array_indices = []
-    new_axes_indices = []
-    dim_idx = 0
-
-    for position, idx in enumerate(indexing):
-        if idx is None:
-            new_axes_indices.append(position)
-        else:
-            if dim_idx < ndim:
-                array_indices.append(idx)
-                dim_idx += 1
-
     # Pad with slice(None) if indexing is shorter than ndim
-    while len(array_indices) < ndim:
-        array_indices.append(slice(None))
+    while len(indexing) < ndim:
+        indexing.append(slice(None))
 
     # Process each index and expand coordinates
     result = []
 
-    for idx, size in zip(array_indices, shape):
+    for idx, size in zip(indexing, shape):
         if isinstance(idx, slice):
             # slice
-            if idx == slice(None) and not expand_full:
-                result.append(None)
-            else:
-                start, stop, step = idx.indices(size)
-                result.append(np.arange(start, stop, step))
+            start, stop, step = idx.indices(size)
+            result.append(np.arange(start, stop, step))
 
         elif isinstance(idx, int):
             # single integer
@@ -111,14 +95,7 @@ def expand_indexing(shape, indexing, expand_full=True):
             result.append(arr)
 
         else:
-            # Default: all indices
-            if expand_full:
-                result.append(np.arange(size))
-            else:
-                result.append(None)
-
-    for indices in new_axes_indices:
-        result.insert(indices, 0)
+            raise ValueError(f'Unsupported indexing {idx}')
 
     return result
 
@@ -545,7 +522,7 @@ class KeyData:
         ]
         return np.concatenate(chunks_trainids)
 
-    def xarray(self, extra_dims=None, roi=(), name=None):
+    def xarray(self, extra_dims=None, roi=(), name=None, extra_coords=None):
         """Load this data as a labelled xarray array or dataset.
 
         The first dimension is labelled with train IDs. Other dimensions
@@ -575,6 +552,8 @@ class KeyData:
         name: str
             Name the array itself. The default is the source and key joined
             by a dot. Ignored for structured data when a dataset is returned.
+        extra_coords: bool or dict
+            Add coordinates to the returned DataArray.
         """
         import xarray
 
@@ -582,26 +561,40 @@ class KeyData:
 
         # Train ID index
         coords = {'trainId': self.train_id_coordinates()}
-
-        def _get_dim_name(idx):
-            if extra_dims is not None:
-                return extra_dims[idx]
-            else:
-                return f'dim_{idx}'
+        dims = ['trainId']
+        drop_dim = []
 
         # Dimension labels after the train dimension
-        _extra_dims = []
-        if roi != ():
-            for idx, coord in enumerate(expand_indexing(self.entry_shape, roi, expand_full=False)):
-                dim = _get_dim_name(idx)
+        if extra_dims is not None and extra_coords is not None:
+            dims += extra_dims
+            coords |= extra_coords
 
-                if coord is None or not isinstance(coord, int):
-                    _extra_dims.append(dim)
-                if coord is not None and not isinstance(coord, int):
-                    coords[dim] = coord
+        elif extra_coords is not None:
+            coords |= extra_coords
+            dims += ['dim_%d' % i for i in range(ndarr.ndim - 1)]
+
+        elif extra_dims is not None:
+            # add default coordinates when extra_dims is provided
+            for idx, coord in enumerate(
+                expand_indexing(self.entry_shape, roi, expand_full=False)
+            ):
+                dim = extra_dims[idx]
+                dims.append(dim)
+                coords[dim] = coord
+
+                if isinstance(coord, int):
+                    # we add new dimensions to be able to construct the xarray
+                    # with the right coordinates.
+                    # Offset by 1 because the first dimension is trainId
+                    ndarr = np.expand_dims(ndarr, idx + 1)
+                    drop_dim.append(idx + 1)
         else:
-            _extra_dims = extra_dims or ['dim_%d' % i for i in range(ndarr.ndim - 1)]
-        dims = ['trainId'] + _extra_dims
+            dims += ['dim_%d' % i for i in range(ndarr.ndim - 1)]
+
+        if any(coord not in dims for coord in coords):
+            print(dims)
+            print(coords)
+            raise ValueError(f'coordinates given for non-exising dimension(s).')
 
         # xarray attributes
         attrs = {}
@@ -610,7 +603,7 @@ class KeyData:
 
         if ndarr.dtype.names is not None:
             # Structured dtype.
-            return xarray.Dataset(
+            out = xarray.Dataset(
                 {field: (dims, ndarr[field]) for field in ndarr.dtype.names},
                 coords=coords, attrs=attrs)
         else:
@@ -620,9 +613,16 @@ class KeyData:
                 if name.endswith('.value') and self.section == 'CONTROL':
                     name = name[:-6]
 
+            # print(f'{dims=}')
+            # print(f'{coords=}')
+            # print(ndarr.shape)
+            # print('---')
             # Primitive dtype.
-            return xarray.DataArray(
+            out = xarray.DataArray(
                 ndarr, dims=dims, coords=coords, name=name, attrs=attrs)
+
+        out = out.squeeze(axis=drop_dim)
+        return out
 
     def series(self):
         """Load this data as a pandas Series. Only for 1D data.
