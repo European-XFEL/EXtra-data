@@ -37,9 +37,9 @@ def expand_indexing(shape, indexing):
     # expanding Ellipsis
     if any(x is Ellipsis for x in indexing):
         ellipsis_idx = indexing.index(Ellipsis)
-        # Count non-Ellipsis, non-newaxis dimensions
-        n_before = sum(1 for x in indexing[:ellipsis_idx] if x is not None)
-        n_after = sum(1 for x in indexing[ellipsis_idx + 1:] if x is not None)
+        # Count non-Ellipsis
+        n_before = len(indexing[:ellipsis_idx])
+        n_after = len(indexing[ellipsis_idx + 1:])
         n_ellipsis = max(0, ndim - n_before - n_after)
 
         # Replace Ellipsis with appropriate number of colons
@@ -553,7 +553,10 @@ class KeyData:
             Name the array itself. The default is the source and key joined by a
             dot. Ignored for structured data when a dataset is returned.
         extra_coords: bool or dict
-            Add coordinates to the returned DataArray.
+            Add coordinates to the returned DataArray. If roi is used, the
+            coordinates will match the selected region of interest. If a dict is
+            given, it should map dimension names to coordinate arrays. If True,
+            default coordinate arrays will be generated.
         """
         import xarray
 
@@ -562,7 +565,6 @@ class KeyData:
         # Train ID index
         coords = {'trainId': self.train_id_coordinates()}
         dims = ['trainId']
-        drop_dim = []
 
         def _dim_name(idx):
             if extra_dims is not None:
@@ -583,20 +585,12 @@ class KeyData:
             # add default coordinates if extra_coords is True or extra_dims given.
             for idx, coord in enumerate(expand_indexing(self.entry_shape, roi)):
                 dim = _dim_name(idx)
-                dims.append(dim)
                 coords[dim] = coord
 
-                if isinstance(coord, int):
-                    # we add new dimensions to be able to construct the xarray
-                    # with the right coordinates.
-                    # Offset by 1 because the first dimension is trainId
-                    ndarr = np.expand_dims(ndarr, idx + 1)
-                    drop_dim.append(idx + 1)
+                if not isinstance(coord, int):
+                    dims.append(dim)
         else:
             dims += ['dim_%d' % i for i in range(ndarr.ndim - 1)]
-
-        if any(coord not in dims for coord in coords):
-            raise ValueError(f'coordinates given for non-existing dimension(s).')
 
         # xarray attributes
         attrs = {}
@@ -605,7 +599,7 @@ class KeyData:
 
         if ndarr.dtype.names is not None:
             # Structured dtype.
-            out = xarray.Dataset(
+            return xarray.Dataset(
                 {field: (dims, ndarr[field]) for field in ndarr.dtype.names},
                 coords=coords, attrs=attrs)
         else:
@@ -616,11 +610,8 @@ class KeyData:
                     name = name[:-6]
 
             # Primitive dtype.
-            out = xarray.DataArray(
+            return xarray.DataArray(
                 ndarr, dims=dims, coords=coords, name=name, attrs=attrs)
-
-        out = out.squeeze(axis=drop_dim)
-        return out
 
     def series(self):
         """Load this data as a pandas Series. Only for 1D data.
