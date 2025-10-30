@@ -34,7 +34,7 @@ def check_access(path):
     print(f'{prefix}read attempt hangs', flush=True)
 
     try:
-        fa = FileAccess(path)
+        FileAccess(path)
     except Exception as e:
         print(f'{prefix}read attempt raises: {str(e)}')
     else:
@@ -139,6 +139,8 @@ def main(argv=None):
 
         for path_str in sorted(shown_states):
             print(path_str.ljust(path_col), shown_states[path_str])
+
+    return 0
 
 
 if __name__ == '__main__':
