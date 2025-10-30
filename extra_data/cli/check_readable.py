@@ -105,7 +105,7 @@ def main(argv=None):
             path_states[path] = p.stdout.decode().split('\n')[-2]
             return '.'
 
-    with ThreadPool(processes=min(10, cpu_count() // 4)) as pool:
+    with ThreadPool(processes=min(32, cpu_count() // 4)) as pool:
         for res in pool.imap_unordered(monitor_access_check, paths):
             print(res, end='', flush=True)
 
