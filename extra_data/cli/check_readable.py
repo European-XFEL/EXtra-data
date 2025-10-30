@@ -1,7 +1,7 @@
 
 import sys
 from argparse import ArgumentParser
-from multiprocessing import get_context
+import subprocess
 from multiprocessing.pool import ThreadPool
 from os import cpu_count
 from pathlib import Path
@@ -11,32 +11,44 @@ from extra_data import FileAccess
 from extra_data.locality import get_locality
 
 
-def check_access(path_states, path):
+def check_access(path):
+    print('any access hangs', flush=True)
+
     start = monotonic()
     locality = get_locality(path)
 
     if locality == 'UNAVAILABLE':
-        path_states[path] = 'dCache reports unavailable'
-        return
+        print('dCache reports unavailable', flush=True)
+        return 0
     elif locality == 'NEARLINE':
-        path_states[path] = 'dCache reports tape only'
-        return
+        print('dCache reports tape only', flush=True)
+        return 0
     elif locality == 'NOT_ON_DCACHE':
         prefix = 'file on GPFS but '
     else:
         prefix = 'dCache reports on disk but '
 
-    path_states[path] = f'{prefix}stat hangs'
+    print(f'{prefix}stat hangs', flush=True)
 
     path.stat()
-    path_states[path] = f'{prefix}read attempt hangs'
+    print(f'{prefix}read attempt hangs', flush=True)
 
     try:
         fa = FileAccess(path)
     except Exception as e:
-        path_states[path] = f'{prefix}read attempt raises: {str(e)}'
+        print(f'{prefix}read attempt raises: {str(e)}')
     else:
-        path_states[path] = monotonic() - start
+        print(f'readable_{monotonic() - start}')
+
+    return 0
+
+
+check_access_runtime = '''
+import sys
+from pathlib import Path
+from extra_data.cli.check_readable import check_access
+sys.exit(check_access(Path('{}')))
+'''
 
 
 def main(argv=None):
@@ -48,22 +60,20 @@ def main(argv=None):
         help='folder of input data to check')
 
     ap.add_argument(
+        '--all', '-a', action='store_true',
+        help='whether to show the result for all files rather than only '
+             'unreadable ones')
+
+    ap.add_argument(
         '--recursive', '-r', action='store_true',
         help='whether to search directories passed as input recursively for '
              'those containing HDF5 files')
 
     ap.add_argument(
-        '--timeout', action='store', type=float, default=3.0,
+        '--timeout', action='store', type=float, default=5.0,
         metavar='SECS', help='timeout for access checks, 5s by default')
 
     args = ap.parse_args(argv)
-
-    # Ensure the spawn method is used to reliably terminate with no
-    # zombie processes in D state lying around.
-    mp_ctx = get_context('spawn')
-
-    # Record last state for each path in a shared dictionary.
-    path_states = mp_ctx.Manager().dict()
 
     # Collect input files to check.
     paths = []
@@ -78,18 +88,20 @@ def main(argv=None):
         print('No HDF5 files to check')
         return 0
 
+    # Map of the result for each path.
+    path_states = {}
+
     def monitor_access_check(path):
-        path_states[path] = 'any access hangs'
-        p = mp_ctx.Process(target=check_access, args=(path_states, path,),
-                           daemon=True)
-        p.start()
-        p.join(timeout=args.timeout)
-
-        if p.exitcode is None:
-            p.kill()
+        try:
+            p = subprocess.run(
+                [sys.executable, '-c', check_access_runtime.format(path)],
+                timeout=args.timeout, capture_output=True)
+        except subprocess.TimeoutExpired as e:
+            path_states[path] = e.stdout.decode().split('\n')[-2]
             return 'T'
-
-        return '.'
+        else:
+            path_states[path] = p.stdout.decode().split('\n')[-2]
+            return '.'
 
     with ThreadPool(processes=min(10, cpu_count() // 4)) as pool:
         for res in pool.imap_unordered(monitor_access_check, paths):
@@ -102,25 +114,31 @@ def main(argv=None):
             pass
     '''
 
+    '''
+    for path in paths:
+        print(monitor_access_check(path), end='', flush=True)
+    '''
+
     print('')
 
     # Collect access time measurement for successful checks
-    times = [timing for timing in path_states.values()
-             if isinstance(timing, float)]
+    times = [float(state[9:]) for state in path_states.values()
+             if state.startswith('readable')]
     print(f'average access time: {(sum(times) / len(times)):03g}s, '
           f'max access time: {max(times):03g}s')
 
-    # Collect all anomalous paths and print.
-    anomalous_states = {str(path): state for path, state in path_states.items()
-                        if isinstance(state, str)}
+    # Collect all paths to be shown.
+    shown_states = {str(path): state.partition('_')[0] for path, state
+                    in path_states.items()
+                    if args.all or not state.startswith('readable')}
 
-    if not anomalous_states:
+    if not shown_states:
         print('all files readable')
     else:
-        path_col = max([len(path_str) for path_str in anomalous_states]) + 3
+        path_col = max([len(path_str) for path_str in shown_states]) + 3
 
-        for path_str, state in anomalous_states.items():
-            print(path_str.ljust(path_col), state)
+        for path_str in sorted(shown_states):
+            print(path_str.ljust(path_col), shown_states[path_str])
 
 
 if __name__ == '__main__':
