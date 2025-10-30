@@ -48,6 +48,7 @@ setup(name="EXtra-data",
               "extra-data-validate = extra_data.validation:main",
               "extra-data-make-virtual-cxi = extra_data.cli.make_virtual_cxi:main",
               "extra-data-locality = extra_data.locality:main",
+              "extra-data-readable = extra_data.cli.check_access:main"
           ],
       },
       install_requires=[
