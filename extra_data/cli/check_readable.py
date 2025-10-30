@@ -1,7 +1,7 @@
 
+import subprocess
 import sys
 from argparse import ArgumentParser
-import subprocess
 from multiprocessing.pool import ThreadPool
 from os import cpu_count
 from pathlib import Path
@@ -118,8 +118,8 @@ def main(argv=None):
     if not times:
         print('no files are readable')
     else:
-        print(f'average access time: {(sum(times) / len(times)):03g}s, '
-              f'max access time: {max(times):03g}s')
+        print(f'average access time: {(sum(times) / len(times)):.3g}s, '
+              f'max access time: {max(times):.3g}s')
 
     # Collect all paths to be shown.
     shown_states = {str(path): state.partition('_')[0] for path, state
