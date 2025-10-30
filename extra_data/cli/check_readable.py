@@ -34,10 +34,11 @@ def check_access(path):
     print(f'{prefix}read attempt hangs', flush=True)
 
     try:
-        FileAccess(path)
+        fa = FileAccess(path)
     except Exception as e:
         print(f'{prefix}read attempt raises: {str(e)}')
     else:
+        fa.file.close()
         print(f'readable_{monotonic() - start}')
 
     return 0
@@ -95,7 +96,8 @@ def main(argv=None):
         try:
             p = subprocess.run(
                 [sys.executable, '-c', check_access_runtime.format(path)],
-                timeout=args.timeout, capture_output=True)
+                timeout=args.timeout, capture_output=True,
+                env={'OMP_NUM_THREADS': '1'})
         except subprocess.TimeoutExpired as e:
             path_states[path] = e.stdout.decode().split('\n')[-2]
             return 'T'
@@ -107,25 +109,17 @@ def main(argv=None):
         for res in pool.imap_unordered(monitor_access_check, paths):
             print(res, end='', flush=True)
 
-    '''
-    from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=5) as pool:
-        for _ in pool.map(monitor_access_check, paths):
-            pass
-    '''
-
-    '''
-    for path in paths:
-        print(monitor_access_check(path), end='', flush=True)
-    '''
-
     print('')
 
     # Collect access time measurement for successful checks
     times = [float(state[9:]) for state in path_states.values()
              if state.startswith('readable')]
-    print(f'average access time: {(sum(times) / len(times)):03g}s, '
-          f'max access time: {max(times):03g}s')
+
+    if not times:
+        print('no files are readable')
+    else:
+        print(f'average access time: {(sum(times) / len(times)):03g}s, '
+              f'max access time: {max(times):03g}s')
 
     # Collect all paths to be shown.
     shown_states = {str(path): state.partition('_')[0] for path, state
