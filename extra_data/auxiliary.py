@@ -168,6 +168,9 @@ class AuxiliaryIndexer:
         return file.getvalue()
 
     def info(self, details_for_sources=(), with_aggregators=False):
+        """Show information about the auxiliary data.
+        """
+
         self._source_info('reduction', self.reduction_sources,
                           details_for_sources, with_aggregators)
         print('')
