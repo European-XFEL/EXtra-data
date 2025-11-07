@@ -144,6 +144,16 @@ def mock_spb_proc_run(format_version):
 
 
 @pytest.fixture(scope='session')
+def mock_reduced_spb_raw_run():
+    """Varying number of frames stored from AGIPD"""
+    rng = np.random.RandomState(123)  # Fix seed
+    with TemporaryDirectory() as td:
+        make_examples.make_reduced_spb_run(td, raw=True, rng=rng,
+                                           format_version='1.2')
+        yield td
+
+
+@pytest.fixture(scope='session')
 def mock_reduced_spb_proc_run(format_version):
     """Varying number of frames stored from AGIPD"""
     rng = np.random.RandomState(123)  # Fix seed

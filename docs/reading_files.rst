@@ -82,6 +82,10 @@ to refer to all data associated with that 0.1 second window.
 
    .. automethod:: drop_aliases
 
+   .. attribute:: auxiliary
+
+      Enables access to :ref:`auxiliary data <auxiliary-data>`.
+
 .. _using-aliases:
 
 Using aliases
@@ -428,7 +432,7 @@ Here are some problems we've seen, and possible solutions or workarounds:
   but if you have any issues, please let us know.
 
   - In one case, a train ID had the maximum possible value (2\ :sup:`64` - 1),
-    causing :meth:`~.info` to fail. You can select everything except this train
+    causing :meth:`~.DataCollection.info` to fail. You can select everything except this train
     using :meth:`~.DataCollection.select_trains`::
 
         from extra_data import by_id
@@ -531,3 +535,53 @@ are suspect. The good trains should make an increasing sequence, and it tries to
 exclude as few trains as possible to achieve this. If something goes wrong with
 this guessing, try using ``inc_suspect_trains=True`` to avoid it.
 Please let us know (da-support@xfel.eu) if you need to do this.
+
+
+.. _auxiliary-data:
+
+Auxiliary data
+--------------
+
+Starting in 2025, data may contain auxiliary sources. These generally do not
+correspond to devices used in experiments but are used to record diagnostics
+of the data acquisition process. You can access auxiliary sources and their keys through the :attr:`DataCollection.auxiliary` property in the same way as regular sources and keys are used:
+
+.. code-block:: python
+
+   # SourceData for a reduction source.
+   run.auxiliary["GAIN_REDUCTION/MID_DET_AGIPD1M-1/DET/0CH0:xtdf"]
+
+   # KeyData for a reduction source's key.
+   run.auxiliary["PULSE_REDUCTION/SPB_DET_AGIPD1M-1/DET/3CH0:xtdf",
+                 "image.data.reductionRatio"]
+
+   # Print information about auxiliary sources in this data.
+   run.auxiliary.info()
+
+Auxiliary sources are categorized as an *errata source* or a *reduction source*.
+*Errata sources* record data quality issues that occured during data acquisition,
+e.g. data that is received very late. *Reduction sources* describe data reduction
+that may have been applied before data is recorded, e.g. frame filters.
+
+.. class:: extra_data.auxiliary.AuxiliaryIndexer
+
+   Accessible via the :attr:`DataCollection.auxiliary` property.
+
+   .. attribute:: errata_sources
+
+      A set of errata sources in this data. Errata sources record data quality
+      issues that were encountered during data acquisition.
+
+   .. attribute:: reduction_sources
+
+      A set of reduction sources in this data. Reduction sources describe data
+      reduction that was already applied during data acquisition.
+
+   .. attribute:: all_sources
+
+      A set of all auxiliary sources. This is the union of the two sets above.
+
+   .. method:: info
+
+      Show information about the auxiliary data similar to how
+      :meth:`~.DataCollection.info` does for regular sources.
