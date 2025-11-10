@@ -27,6 +27,9 @@ DETECTOR_SOURCE_RE = re.compile(r'(.+\/(?:DET|CORR))\/(\d+)CH')
 def data_root_dir():
     return Path(os.environ.get('EXTRA_DATA_DATA_ROOT', '/gpfs/exfel/exp'))
 
+# For backwards compatibility in case any code uses this variable
+DATA_ROOT_DIR = str(data_root_dir())
+
 
 def sw_root_dir():
     return Path(os.environ.get('EXTRA_DATA_SW_ROOT', '/gpfs/exfel/sw'))
