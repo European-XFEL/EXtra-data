@@ -2139,12 +2139,10 @@ def open_run(
     default_aliases = Path(DEFAULT_ALIASES_FILE.format(prop_dir))
     if aliases == default_aliases and not default_aliases.is_file():
         # Determine the instrument from the proposal path
-        instrument = None
-        template_path = None
-        if instrument := Path(prop_dir).parts[-3]:
-            template_path = sw_root_dir() / instrument / "extra-data-aliases-default.yml"
+        instrument = Path(prop_dir).parts[-3]
+        template_path = sw_root_dir() / instrument / "extra-data-aliases-default.yml"
 
-        if template_path and template_path.is_file():
+        if template_path.is_file():
             try:
                 shutil.copyfile(template_path, default_aliases)
                 # Ensure the copied file is editable by everyone
