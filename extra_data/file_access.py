@@ -213,9 +213,13 @@ class FileAccess(metaclass=MetaFileAccess):
 
         if m:
             if m[1] == 'gpfs/exfel/exp':
-                self._path_infos = (m[5], m[2], m[3], int(m[4][1:]))  # ONC path.
+                # ONC path.
+                self._path_infos = (m[5], m[2], m[3], int(m[4][1:]),
+                                    int(m[6]) if m[6] is not None else None)
             else:
-                self._path_infos = (m[2], m[3], m[4], int(m[5][1:]))  # Maxwell path.
+                # Maxwell path.
+                self._path_infos = (m[2], m[3], m[4], int(m[5][1:]),
+                                    int(m[6]) if m[6] is not None else None)
         else:
             self._path_infos = (None, None, None, None)
 
@@ -261,7 +265,15 @@ class FileAccess(metaclass=MetaFileAccess):
     def run(self):
         if self._filename_infos is None:
             self._evaluate_filename_infos()
-        return self._filename_infos[1]
+
+        if self._filename_infos[1] is not None:
+            return self._filename_infos[1]
+
+        # Run number may also be part of the path.
+        if self._path_infos is None:
+            self._evaluate_path_infos()
+
+        return self._path_infos[4]
 
     @property
     def aggregator(self):

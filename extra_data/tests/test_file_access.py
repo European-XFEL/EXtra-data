@@ -81,14 +81,16 @@ def test_euxfel_path_infos(mock_sa3_control_data, monkeypatch):
     assert fa.storage_class is None
     assert fa.instrument is None
     assert fa.cycle is None
+    assert fa.proposal is None
+    assert fa.run == 450  # But a valid filename!
 
     # EuXFEL locations are resolved to their true paths and may either
     # be on online GPFS, offline GPFS or dCache.
     for filename in [
-        '/gpfs/exfel/exp/SA3/202301/p001234/raw/r0100/foo.h5',
-        '/gpfs/exfel/d/raw/SA3/202301/p001234/r0100/foo.h5',
-        '/pnfs/xfel.eu/exfel/archive/XFEL/raw/SA3/202301/p001234/r0100/foo.h5',
-        '/gpfs/exfel/exp/SA3/202301/p001234/usr/.extra_data/RAW-R0100-OVERVIEW.h5'
+        '/gpfs/exfel/exp/SA3/202301/p001234/raw/r5100/foo.h5',
+        '/gpfs/exfel/d/raw/SA3/202301/p001234/r5100/foo.h5',
+        '/pnfs/xfel.eu/exfel/archive/XFEL/raw/SA3/202301/p001234/r5100/foo.h5',
+        '/gpfs/exfel/exp/SA3/202301/p001234/usr/.extra_data/RAW-R5100-OVERVIEW.h5'
     ]:
         fa = FileAccess(filename, _cache_info=_empty_cache_info)
 
@@ -96,6 +98,14 @@ def test_euxfel_path_infos(mock_sa3_control_data, monkeypatch):
         assert fa.instrument == 'SA3'
         assert fa.cycle == '202301'
         assert fa.proposal == 1234
+        assert fa.run == 5100
+
+    # Verify that run is unavailable in some cases.
+    fa = FileAccess(
+        '/gpfs/exfel/exp/SA3/202301/p001234/usr/.extra_data/OVERVIEW.h5',
+        _cache_info=_empty_cache_info)
+    assert fa.proposal == 1234
+    assert fa.run is None
 
 
 def test_euxfel_filename_infos(mock_sa3_control_data, monkeypatch):
