@@ -1,12 +1,16 @@
+import os
+import stat
 from itertools import islice
+from pathlib import Path
+from unittest import mock
 
-import pytest
 import numpy as np
+import pytest
 
-from extra_data import (
-    H5File, KeyData, by_index, by_id,
-    AliasError, SourceNameError, PropertyNameError
-)
+from extra_data import (AliasError, H5File, KeyData, PropertyNameError,
+                        SourceNameError, by_id, by_index, open_run)
+from extra_data.reader import DEFAULT_ALIASES_FILE
+
 
 def test_with_aliases(mock_sa3_control_data, mock_sa3_control_aliases, mock_sa3_control_aliases_yaml):
     run_without_aliases = H5File(mock_sa3_control_data)
@@ -334,3 +338,74 @@ def test_alias_jhub_links(mock_sa3_control_data, mock_sa3_control_aliases_yaml):
     # Test that the /gpfs root is replaced with the ~/GPFS symlink
     run._alias_files[0] = "/gpfs/foo.yaml"
     assert run.alias.jhub_links() == {"/gpfs/foo.yaml": "https://max-jhub.desy.de/hub/user-redirect/lab/tree/GPFS/foo.yaml"}
+
+
+def test_alias_template_fallback(mock_spb_raw_and_proc_run, tmp_path):
+    mock_data_root, raw_run_dir, proc_run_dir = mock_spb_raw_and_proc_run
+
+    # Prepare a template file with a simple alias under a fake SW root
+    sw_root = tmp_path
+    template_dir = sw_root / 'SPB'
+    template_dir.mkdir(parents=True)
+    template_path = template_dir / 'extra-data-aliases-default.yml'
+    template_path.write_text("xgm: SA1_XTD2_XGM/DOOCS/MAIN\n")
+
+    with mock.patch('extra_data.reader.DATA_ROOT_DIR', mock_data_root), \
+         mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', mock_data_root), \
+         mock.patch('extra_data.reader.SW_ROOT_DIR', str(sw_root)):
+
+        prop_dir = f"{mock_data_root}/SPB/201830/p002012"
+        default_aliases = Path(DEFAULT_ALIASES_FILE.format(prop_dir))
+        default_aliases.parent.mkdir(parents=True, exist_ok=True)
+        assert not default_aliases.exists()
+
+        # Default call should trigger template copy into proposal usr dir
+        run = open_run(2012, 238)
+
+        # File was created
+        assert default_aliases.is_file()
+
+        # Permissions are world-writable
+        mode = stat.S_IMODE(os.stat(default_aliases).st_mode)
+        assert mode & 0o222 == 0o222  # Group + other writable
+
+        # Aliases were loaded and usable
+        assert 'xgm' in run.alias
+
+
+def test_alias_template_missing(mock_spb_raw_and_proc_run, tmp_path):
+    mock_data_root, raw_run_dir, proc_run_dir = mock_spb_raw_and_proc_run
+
+    # Instrument is not present under SW_ROOT
+    sw_root = tmp_path
+
+    with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', mock_data_root), \
+         mock.patch('extra_data.read_machinery.SW_ROOT_DIR', str(sw_root)):
+
+        run = open_run(2012, 238)
+
+        prop_dir = f"{mock_data_root}/SPB/201830/p002012"
+        default_aliases = Path(DEFAULT_ALIASES_FILE.format(prop_dir))
+
+        # File was not created
+        assert not default_aliases.exists()
+        # No aliases loaded
+        assert run._aliases == {}
+
+    # Instrument dir is present but no template file
+    sw_root = tmp_path
+    instrument_dir = sw_root / 'SPB'
+    instrument_dir.mkdir(parents=True)
+
+    with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', mock_data_root), \
+         mock.patch('extra_data.read_machinery.SW_ROOT_DIR', str(sw_root)):
+
+        run = open_run(2012, 238)
+
+        prop_dir = f"{mock_data_root}/SPB/201830/p002012"
+        default_aliases = Path(DEFAULT_ALIASES_FILE.format(prop_dir))
+
+        # File was not created
+        assert not default_aliases.exists()
+        # No aliases loaded
+        assert run._aliases == {}
