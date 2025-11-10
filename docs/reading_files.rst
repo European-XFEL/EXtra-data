@@ -107,6 +107,19 @@ whenever opening a run with :meth:`open_run`.
 
       chmod 666 extra-data-aliases.yml
 
+.. note::
+   If you call :meth:`open_run` without specifying ``aliases`` and the
+   per‑proposal aliases file (``usr/extra-data-aliases.yml``) is missing,
+   EXtra-data will try to bootstrap it from a site template.
+
+   It looks for ``extra-data-aliases-default.yml`` under the software root for
+   the instrument, e.g. ``/gpfs/exfel/sw/SPB``.
+
+   If the template exists, it is copied to the proposal directory at
+   ``usr/extra-data-aliases.yml`` and permissions are relaxed (``chmod 666``) so
+   that everyone can edit it. If no template is found, the run is opened without
+   aliases, as before.
+
 You can then access sources and keys by aliases through the
 :attr:`DataCollection.alias` property. For example, if this was in our
 ``extra-data-aliases.yml`` file:
