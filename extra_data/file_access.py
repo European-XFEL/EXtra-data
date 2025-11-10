@@ -227,7 +227,7 @@ class FileAccess(metaclass=MetaFileAccess):
         m = self.euxfel_filename_pattern.match(osp.basename(self.filename))
 
         if m:
-            self._filename_infos = (m[1], int(m[2][1:]), m[3], int(m[4]) if m[3] != 'OVERVIEW' else 0)
+            self._filename_infos = (m[1], int(m[2]), m[3], int(m[4]) if m[3] != 'OVERVIEW' else 0)
         else:
             self._filename_infos = (None, None, None, None)
 
