@@ -38,9 +38,10 @@ from .exceptions import (MultiRunError, PropertyNameError, SourceNameError,
                          TrainIDError)
 from .file_access import FileAccess
 from .keydata import KeyData
-from .read_machinery import (DATA_ROOT_DIR, DETECTOR_SOURCE_RE, SW_ROOT_DIR,
-                             by_id, by_index, find_proposal, glob_wildcards_re,
-                             is_int_like, same_run, select_train_ids)
+from .read_machinery import (DETECTOR_SOURCE_RE, by_id, by_index,
+                             data_root_dir, find_proposal, glob_wildcards_re,
+                             is_int_like, same_run, select_train_ids,
+                             sw_root_dir)
 from .run_files_map import RunFilesMap
 from .sourcedata import SourceData
 from .utils import available_cpu_cores, isinstance_no_import
@@ -2140,10 +2141,8 @@ def open_run(
         # Determine the instrument from the proposal path
         instrument = None
         template_path = None
-        m = re.match(rf'^{DATA_ROOT_DIR}/(\w+)/(\w+)/(p\d+)/?$', prop_dir)
-        if m:
-            instrument = m.group(1)
-            template_path = Path(SW_ROOT_DIR) / instrument / "extra-data-aliases-default.yml"
+        if instrument := Path(prop_dir).parts[-3]:
+            template_path = sw_root_dir() / instrument / "extra-data-aliases-default.yml"
 
         if template_path and template_path.is_file():
             try:

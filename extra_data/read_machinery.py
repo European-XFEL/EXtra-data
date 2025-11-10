@@ -11,6 +11,7 @@ import re
 import time
 from glob import iglob
 from numbers import Integral
+from pathlib import Path
 from warnings import warn
 
 import numpy as np
@@ -22,8 +23,13 @@ log = logging.getLogger(__name__)
 DETECTOR_NAMES = {'AGIPD', 'DSSC', 'LPD'}
 DETECTOR_SOURCE_RE = re.compile(r'(.+\/(?:DET|CORR))\/(\d+)CH')
 
-DATA_ROOT_DIR = os.environ.get('EXTRA_DATA_DATA_ROOT', '/gpfs/exfel/exp')
-SW_ROOT_DIR = os.environ.get('EXTRA_DATA_SW_ROOT', '/gpfs/exfel/sw')
+
+def data_root_dir():
+    return Path(os.environ.get('EXTRA_DATA_DATA_ROOT', '/gpfs/exfel/exp'))
+
+
+def sw_root_dir():
+    return Path(os.environ.get('EXTRA_DATA_SW_ROOT', '/gpfs/exfel/sw'))
 
 
 class _SliceConstructor(type):
@@ -312,10 +318,10 @@ def find_proposal(propno):
         return propno
 
     t0 = time.monotonic()
-    for d in iglob(osp.join(DATA_ROOT_DIR, '*/*/{}'.format(propno))):
+    for d in data_root_dir().glob(f'*/*/{propno}'):
         dt = time.monotonic() - t0
         log.info("Found proposal dir %r in %.2g s", d, dt)
-        return d
+        return str(d)
 
     raise Exception("Couldn't find proposal dir for {!r}".format(propno))
 

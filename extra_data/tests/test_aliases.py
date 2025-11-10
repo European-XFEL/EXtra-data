@@ -340,7 +340,7 @@ def test_alias_jhub_links(mock_sa3_control_data, mock_sa3_control_aliases_yaml):
     assert run.alias.jhub_links() == {"/gpfs/foo.yaml": "https://max-jhub.desy.de/hub/user-redirect/lab/tree/GPFS/foo.yaml"}
 
 
-def test_alias_template_fallback(mock_spb_raw_and_proc_run, tmp_path):
+def test_alias_template_fallback(mock_spb_raw_and_proc_run, tmp_path, monkeypatch):
     mock_data_root, raw_run_dir, proc_run_dir = mock_spb_raw_and_proc_run
 
     # Prepare a template file with a simple alias under a fake SW root
@@ -350,62 +350,54 @@ def test_alias_template_fallback(mock_spb_raw_and_proc_run, tmp_path):
     template_path = template_dir / 'extra-data-aliases-default.yml'
     template_path.write_text("xgm: SA1_XTD2_XGM/DOOCS/MAIN\n")
 
-    with mock.patch('extra_data.reader.DATA_ROOT_DIR', mock_data_root), \
-         mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', mock_data_root), \
-         mock.patch('extra_data.reader.SW_ROOT_DIR', str(sw_root)):
+    monkeypatch.setenv('EXTRA_DATA_SW_ROOT', str(sw_root))
 
-        prop_dir = f"{mock_data_root}/SPB/201830/p002012"
-        default_aliases = Path(DEFAULT_ALIASES_FILE.format(prop_dir))
-        default_aliases.parent.mkdir(parents=True, exist_ok=True)
-        assert not default_aliases.exists()
+    prop_dir = f"{mock_data_root}/SPB/201830/p002012"
+    default_aliases = Path(DEFAULT_ALIASES_FILE.format(prop_dir))
+    default_aliases.parent.mkdir(parents=True, exist_ok=True)
+    assert not default_aliases.exists()
 
-        # Default call should trigger template copy into proposal usr dir
-        run = open_run(2012, 238)
+    # Default call should trigger template copy into proposal usr dir
+    run = open_run(2012, 238)
 
-        # File was created
-        assert default_aliases.is_file()
+    # File was created
+    assert default_aliases.is_file()
 
-        # Permissions are world-writable
-        mode = stat.S_IMODE(os.stat(default_aliases).st_mode)
-        assert mode & 0o222 == 0o222  # Group + other writable
+    # Permissions are world-writable
+    mode = stat.S_IMODE(os.stat(default_aliases).st_mode)
+    assert mode & 0o222 == 0o222  # Group + other writable
 
-        # Aliases were loaded and usable
-        assert 'xgm' in run.alias
+    # Aliases were loaded and usable
+    assert 'xgm' in run.alias
 
 
-def test_alias_template_missing(mock_spb_raw_and_proc_run, tmp_path):
+def test_alias_template_missing(mock_spb_raw_and_proc_run, tmp_path, monkeypatch):
     mock_data_root, raw_run_dir, proc_run_dir = mock_spb_raw_and_proc_run
 
     # Instrument is not present under SW_ROOT
     sw_root = tmp_path
+    monkeypatch.setenv('EXTRA_DATA_SW_ROOT', str(sw_root))
 
-    with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', mock_data_root), \
-         mock.patch('extra_data.read_machinery.SW_ROOT_DIR', str(sw_root)):
+    run = open_run(2012, 238)
 
-        run = open_run(2012, 238)
+    prop_dir = f"{mock_data_root}/SPB/201830/p002012"
+    default_aliases = Path(DEFAULT_ALIASES_FILE.format(prop_dir))
 
-        prop_dir = f"{mock_data_root}/SPB/201830/p002012"
-        default_aliases = Path(DEFAULT_ALIASES_FILE.format(prop_dir))
-
-        # File was not created
-        assert not default_aliases.exists()
-        # No aliases loaded
-        assert run._aliases == {}
+    # File was not created
+    assert not default_aliases.exists()
+    # No aliases loaded
+    assert run._aliases == {}
 
     # Instrument dir is present but no template file
-    sw_root = tmp_path
     instrument_dir = sw_root / 'SPB'
     instrument_dir.mkdir(parents=True)
 
-    with mock.patch('extra_data.read_machinery.DATA_ROOT_DIR', mock_data_root), \
-         mock.patch('extra_data.read_machinery.SW_ROOT_DIR', str(sw_root)):
+    run = open_run(2012, 238)
 
-        run = open_run(2012, 238)
+    prop_dir = f"{mock_data_root}/SPB/201830/p002012"
+    default_aliases = Path(DEFAULT_ALIASES_FILE.format(prop_dir))
 
-        prop_dir = f"{mock_data_root}/SPB/201830/p002012"
-        default_aliases = Path(DEFAULT_ALIASES_FILE.format(prop_dir))
-
-        # File was not created
-        assert not default_aliases.exists()
-        # No aliases loaded
-        assert run._aliases == {}
+    # File was not created
+    assert not default_aliases.exists()
+    # No aliases loaded
+    assert run._aliases == {}

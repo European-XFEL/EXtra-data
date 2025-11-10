@@ -100,7 +100,6 @@ def test_serve_run(mock_spb_raw_and_proc_run, tmp_path):
     p = Popen(args, env=dict(
         os.environ,
         PYTHONUNBUFFERED='1',
-        EXTRA_DATA_DATA_ROOT=mock_data_root
     ))
     try:
         with Client(zmq_endpoint, timeout=30) as c:
