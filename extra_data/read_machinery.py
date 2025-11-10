@@ -23,6 +23,7 @@ DETECTOR_NAMES = {'AGIPD', 'DSSC', 'LPD'}
 DETECTOR_SOURCE_RE = re.compile(r'(.+\/(?:DET|CORR))\/(\d+)CH')
 
 DATA_ROOT_DIR = os.environ.get('EXTRA_DATA_DATA_ROOT', '/gpfs/exfel/exp')
+SW_ROOT_DIR = os.environ.get('EXTRA_DATA_SW_ROOT', '/gpfs/exfel/sw')
 
 
 class _SliceConstructor(type):

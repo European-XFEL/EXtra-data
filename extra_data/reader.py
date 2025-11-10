@@ -16,13 +16,14 @@ import logging
 import os
 import os.path as osp
 import re
+import shutil
 import signal
 import sys
 import tempfile
 import time
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from itertools import groupby, chain
+from itertools import chain, groupby
 from multiprocessing import Pool
 from operator import index
 from pathlib import Path
@@ -37,9 +38,9 @@ from .exceptions import (MultiRunError, PropertyNameError, SourceNameError,
                          TrainIDError)
 from .file_access import FileAccess
 from .keydata import KeyData
-from .read_machinery import (DETECTOR_SOURCE_RE, by_id, by_index,
-                             find_proposal, glob_wildcards_re, is_int_like,
-                             same_run, select_train_ids)
+from .read_machinery import (DATA_ROOT_DIR, DETECTOR_SOURCE_RE, SW_ROOT_DIR,
+                             by_id, by_index, find_proposal, glob_wildcards_re,
+                             is_int_like, same_run, select_train_ids)
 from .run_files_map import RunFilesMap
 from .sourcedata import SourceData
 from .utils import available_cpu_cores, isinstance_no_import
@@ -2131,11 +2132,35 @@ def open_run(
     if isinstance(aliases, str):
         aliases = Path(aliases.format(prop_dir))
 
-    # If we're using the default aliases file and it doesn't exist, ignore it
-    # without throwing any errors.
+    # If we're using the default aliases file and it doesn't exist, try to
+    # bootstrap it from an instrument template before falling back to no
+    # aliases.
     default_aliases = Path(DEFAULT_ALIASES_FILE.format(prop_dir))
     if aliases == default_aliases and not default_aliases.is_file():
-        aliases = None
+        # Determine the instrument from the proposal path
+        instrument = None
+        template_path = None
+        m = re.match(rf'^{DATA_ROOT_DIR}/(\w+)/(\w+)/(p\d+)/?$', prop_dir)
+        if m:
+            instrument = m.group(1)
+            template_path = Path(SW_ROOT_DIR) / instrument / "extra-data-aliases-default.yml"
+
+        if template_path and template_path.is_file():
+            try:
+                shutil.copyfile(template_path, default_aliases)
+                # Ensure the copied file is editable by everyone
+                try:
+                    default_aliases.chmod(0o666)
+                except PermissionError:
+                    # If we can't change permissions, proceed anyway.
+                    log.warning("Could not set permissions on %s", default_aliases)
+                log.info("Copied default alias template from %s to %s", template_path, default_aliases)
+            except Exception as exc:
+                log.warning("Failed to copy alias template from %s to %s: %s", template_path, default_aliases, exc)
+
+        # If the file still doesn't exist after attempting to copy, ignore aliases
+        if not default_aliases.is_file():
+            aliases = None
 
     if aliases is not None:
         dc = dc.with_aliases(aliases)
