@@ -12,9 +12,9 @@ from tempfile import TemporaryDirectory
 import h5py
 
 from .file_access import FileAccess
+from .read_machinery import data_root_dir
 from .writer import VirtualFileWriter
 
-DATA_ROOT_DIR = "/gpfs/exfel/exp/"
 # Version number for virtual overview format - increment if we need to stop old
 # versions of EXtra-data from reading files made by newer versions.
 VOVIEW_VERSION = 1
@@ -85,13 +85,9 @@ def voview_paths_for_run(directory):
         return paths
 
     fname = f'{raw_proc.upper()}-{run_nr.upper()}-OVERVIEW.h5'
-    prop_usr = osp.join(
-        DATA_ROOT_DIR, instr, cycle, prop, 'usr'
-    )
-    if osp.isdir(prop_usr):
-        paths.append(
-            osp.join(prop_usr, '.extra_data', fname)
-        )
+    prop_usr = data_root_dir() / instr / cycle / prop / 'usr'
+    if prop_usr.is_dir():
+        paths.append(str(prop_usr / '.extra_data' / fname))
     return paths
 
 def find_file_read(run_dir):

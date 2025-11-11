@@ -125,7 +125,7 @@ def test_combine_voview(mock_spb_raw_run, mock_spb_proc_run, tmp_path):
 
 
 def test_voview_paths(tmp_path, monkeypatch):
-    monkeypatch.setattr(voview, 'DATA_ROOT_DIR', str(tmp_path))
+    monkeypatch.setenv('EXTRA_DATA_DATA_ROOT', str(tmp_path))
 
     maxwell_run_dir = tmp_path / 'raw' / 'XMPL' / '202102' / 'p700000' / 'r0123'
     maxwell_run_dir.mkdir(parents=True)

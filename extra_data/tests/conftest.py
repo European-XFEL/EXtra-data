@@ -171,8 +171,9 @@ def mock_spb_raw_run(format_version):
 
 
 @pytest.fixture()
-def mock_spb_raw_and_proc_run():
+def mock_spb_raw_and_proc_run(monkeypatch):
     with TemporaryDirectory() as td:
+        monkeypatch.setenv('EXTRA_DATA_DATA_ROOT', str(td))
         prop_dir = osp.join(str(td), 'SPB', '201830', 'p002012')
 
         # Set up raw
@@ -200,8 +201,9 @@ def mock_modern_spb_proc_run():
         yield td
 
 @pytest.fixture()
-def mock_spb_raw_and_modern_proc_run():
+def mock_spb_raw_and_modern_proc_run(monkeypatch):
     with TemporaryDirectory() as td:
+        monkeypatch.setenv('EXTRA_DATA_DATA_ROOT', str(td))
         prop_dir = osp.join(str(td), 'SPB', '201830', 'p002012')
 
         # Set up raw
