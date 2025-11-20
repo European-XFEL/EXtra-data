@@ -129,6 +129,7 @@ class AGIPD1MPSC(DeviceBase):
         if bias_voltage:
             self.control_keys.append(
                 ('channels/U0/measurementSenseVoltage', 'f8', ()))
+            self.control_keys.append(
                 ('channels/U0/voltage', 'f8', ()))
 
     def write_control(self, f):
