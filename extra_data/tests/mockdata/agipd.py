@@ -96,7 +96,7 @@ class AGIPD500KFPGA(DeviceBase):
         ctrl_grp = f'CONTROL/{self.device_id}/'
         run_grp = f'RUN/{self.device_id}/'
         for grp in [ctrl_grp, run_grp]:
-            f[grp + 'highVoltage/actual/value'][()] = 200
+            f[grp + 'highVoltage/target/value'][()] = 200
 
 
 class AGIPD1MPSC(DeviceBase):
@@ -136,4 +136,4 @@ class AGIPD1MPSC(DeviceBase):
         if self.bias_voltage:
             for grp in [ctrl_grp, run_grp]:
                 g = f[grp]
-                g['channels/U0/measurementSenseVoltage/value'][()] = 300.0
+                g['channels/U0/voltage/value'][()] = 300.0
