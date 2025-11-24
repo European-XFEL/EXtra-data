@@ -4,3 +4,5 @@ updates:
     directory: "/.github/dependabot/"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 7
