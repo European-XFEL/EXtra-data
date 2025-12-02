@@ -76,7 +76,9 @@ setup(name="EXtra-data",
               'ipython',  # For nbsphinx syntax highlighting
               'nbsphinx',
               'sphinx',
+              'sphinx-rtd-theme',
               'sphinxcontrib_github_alt',
+              'readthedocs-sphinx-search',
           ],
           'test': [
               'cloudpickle',
