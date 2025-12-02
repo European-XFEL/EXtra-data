@@ -125,6 +125,10 @@ class SourceData:
         return list(self.keys(inc_timestamps=False))
 
     def _get_first_source_file(self):
+        # Try a fast-path for non-voview files.
+        if not self.files[0].is_voview:
+            return self.files[0]
+
         try:
             # May throw TypeError if there are only RUN keys.
             first_kd = self[self.one_key()]
