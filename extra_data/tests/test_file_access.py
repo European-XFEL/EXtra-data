@@ -81,30 +81,47 @@ def test_euxfel_path_infos(mock_sa3_control_data, monkeypatch):
     assert fa.storage_class is None
     assert fa.instrument is None
     assert fa.cycle is None
+    assert fa.proposal is None
+    assert fa.run == 450  # But a valid filename!
 
     # EuXFEL locations are resolved to their true paths and may either
     # be on online GPFS, offline GPFS or dCache.
     for filename in [
-        '/gpfs/exfel/exp/SA3/202301/p001234/raw/r0100/foo.h5',
-        '/gpfs/exfel/d/raw/SA3/202301/p001234/r0100/foo.h5',
-        '/pnfs/xfel.eu/exfel/archive/XFEL/raw/SA3/202301/p001234/r0100/foo.h5'
+        '/gpfs/exfel/exp/SA3/202301/p001234/raw/r5100/foo.h5',
+        '/gpfs/exfel/d/raw/SA3/202301/p001234/r5100/foo.h5',
+        '/pnfs/xfel.eu/exfel/archive/XFEL/raw/SA3/202301/p001234/r5100/foo.h5',
+        '/gpfs/exfel/exp/SA3/202301/p001234/usr/.extra_data/RAW-R5100-OVERVIEW.h5'
     ]:
         fa = FileAccess(filename, _cache_info=_empty_cache_info)
 
-        assert fa.storage_class == 'raw'
+        assert fa.storage_class in {'raw', 'usr'}
         assert fa.instrument == 'SA3'
         assert fa.cycle == '202301'
+        assert fa.proposal == 1234
+        assert fa.run == 5100
+
+    # Verify that run is unavailable in some cases.
+    fa = FileAccess(
+        '/gpfs/exfel/exp/SA3/202301/p001234/usr/.extra_data/OVERVIEW.h5',
+        _cache_info=_empty_cache_info)
+    assert fa.proposal == 1234
+    assert fa.run is None
 
 
 def test_euxfel_filename_infos(mock_sa3_control_data, monkeypatch):
     fa = FileAccess(mock_sa3_control_data)
-
     assert fa.data_category == 'RAW'
+    assert fa.run == 450
     assert fa.aggregator == 'DA01'
     assert fa.sequence == 1
 
-    fa = FileAccess('/a/b/c/my-own-file.h5', _cache_info=_empty_cache_info)
+    fa = FileAccess('RAW-R0450-OVERVIEW.h5', _cache_info=_empty_cache_info)
+    assert fa.data_category == 'RAW'
+    assert fa.run == 450
+    assert fa.aggregator == 'OVERVIEW'
+    assert fa.sequence == 0
 
+    fa = FileAccess('/a/b/c/my-own-file.h5', _cache_info=_empty_cache_info)
     assert fa.data_category is None
     assert fa.aggregator is None
     assert fa.sequence is None

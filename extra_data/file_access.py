@@ -130,15 +130,19 @@ class FileAccess(metaclass=MetaFileAccess):
 
     # Regular expressions to extract path and filename information for HDF5
     # files saved on the EuXFEL computing infrastructure.
-    euxfel_path_pattern = re.compile(
-        # A path may have three different prefixes depending on the storage location.
-        r'\/(gpfs\/exfel\/exp|gpfs\/exfel\/d|pnfs\/xfel.eu\/exfel\/archive\/XFEL)'
 
-        # The first prefix above uses the pattern <instrument>/<cycle>/<proposal>/<class>/<run>,
-        # the other two use <class>/<instrument>/<cycle>/<proposal>
-        r'\/(\w+)\/(\d{6}|\w+)\/(\d{6}|p\d{6})\/(p\d{6}|[a-z]+)\/r\d{4}')
+    # Paths starting with /gpfs/exfel/exp are either the canonical link
+    # on Maxwell or an ONC path.
+    euxfel_exp_path_pattern = re.compile(
+        r'\/gpfs\/exfel\/exp\/(\w+)\/(\d{6})\/p(\d{6})\/([a-z]+)\/(?:r(\d{4})|.extra_data)')
 
-    euxfel_filename_pattern = re.compile(r'([A-Z]+)-R\d{4}-(\w+)-S(\d{5}).h5')
+    # Otherwise it is a direct GPFS or dCache path on Maxwell.
+    euxfel_direct_path_pattern = re.compile(
+        r'\/(gpfs\/exfel\/d|gpfs\/exfel\/u|pnfs\/xfel.eu\/exfel\/archive\/XFEL)'
+        r'\/([a-z]+)\/(\w+)\/(\d{6})\/p(\d{6})\/(?:r(\d{4})|.extra_data)'
+    )
+
+    euxfel_filename_pattern = re.compile(r'([A-Z]+)-R(\d{4})-(\w+)(?:-S(\d{5}))?.h5')
 
     def __init__(self, filename, _cache_info=None):
         self.filename = osp.abspath(filename)
@@ -210,23 +214,28 @@ class FileAccess(metaclass=MetaFileAccess):
         return file
 
     def _evaluate_path_infos(self):
-        m = self.euxfel_path_pattern.match(osp.dirname(osp.realpath(self.filename)))
+        parent = osp.dirname(osp.realpath(self.filename))
 
-        if m:
-            if m[1] == 'gpfs/exfel/exp':
-                self._path_infos = (m[5], m[2], m[3])  # ONC path.
-            else:
-                self._path_infos = (m[2], m[3], m[4])  # Maxwell path.
+        if (m := self.euxfel_exp_path_pattern.match(parent)):
+            self._path_infos = (m[4], m[1], m[2], int(m[3]),
+                                int(m[5]) if m[5] is not None else None)
+
+        elif (m := self.euxfel_direct_path_pattern.match(parent)):
+            self._path_infos = (m[2], m[3], m[4], int(m[5][1:]),
+                                int(m[6]) if m[6] is not None else None)
+
         else:
-            self._path_infos = (None, None, None)
+            # storage_class, instrument, cycle, proposal, run
+            self._path_infos = (None, None, None, None, None)
 
     def _evaluate_filename_infos(self):
         m = self.euxfel_filename_pattern.match(osp.basename(self.filename))
 
         if m:
-            self._filename_infos = (m[1], m[2], int(m[3]))
+            self._filename_infos = (m[1], int(m[2]), m[3],
+                                    int(m[4]) if m[3] != 'OVERVIEW' else 0)
         else:
-            self._filename_infos = (None, None, None)
+            self._filename_infos = (None, None, None, None)
 
     @property
     def is_voview(self):
@@ -251,22 +260,42 @@ class FileAccess(metaclass=MetaFileAccess):
         return self._path_infos[2]
 
     @property
+    def proposal(self):
+        if self._path_infos is None:
+            self._evaluate_path_infos()
+        return self._path_infos[3]
+
+    @property
     def data_category(self):
         if self._filename_infos is None:
             self._evaluate_filename_infos()
         return self._filename_infos[0]
 
     @property
+    def run(self):
+        if self._filename_infos is None:
+            self._evaluate_filename_infos()
+
+        if self._filename_infos[1] is not None:
+            return self._filename_infos[1]
+
+        # Run number may also be part of the path.
+        if self._path_infos is None:
+            self._evaluate_path_infos()
+
+        return self._path_infos[4]
+
+    @property
     def aggregator(self):
         if self._filename_infos is None:
             self._evaluate_filename_infos()
-        return self._filename_infos[1]
+        return self._filename_infos[2]
 
     @property
     def sequence(self):
         if self._filename_infos is None:
             self._evaluate_filename_infos()
-        return self._filename_infos[2]
+        return self._filename_infos[3]
 
     @property
     def reduction_sources(self):
