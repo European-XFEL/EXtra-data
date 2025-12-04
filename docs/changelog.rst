@@ -1,6 +1,32 @@
 Release Notes
 =============
 
+.. _rel-1.23:
+
+1.23
+----
+
+2025-12-03
+
+- Aliases can now be set in a per-instrument default file at
+  ``/gpfs/exfel/sw/<instrument>/extra-data-aliases-default.yml`` (:ghpull:`682`).
+  This file is copied to proposal folders the first time a run is opened, so
+  changing the defaults only affects new proposals.
+- Coordinate labels can now be specified for :meth:`.KeyData.xarray` with the
+  ``extra_coords`` parameter (:ghpull:`672`). Also, if dimensions are named
+  using ``extra_dims``, default integer coordinate labels will be added to any
+  dimensions not given in ``extra_coords``.
+- Support for reading the ERRATA & REDUCTION sections of EXDF files through
+  ``run.auxiliary`` (:ghpull:`651`).
+- New command ``extra-data-readable`` for checking if HDF5 data files can be
+  read without hanging (:ghpull:`675`).
+- Fix finding an arbitrary key for control sources with keys selected
+  (:ghpull:`648`).
+- Fix getting information from filenames when using a virtual overview file
+  (:ghpull:`652`).
+- Speed up getting information from filenames when not using a virtual overview
+  file (:ghpull:`688`).
+
 .. _rel-1.22:
 
 1.22
@@ -347,7 +373,7 @@ Breaking changes
   (:ghpull:`274`).
 - Fixes to ensure that files are not unnecessarily reopened (:ghpull:`264`).
 
-.. _rel-1.9.1
+.. _rel-1.9.1:
 
 1.9.1
 -----

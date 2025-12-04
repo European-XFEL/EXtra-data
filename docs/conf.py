@@ -35,9 +35,6 @@ extensions = [
     'nbsphinx',
     'sphinxcontrib_github_alt',
     'sphinx_search.extension',
-    # Workaround for sphinx-rtd-theme issue
-    # https://github.com/readthedocs/sphinx_rtd_theme/issues/1452
-    'sphinxcontrib.jquery',
 ]
 
 # For :ghissue: and :ghpull: links.
