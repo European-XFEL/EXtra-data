@@ -425,6 +425,7 @@ def make_jungfrau_run(dir_path):
         JUNGFRAUPower('SPB_IRDA_JF4M/MDL/POWER'),
     ], ntrains=100, chunksize=1, format_version='1.0')
 
+
 def make_fxe_jungfrau_run(dir_path):
     # Naming based on /gpfs/exfel/exp/FXE/202101/p002478/raw/
     for modno in range(1, 3):
