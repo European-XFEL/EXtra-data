@@ -2142,7 +2142,9 @@ def open_run(
         instrument = Path(prop_dir).parts[-3]
         template_path = sw_root_dir() / instrument / "extra-data-aliases-default.yml"
 
-        if template_path.is_file():
+        # Not using pathlib is_file() here: on Python < 3.14 it can throw
+        # PermissionError, whereas this returns False if permissions lacking.
+        if os.path.isfile(template_path):
             try:
                 shutil.copyfile(template_path, default_aliases)
                 # Ensure the copied file is editable by everyone
