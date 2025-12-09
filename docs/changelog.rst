@@ -1,12 +1,31 @@
 Release Notes
 =============
 
+.. _rel-1.23.2:
+
+1.23.2
+------
+
+2025-12-09
+
+- Fix a bug with the new per-instrument default aliases files, which are not
+  currently accessible for external users (:ghpull:`694`).
+
+.. _rel-1.23.1:
+
+1.23.1
+------
+
+2025-12-08
+
+- Internal fix for testing mechanisms.
+
 .. _rel-1.23:
 
 1.23
 ----
 
-2025-12-03
+2025-12-04
 
 - Aliases can now be set in a per-instrument default file at
   ``/gpfs/exfel/sw/<instrument>/extra-data-aliases-default.yml`` (:ghpull:`682`).
