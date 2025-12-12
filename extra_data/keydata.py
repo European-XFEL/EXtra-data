@@ -1,4 +1,5 @@
 from typing import List, Optional, Tuple
+from warnings import warn
 
 import h5py
 import numpy as np
@@ -610,8 +611,11 @@ class KeyData:
 
         # xarray attributes
         attrs = {}
-        if (units := self.units):
-            attrs['units'] = units
+        try:
+            if (units := self.units):
+                attrs['units'] = units
+        except Exception as e:
+            warn(f"Exception fetching units: {e}")
 
         if ndarr.dtype.names is not None:
             # Structured dtype.
