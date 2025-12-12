@@ -302,7 +302,7 @@ class KeyData:
         if (not attrs) and dset.is_virtual:
             # Virtual datasets were initially created without these attributes.
             # Find a source file. Not using source_file_paths as it can give [].
-            _, filename, _, _ = dset.virtual_sources()[0]
+            filename = dset.id.get_create_plist().get_virtual_filename(0)
             # Not using FileAccess: no need for train or source lists.
             with h5py.File(filename, 'r') as f:
                 attrs = self._find_attributes(f[self.hdf5_data_path])
