@@ -5,7 +5,7 @@ import pytest
 
 import h5py
 
-from extra_data import RunDirectory, H5File
+from extra_data import RunDirectory, H5File, open_run
 from extra_data.keydata import expand_indexing
 from extra_data.exceptions import TrainIDError, NoDataError
 from . import make_examples
@@ -551,3 +551,11 @@ def test_xarray_extra_dims_and_coords(mock_spb_raw_run):
     np.testing.assert_array_equal(da11.coords['dim_0'], np.arange(2))
     np.testing.assert_array_equal(da11.coords['dim_1'], np.arange(15, 16))
     np.testing.assert_array_equal(da11.coords['dim_2'], np.arange(5, 15))
+
+
+@pytest.mark.skipif(not os.path.isdir("/pnfs/xfel.eu"), reason="xfel.eu dCache not available")
+def test_drop_empty_trains_out_of_order():
+    run = open_run(900174, 354, data='raw', include='*-AGIPD00-*.h5')
+    kd = run['HED_DET_AGIPD500K2G/DET/0CH0:xtdf', 'image.data']
+    assert (kd.data_counts(labelled=False) == 0).sum() > 0
+    assert (kd.drop_empty_trains().data_counts(labelled=False) == 0).sum() == 0
