@@ -402,13 +402,13 @@ class KeyData:
         else:
             all_tids_arr = np.array(self.train_ids)
             res = np.zeros(len(all_tids_arr), dtype=np.uint64)
-            tid_to_ix = np.intersect1d(all_tids_arr, train_ids, return_indices=True)[1]
+            _, to_ix, from_ix = np.intersect1d(all_tids_arr, train_ids, return_indices=True)
 
             # We may be missing some train IDs, if they're not in any file
             # for this source, and they're sometimes out of order within chunks
             # (they shouldn't be, but we try not to fail too badly if they are).
-            assert len(tid_to_ix) == len(train_ids)
-            res[tid_to_ix] = counts
+            assert len(to_ix) == len(train_ids)
+            res[to_ix] = counts[from_ix]
 
             return res
 
