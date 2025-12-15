@@ -13,6 +13,7 @@ program. If not, see <https://opensource.org/licenses/BSD-3-Clause>
 import datetime
 import fnmatch
 import logging
+import multiprocessing
 import os
 import os.path as osp
 import re
@@ -24,7 +25,6 @@ import time
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from itertools import chain, groupby
-from multiprocessing import Pool
 from operator import index
 from pathlib import Path
 from typing import Tuple
@@ -182,7 +182,9 @@ class DataCollection:
             # Open the files either in parallel or serially
             if parallelize:
                 nproc = min(available_cpu_cores(), len(uncached))
-                with Pool(processes=nproc, initializer=ignore_sigint) as pool:
+                ctx = multiprocessing.get_context('forkserver')
+                ctx.set_forkserver_preload(['extra_data'])
+                with ctx.Pool(processes=nproc, initializer=ignore_sigint) as pool:
                     for fname, fa in pool.imap_unordered(cls._open_file, uncached):
                         handle_open_file_attempt(fname, fa)
             else:
