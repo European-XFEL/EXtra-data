@@ -180,7 +180,8 @@ class DataCollection:
 
         if uncached:
             # Open the files either in parallel or serially
-            if parallelize:
+            # If we're in a parallel worker (.daemon set), don't parallelise
+            if parallelize and not multiprocessing.current_process().daemon:
                 nproc = min(available_cpu_cores(), len(uncached))
                 ctx = multiprocessing.get_context('forkserver')
                 ctx.set_forkserver_preload(['extra_data'])
