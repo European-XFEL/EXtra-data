@@ -53,12 +53,13 @@ setup(name="EXtra-data",
       },
       install_requires=[
           'h5py>=2.10',
+          'loky',
           'matplotlib',
           'numpy',
           'packaging',
           'pandas',
-          'xarray',
           'pyyaml',
+          'xarray',
       ],
       extras_require={
           'bridge': [
