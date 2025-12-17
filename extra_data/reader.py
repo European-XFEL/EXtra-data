@@ -24,7 +24,7 @@ import time
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from itertools import chain, groupby
-from multiprocessing import Pool
+from multiprocessing import current_process
 from operator import index
 from pathlib import Path
 from typing import Tuple
@@ -180,10 +180,20 @@ class DataCollection:
 
         if uncached:
             # Open the files either in parallel or serially
-            if parallelize:
-                nproc = min(available_cpu_cores(), len(uncached))
-                with Pool(processes=nproc, initializer=ignore_sigint) as pool:
-                    for fname, fa in pool.imap_unordered(cls._open_file, uncached):
+            # If we're in a parallel worker (.daemon set), don't parallelise
+            if parallelize and not current_process().daemon and len(uncached) >= 4:
+                # We're using loky because it's safer than the fork start method
+                # but still works in simple scripts without the __name__ check.
+                # Limiting the number of processes and telling BLAS not to set
+                # up a big thread pool mitigates the overhead.
+                from loky import ProcessPoolExecutor
+                nproc = min(available_cpu_cores(), len(uncached) // 2, 16)
+                with ProcessPoolExecutor(
+                        max_workers=nproc,
+                        initializer=ignore_sigint,
+                        env={'OPENBLAS_NUM_THREADS': '1'},
+                ) as pool:
+                    for fname, fa in pool.map(cls._open_file, uncached):
                         handle_open_file_attempt(fname, fa)
             else:
                 for path in uncached:
