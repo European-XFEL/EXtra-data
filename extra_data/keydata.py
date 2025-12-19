@@ -535,6 +535,29 @@ class KeyData:
         ]
         return np.concatenate(chunks_trainids)
 
+    def train_index_bounds(self, labelled=False):
+        """Generate first and last indices of trains to use alongside data
+        from ``.ndarray()``.
+
+        If *labelled* is True, returns a pandas dataframe with columns first
+        and last. Otherwise, returns a tuple of two NumPy arrays.
+        """
+
+        counts = self.data_counts(labelled)
+        first = counts.copy()
+
+        if labelled:
+            first.iloc[0] = 0
+            first.iloc[1:] = counts.cumsum().iloc[:-1]
+            last = first + counts
+            import pandas as pd
+            return pd.concat(
+                [first.rename('first'), last.rename('last')], axis=1)
+        else:
+            first[0] = 0
+            first[1:] = counts.cumsum()[:-1]
+            return first, first + counts
+
     def xarray(self, extra_dims=None, roi=(), name=None, extra_coords=None):
         """Load this data as a labelled xarray array or dataset.
 
