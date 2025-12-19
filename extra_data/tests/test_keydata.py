@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import xarray as xr
+import pandas as pd
 import pytest
 
 import h5py
@@ -245,6 +246,33 @@ def test_data_counts_missing_train(fxe_run_module_offset):
     arr = lpd_m8_w_data.data_counts(labelled=False)
     assert len(arr) == 480
     np.testing.assert_array_equal(arr, 128)
+
+
+@pytest.mark.parametrize('labelled', [True, False])
+def test_train_index_bounds(mock_spb_raw_run, labelled):
+    run = RunDirectory(mock_spb_raw_run)
+
+    agipd_m0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.pulseId']
+    bounds = agipd_m0.train_index_bounds(labelled)
+
+    if labelled:
+        first, last = bounds['first'], bounds['last']
+    else:
+        first, last = bounds
+
+    np.testing.assert_array_equal(first, np.arange(0, 4032+1, 64))
+    np.testing.assert_array_equal(last, first+64)
+
+    xgm = run['SPB_XTD9_XGM/DOOCS/MAIN', 'pulseEnergy.photonFlux']
+    bounds = xgm.train_index_bounds(labelled)
+
+    if labelled:
+        first, last = bounds['first'], bounds['last']
+    else:
+        first, last = bounds
+
+    np.testing.assert_array_equal(first, np.arange(len(first)))
+    np.testing.assert_array_equal(last, first+1)
 
 
 def test_select_by(mock_spb_raw_run):
