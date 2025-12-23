@@ -31,7 +31,7 @@ class XGM(DeviceBase):
         ('pulseEnergy/crossUsed', 'f4', ()),
         ('pulseEnergy/gammaUsed', 'f4', ()),
         ('pulseEnergy/gmdError', 'i4', ()),
-        ('pulseEnergy/nummberOfBrunches', 'f4', ()),
+        ('pulseEnergy/nummberOfBunches', 'f4', ()),
         ('pulseEnergy/photonFlux', 'f4', ()),
         ('pulseEnergy/pressure', 'f4', ()),
         ('pulseEnergy/temperature', 'f4', ()),
