@@ -286,8 +286,16 @@ class MultimodDetectorBase:
                 pat = re.escape(detector_name) + cls._source_raw_pat
                 source_to_modno = dict(cls._source_matches(data, pat))
 
-                if (raw is False) and any(cls._data_is_raw(data, s) for s in source_to_modno):
-                    raise SourceNameError(f'{detector_name}/CORR/...')
+                if any(cls._data_is_raw(data, s) for s in source_to_modno):
+                    if raw is False:
+                        raise SourceNameError(f'{detector_name}/CORR/...')
+                    warn(
+                        'Falling back to raw data for backwards compatibility. '
+                        'Please pass raw=False to make this warning into an '
+                        'error, or raw=True if you intend to work with raw '
+                        'detector data.',
+                        stacklevel=3
+                    )
                 # raw=None -> legacy behaviour: prefer corrected but allow raw
 
         if modules is not None:
