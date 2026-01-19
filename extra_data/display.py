@@ -11,38 +11,54 @@ from .sourcedata import SourceData
 def info(dc: DataCollection, details_for_sources=(), with_aggregators=False,
          with_auxiliary=False):
     """Show information about the selected data."""
-    details_sources_re = [re.compile(fnmatch.translate(p))
-                          for p in details_for_sources]
+    InfoPrinter(dc, details_for_sources, with_aggregators).show(with_auxiliary)
 
-    # time info
-    train_count = len(dc.train_ids)
-    if train_count == 0:
-        first_train = last_train = '-'
-        span_txt = '0.0'
-    else:
-        first_train = dc.train_ids[0]
-        last_train = dc.train_ids[-1]
-        seconds, deciseconds = divmod((last_train - first_train + 1), 10)
-        try:
-            td = timedelta(seconds=int(seconds))
-        except OverflowError:  # Can occur if a train ID is corrupted
-            span_txt = "OverflowError (one or more train IDs are probably wrong)"
+
+class InfoPrinter:
+    def __init__(self, dc: DataCollection, details_for_sources=(), with_aggregators=False):
+        self.dc = dc
+        self.details_for_sources = details_for_sources
+        self.details_sources_re = [re.compile(fnmatch.translate(p))
+                                   for p in details_for_sources]
+        self.with_aggregators = with_aggregators
+
+        # Invert aliases for faster lookup.
+        self.src_aliases = defaultdict(set)
+        self.srckey_aliases = defaultdict(lambda: defaultdict(set))
+
+        for alias, literal in dc._aliases.items():
+            if isinstance(literal, str):
+                self.src_aliases[literal].add(alias)
+            else:
+                self.srckey_aliases[literal[0]][literal[1]].add(alias)
+
+    def trains(self):
+        # time info
+        train_count = len(self.dc.train_ids)
+        if train_count == 0:
+            first_train = last_train = '-'
+            span_txt = '0.0'
         else:
-            span_txt = f'{td}.{int(deciseconds)}'
+            first_train = self.dc.train_ids[0]
+            last_train = self.dc.train_ids[-1]
+            seconds, deciseconds = divmod((last_train - first_train + 1), 10)
+            try:
+                td = timedelta(seconds=int(seconds))
+            except OverflowError:  # Can occur if a train ID is corrupted
+                span_txt = "OverflowError (one or more train IDs are probably wrong)"
+            else:
+                span_txt = f'{td}.{int(deciseconds)}'
 
-    # disp
-    print('# of trains:   ', train_count)
-    print('Duration:      ', span_txt)
-    print('First train ID:', first_train)
-    print('Last train ID: ', last_train)
-    print()
+        # disp
+        print('# of trains:   ', train_count)
+        print('Duration:      ', span_txt)
+        print('First train ID:', first_train)
+        print('Last train ID: ', last_train)
+        print()
 
-    if not details_for_sources:
-        # Include summary section for multi-module detectors unless
-        # source details are enabled.
-
+    def xtdf(self):
         sources_by_detector = {}
-        for source in dc.detector_sources:
+        for source in self.dc.detector_sources:
             name, modno = DETECTOR_SOURCE_RE.match(source).groups((1, 2))
             sources_by_detector.setdefault(name, {})[modno] = source
 
@@ -56,7 +72,7 @@ def info(dc: DataCollection, details_for_sources=(), with_aggregators=False,
                 # Show detail on the first module (the others should be similar)
                 mod_key = sorted(detector_modules)[0]
                 mod_source = detector_modules[mod_key]
-                dinfo = dc.detector_info(mod_source)
+                dinfo = self.dc.detector_info(mod_source)
                 module = ' '.join(mod_key)
                 dims = ' x '.join(str(d) for d in dinfo['dims'])
                 print("  e.g. module {} : {} pixels".format(module, dims))
@@ -66,93 +82,99 @@ def info(dc: DataCollection, details_for_sources=(), with_aggregators=False,
                 ))
             print()
 
-    # Invert aliases for faster lookup.
-    src_aliases = defaultdict(set)
-    srckey_aliases = defaultdict(lambda: defaultdict(set))
-
-    for alias, literal in dc._aliases.items():
-        if isinstance(literal, str):
-            src_aliases[literal].add(alias)
-        else:
-            srckey_aliases[literal[0]][literal[1]].add(alias)
-
-    def src_alias_list(s):
-        if src_aliases[s]:
-            alias_str = ', '.join(src_aliases[s])
+    def src_alias_list(self, s):
+        if self.src_aliases[s]:
+            alias_str = ', '.join(self.src_aliases[s])
             return f'<{alias_str}>'
         return ''
 
-    if details_for_sources:
-        # All instrument sources with details enabled.
-        displayed_inst_srcs = dc.instrument_sources - dc.legacy_sources.keys()
-        print(len(displayed_inst_srcs), 'instrument sources:')
-    else:
-        # Only non-XTDF instrument sources without details enabled.
-        displayed_inst_srcs = dc.instrument_sources - dc.detector_sources - dc.legacy_sources.keys()
-        print(len(displayed_inst_srcs), 'instrument sources (excluding XTDF detectors):')
+    def inst_sources(self):
+        srcs = self.dc.instrument_sources
+        if self.details_sources_re:
+            # All instrument sources with details enabled.
+            displayed_inst_srcs = srcs - self.dc.legacy_sources.keys()
+            print(len(displayed_inst_srcs), 'instrument sources:')
+        else:
+            # Only non-XTDF instrument sources without details enabled.
+            displayed_inst_srcs = (
+                srcs - self.dc.detector_sources - self.dc.legacy_sources.keys()
+            )
+            print(len(displayed_inst_srcs), 'instrument sources (excluding XTDF detectors):')
 
-    for s in sorted(displayed_inst_srcs):
-        agg_str = f' [{dc[s].aggregator}]' if with_aggregators else ''
-        print('  -' + agg_str, s, src_alias_list(s))
-        if not any(p.match(s) for p in details_sources_re):
-            continue
+        for s in sorted(displayed_inst_srcs):
+            sd = self.dc[s]
+            agg_str = f' [{sd.aggregator}]' if self.with_aggregators else ''
+            print('  -' + agg_str, s, self.src_alias_list(s))
+            if not any(p.match(s) for p in self.details_sources_re):
+                continue
 
-        sif = SourceInfoFormatter(dc[s], srckey_aliases[s])
+            sif = SourceInfoFormatter(sd, self.srckey_aliases[s])
 
-        # Detail for instrument sources:
-        for group, keys in groupby(sorted(dc.keys_for_source(s)),
-                                   key=lambda k: k.split('.')[0]):
-            print(f'    - {group}:')
-            keys = list(keys)
-            print('      ' + sif.src_data_detail(keys))
-            for l in sif.keys_detail(keys):
-                print("      " + l)
+            # Detail for instrument sources:
+            for group, keys in groupby(sorted(sd.keys()),
+                                       key=lambda k: k.split('.')[0]):
+                print(f'    - {group}:')
+                keys = list(keys)
+                print('      ' + sif.src_data_detail(keys))
+                for l in sif.keys_detail(keys):
+                    print("      " + l)
+        print()
 
-    print()
-    print(len(dc.control_sources), 'control sources:')
-    for s in sorted(dc.control_sources):
-        agg_str = f' [{dc[s].aggregator}]' if with_aggregators else ''
-        print('  -' + agg_str, s, src_alias_list(s))
-        if any(p.match(s) for p in details_sources_re):
-            sif = SourceInfoFormatter(dc[s], srckey_aliases[s])
-            # Detail for control sources: list keys
-            print('    - Control keys (1 entry per train):')
-            for l in sif.keys_detail():
-                print("      " + l)
-
-            if rok_detail := list(sif.run_only_keys_detail()):
-                print('    - Additional run keys (1 entry per run):')
-                for l in rok_detail:
+    def ctrl_sources(self):
+        print(len(self.dc.control_sources), 'control sources:')
+        for s in sorted(self.dc.control_sources):
+            sd = self.dc[s]
+            agg_str = f' [{sd.aggregator}]' if self.with_aggregators else ''
+            print('  -' + agg_str, s, self.src_alias_list(s))
+            if any(p.match(s) for p in self.details_sources_re):
+                sif = SourceInfoFormatter(sd, self.srckey_aliases[s])
+                # Detail for control sources: list keys
+                print('    - Control keys (1 entry per train):')
+                for l in sif.keys_detail():
                     print("      " + l)
 
-    print()
+                if rok_detail := list(sif.run_only_keys_detail()):
+                    print('    - Additional run keys (1 entry per run):')
+                    for l in rok_detail:
+                        print("      " + l)
+        print()
 
-    if dc.legacy_sources:
+    def legacy_sources(self):
         # Collect legacy souces matching DETECTOR_SOURCE_RE
         # separately for a condensed view.
         detector_legacy_sources = defaultdict(set)
 
-        print(len(dc.legacy_sources), 'legacy source names:')
-        for s in sorted(dc.legacy_sources.keys()):
+        print(len(self.dc.legacy_sources), 'legacy source names:')
+        for s in sorted(self.dc.legacy_sources.keys()):
             m = DETECTOR_SOURCE_RE.match(s)
 
             if m is not None:
                 detector_legacy_sources[m[1]].add(s)
             else:
                 # Only print non-XTDF legacy sources.
-                print(' -', s, '->', dc.legacy_sources[s])
+                print(' -', s, '->', self.dc.legacy_sources[s])
 
         for legacy_det, legacy_sources in detector_legacy_sources.items():
-            canonical_mod = dc.legacy_sources[next(iter(legacy_sources))]
+            canonical_mod = self.dc.legacy_sources[next(iter(legacy_sources))]
             canonical_det = DETECTOR_SOURCE_RE.match(canonical_mod)[1]
 
             print(' -', f'{legacy_det}/*', '->', f'{canonical_det}/*',
                   f'({len(legacy_sources)})')
         print()
 
-    if with_auxiliary:
-        dc.auxiliary.info(details_for_sources=details_for_sources,
-                            with_aggregators=with_aggregators)
+    def show(self, with_auxiliary=False):
+        self.trains()
+        if not self.details_sources_re:
+            self.xtdf()
+        self.inst_sources()
+        self.ctrl_sources()
+        if self.dc.legacy_sources:
+            self.legacy_sources()
+        if with_auxiliary:
+            self.dc.auxiliary.info(
+                details_for_sources=self.details_for_sources,
+                with_aggregators=self.with_aggregators
+            )
 
 
 class SourceInfoFormatter:
