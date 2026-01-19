@@ -191,10 +191,7 @@ class SourceInfoFormatter:
     def run_only_keys_detail(self):
         run_values = self.src.run_values(inc_timestamps=False)
         run_only_keys = set(run_values) - self.src.keys(inc_timestamps=False)
-        if not run_only_keys:
-            return None
 
-        l = []
         for k in sorted(run_only_keys):
             if aliases := self.key_aliases.get(k):
                 alias_str = ' <' + ', '.join(aliases) + '>'
