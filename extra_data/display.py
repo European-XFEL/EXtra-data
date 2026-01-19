@@ -4,10 +4,9 @@ from collections import defaultdict
 from datetime import timedelta
 from itertools import groupby
 
-import h5py
-
 from .reader import DataCollection
 from .read_machinery import DETECTOR_SOURCE_RE
+from .sourcedata import SourceData
 
 def info(dc: DataCollection, details_for_sources=(), with_aggregators=False,
          with_auxiliary=False):
@@ -83,35 +82,6 @@ def info(dc: DataCollection, details_for_sources=(), with_aggregators=False,
             return f'<{alias_str}>'
         return ''
 
-    def src_data_detail(s, keys, prefix=''):
-        """Detail for how much data is present for an instrument group"""
-        if not keys:
-            return
-        counts = dc.get_data_counts(s, list(keys)[0])
-        ntrains_data = (counts > 0).sum()
-        print(
-            f'{prefix}data for {ntrains_data} trains '
-            f'({ntrains_data / train_count:.2%}), '
-            f'up to {counts.max()} entries per train'
-        )
-
-    def keys_detail(s, keys, prefix=''):
-        """Detail for a group of keys"""
-        for k in keys:
-            entry_shape = dc.get_entry_shape(s, k)
-            if entry_shape:
-                entry_info = f", entry shape {entry_shape}"
-            else:
-                entry_info = ""
-            dt = dc.get_dtype(s, k)
-
-            if k in srckey_aliases[s]:
-                alias_str = ' <' + ', '.join(srckey_aliases[s][k]) + '>'
-            else:
-                alias_str = ''
-
-            print(f"{prefix}{k}{alias_str}\t[{dt}{entry_info}]")
-
     if details_for_sources:
         # All instrument sources with details enabled.
         displayed_inst_srcs = dc.instrument_sources - dc.legacy_sources.keys()
@@ -127,13 +97,16 @@ def info(dc: DataCollection, details_for_sources=(), with_aggregators=False,
         if not any(p.match(s) for p in details_sources_re):
             continue
 
+        sif = SourceInfoFormatter(dc[s], srckey_aliases[s])
+
         # Detail for instrument sources:
         for group, keys in groupby(sorted(dc.keys_for_source(s)),
                                    key=lambda k: k.split('.')[0]):
             print(f'    - {group}:')
             keys = list(keys)
-            src_data_detail(s, keys, prefix='      ')
-            keys_detail(s, keys, prefix='      - ')
+            print('      ' + sif.src_data_detail(keys))
+            for l in sif.keys_detail(keys):
+                print("      " + l)
 
     print()
     print(len(dc.control_sources), 'control sources:')
@@ -141,34 +114,16 @@ def info(dc: DataCollection, details_for_sources=(), with_aggregators=False,
         agg_str = f' [{dc[s].aggregator}]' if with_aggregators else ''
         print('  -' + agg_str, s, src_alias_list(s))
         if any(p.match(s) for p in details_sources_re):
+            sif = SourceInfoFormatter(dc[s], srckey_aliases[s])
             # Detail for control sources: list keys
-            ctrl_keys = dc[s].keys(inc_timestamps=False)
             print('    - Control keys (1 entry per train):')
-            keys_detail(s, sorted(ctrl_keys), prefix='      - ')
+            for l in sif.keys_detail():
+                print("      " + l)
 
-            run_keys = dc._sources_data[s].files[0].get_run_keys(s)
-            run_keys = {k[:-6] for k in run_keys if k.endswith('.value')}
-            run_only_keys = run_keys - ctrl_keys
-            if run_only_keys:
+            if rok_detail := list(sif.run_only_keys_detail()):
                 print('    - Additional run keys (1 entry per run):')
-                for k in sorted(run_only_keys):
-                    if k in srckey_aliases[s]:
-                        alias_str = ' <' + ', '.join(srckey_aliases[s][k]) + '>'
-                    else:
-                        alias_str = ''
-
-                    ds = dc._sources_data[s].files[0].file[
-                        f"/RUN/{s}/{k.replace('.', '/')}/value"
-                    ]
-                    entry_shape = ds.shape[1:]
-                    if entry_shape:
-                        entry_info = f", entry shape {entry_shape}"
-                    else:
-                        entry_info = ""
-                    dt = ds.dtype
-                    if h5py.check_string_dtype(dt):
-                        dt = 'string'
-                    print(f"      - {k}{alias_str}\t[{dt}{entry_info}]")
+                for l in rok_detail:
+                    print("      " + l)
 
     print()
 
@@ -198,3 +153,60 @@ def info(dc: DataCollection, details_for_sources=(), with_aggregators=False,
     if with_auxiliary:
         dc.auxiliary.info(details_for_sources=details_for_sources,
                             with_aggregators=with_aggregators)
+
+
+class SourceInfoFormatter:
+    def __init__(self, src: SourceData, key_aliases=None):
+        self.src = src
+        self.key_aliases = key_aliases or {}
+
+    def src_data_detail(self, keys):
+        """Detail for how much data is present for an instrument group"""
+        if not keys:
+            return
+        counts = self.src[list(keys)[0]].data_counts()
+        ntrains_data = (counts > 0).sum()
+        return (
+            f'data for {ntrains_data} trains '
+            f'({ntrains_data / len(self.src.train_ids):.2%}), '
+            f'up to {counts.max()} entries per train'
+        )
+
+    def keys_detail(self, keys=None):
+        """Detail for a group of keys"""
+        if keys is None:
+            keys = sorted(self.src.keys(inc_timestamps=False))
+
+        for k in keys:
+            kd = self.src[k]
+
+            if aliases := self.key_aliases.get(k):
+                alias_str = ' <' + ', '.join(sorted(aliases)) + '>'
+            else:
+                alias_str = ''
+
+            entry_info = f", entry shape {kd.entry_shape}" if kd.entry_shape else ""
+            yield f"- {k}{alias_str}\t[{kd.dtype}{entry_info}]"
+
+    def run_only_keys_detail(self):
+        run_values = self.src.run_values(inc_timestamps=False)
+        run_only_keys = set(run_values) - self.src.keys(inc_timestamps=False)
+        if not run_only_keys:
+            return None
+
+        l = []
+        for k in sorted(run_only_keys):
+            if aliases := self.key_aliases.get(k):
+                alias_str = ' <' + ', '.join(aliases) + '>'
+            else:
+                alias_str = ''
+
+            val = run_values[k]
+            if isinstance(val, str):
+                shape = ()
+                dt = 'string'
+            else:
+                shape = val.shape
+                dt = val.dtype
+            entry_info = f", entry shape {val.shape}" if shape else ""
+            yield f"- {k}{alias_str}\t[{dt}{entry_info}]"
