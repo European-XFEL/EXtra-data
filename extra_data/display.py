@@ -1,6 +1,7 @@
 import fnmatch
 import re
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import timedelta
 from itertools import groupby
 
@@ -88,59 +89,78 @@ class InfoPrinter:
             return f'<{alias_str}>'
         return ''
 
+    def source_line(self, s):
+        agg_str = f" [{self.dc[s].aggregator}]" if self.with_aggregators else ""
+        print(f"  -{agg_str} {s} {self.src_alias_list(s)}")
+
+    def list_sources(self, srcs: list, detail: Callable):
+        current_group = SourceGroup()
+        def flush_group():
+            nonlocal current_group
+            if current_group:
+                print(f"  - {current_group}")
+            current_group = SourceGroup()
+
+        for s in sorted(srcs):
+            show_detail = any(p.match(s) for p in self.details_sources_re)
+            show_solo = show_detail or self.with_aggregators or self.src_aliases[s]
+            if show_solo:
+                flush_group()
+                self.source_line(s)
+                if show_detail:
+                    detail(s)
+            else:
+                if not current_group.add(s):
+                    flush_group()
+                    current_group.add(s)
+        flush_group()
+
     def inst_sources(self):
         srcs = self.dc.instrument_sources
         if self.details_sources_re:
             # All instrument sources with details enabled.
             displayed_inst_srcs = srcs - self.dc.legacy_sources.keys()
-            print(len(displayed_inst_srcs), 'instrument sources:')
+            print(len(displayed_inst_srcs), "instrument sources:")
         else:
             # Only non-XTDF instrument sources without details enabled.
             displayed_inst_srcs = (
                 srcs - self.dc.detector_sources - self.dc.legacy_sources.keys()
             )
-            print(len(displayed_inst_srcs), 'instrument sources (excluding XTDF detectors):')
+            print(len(displayed_inst_srcs), "instrument sources (excluding XTDF detectors):")
 
-        for s in sorted(displayed_inst_srcs):
-            sd = self.dc[s]
-            agg_str = f' [{sd.aggregator}]' if self.with_aggregators else ''
-            print('  -' + agg_str, s, self.src_alias_list(s))
-            if not any(p.match(s) for p in self.details_sources_re):
-                continue
-
-            sif = SourceInfoFormatter(sd, self.srckey_aliases[s])
-
-            # Detail for instrument sources:
-            for group, keys in groupby(sorted(sd.keys()),
-                                       key=lambda k: k.split('.')[0]):
-                print(f'    - {group}:')
-                keys = list(keys)
-                print('      ' + sif.src_data_detail(keys))
-                for l in sif.keys_detail(keys):
-                    print("      " + l)
+        self.list_sources(displayed_inst_srcs, self.inst_detail)
         print()
+
+    def inst_detail(self, s):
+        # Detail for instrument sources:
+        sd = self.dc[s]
+        sif = SourceInfoFormatter(self.dc[s], self.srckey_aliases[s])
+        for group, keys in groupby(sorted(sd.keys()), key=lambda k: k.split(".")[0]):
+            print(f"    - {group}:")
+            keys = list(keys)
+            print("      " + sif.src_data_detail(keys))
+            for l in sif.keys_detail(keys):
+                print("      " + l)
 
     def ctrl_sources(self):
-        print(len(self.dc.control_sources), 'control sources:')
-        for s in sorted(self.dc.control_sources):
-            sd = self.dc[s]
-            agg_str = f' [{sd.aggregator}]' if self.with_aggregators else ''
-            print('  -' + agg_str, s, self.src_alias_list(s))
-            if any(p.match(s) for p in self.details_sources_re):
-                sif = SourceInfoFormatter(sd, self.srckey_aliases[s])
-                # Detail for control sources: list keys
-                print('    - Control keys (1 entry per train):')
-                for l in sif.keys_detail():
-                    print("      " + l)
-
-                if rok_detail := list(sif.run_only_keys_detail()):
-                    print('    - Additional run keys (1 entry per run):')
-                    for l in rok_detail:
-                        print("      " + l)
+        print(len(self.dc.control_sources), "control sources:")
+        self.list_sources(self.dc.control_sources, self.ctrl_detail)
         print()
 
+    def ctrl_detail(self, s):
+        sif = SourceInfoFormatter(self.dc[s], self.srckey_aliases[s])
+        # Detail for control sources: list keys
+        print("    - Control keys (1 entry per train):")
+        for l in sif.keys_detail():
+            print("      " + l)
+
+        if rok_detail := list(sif.run_only_keys_detail()):
+            print("    - Additional run keys (1 entry per run):")
+            for l in rok_detail:
+                print("      " + l)
+
     def legacy_sources(self):
-        # Collect legacy souces matching DETECTOR_SOURCE_RE
+        # Collect legacy sources matching DETECTOR_SOURCE_RE
         # separately for a condensed view.
         detector_legacy_sources = defaultdict(set)
 
@@ -158,8 +178,7 @@ class InfoPrinter:
             canonical_mod = self.dc.legacy_sources[next(iter(legacy_sources))]
             canonical_det = DETECTOR_SOURCE_RE.match(canonical_mod)[1]
 
-            print(' -', f'{legacy_det}/*', '->', f'{canonical_det}/*',
-                  f'({len(legacy_sources)})')
+            print(f" - {legacy_det}/* -> {canonical_det}/* ({len(legacy_sources)})")
         print()
 
     def show(self, with_auxiliary=False):
@@ -173,8 +192,61 @@ class InfoPrinter:
         if with_auxiliary:
             self.dc.auxiliary.info(
                 details_for_sources=self.details_for_sources,
-                with_aggregators=self.with_aggregators
+                with_aggregators=self.with_aggregators,
             )
+
+
+class SourceGroup:
+    _num_re = re.compile(r"(\d+)")
+
+    def __init__(self):
+        self.entries = []
+
+    def __bool__(self):
+        return bool(self.entries)
+
+    def add(self, name):
+        split = self._num_re.split(name)  # parts 1, 3, ... are numeric
+        if not self.entries:
+            self.entries = [split]
+            return True
+
+        grp = self.entries
+        if len(split) != len(grp[0]):
+            return False
+
+        diffs_at = [i for i, (p1, p2) in enumerate(zip(grp[-1], split)) if p1 != p2]
+        if len(diffs_at) != 1 or ((diff_at := diffs_at[0]) % 2 == 0):
+            return False  # >1 part changed, or non-numeric part changed
+
+        if len(grp) > 2 and (grp[-1][diff_at] == grp[0][diff_at]):
+            return False  # different part changing from current seq
+
+        self.entries.append(split)
+        return True
+
+    def __str__(self):
+        res = []
+        for matched_parts in zip(*self.entries):
+            if len(ps := set(matched_parts)) == 1:
+                res.append(ps.pop())
+            else:
+                pl = sorted(ps, key=int)
+                ranges = [[pl[0], pl[0]]]
+                for part in pl[1:]:
+                    if int(part) == int(ranges[-1][-1]) + 1:
+                        ranges[-1][-1] = part
+                    else:
+                        ranges.append([part, part])
+
+                grp_part = ", ".join(
+                    [
+                        f"{start}" if start == end else f"{start}-{end}"
+                        for (start, end) in ranges
+                    ]
+                )
+                res.append("{" + grp_part + "}")
+        return "".join(res)
 
 
 class SourceInfoFormatter:
