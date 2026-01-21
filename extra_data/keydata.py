@@ -777,3 +777,9 @@ class KeyData:
                     yield tid, empty_result
 
                 start += count
+
+    def _pasha_functor_(self):
+        """Integration with pasha for map operations."""
+
+        from .pasha_functor import ExtraDataFunctor
+        return ExtraDataFunctor(self)

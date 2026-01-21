@@ -422,6 +422,12 @@ class DataCollection:
         return iter(TrainIterator(dc, require_all=require_all,
                                   flat_keys=flat_keys, keep_dims=keep_dims))
 
+    def _pasha_functor_(self):
+        """Integration with pasha for map operations."""
+
+        from .pasha_functor import ExtraDataFunctor
+        return ExtraDataFunctor(self)
+
     def train_from_id(
         self, train_id, devices=None, *, flat_keys=False, keep_dims=False):
         """Get train data for specified train ID.
