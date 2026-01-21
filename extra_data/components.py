@@ -2093,7 +2093,10 @@ def identify_multimod_detectors(
     res = set()
     for cls in clses:
         for name in cls._find_detector_names(data):
-            res.add((name, cls))
+            if (detector_name is None
+                or detector_name in name
+            ):
+                res.add((name, cls))
 
     if single:
         if len(res) < 1:
