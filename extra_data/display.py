@@ -197,7 +197,7 @@ class InfoPrinter:
 
 
 class SourceGroup:
-    _num_re = re.compile(r"(\d+)")
+    _piece_re = re.compile(r"(\d+|[a-zA-Z]+)")
 
     def __init__(self):
         self.entries = []
@@ -206,7 +206,7 @@ class SourceGroup:
         return bool(self.entries)
 
     def add(self, name):
-        split = self._num_re.split(name)  # parts 1, 3, ... are numeric
+        split = self._piece_re.split(name)  # parts 1, 3, ... are numeric
         if not self.entries:
             self.entries = [split]
             return True
@@ -217,13 +217,39 @@ class SourceGroup:
 
         diffs_at = [i for i, (p1, p2) in enumerate(zip(grp[-1], split)) if p1 != p2]
         if len(diffs_at) != 1 or ((diff_at := diffs_at[0]) % 2 == 0):
-            return False  # >1 part changed, or non-numeric part changed
+            return False  # >1 part changed, or separator part changed
 
         if len(grp) > 2 and (grp[-1][diff_at] == grp[0][diff_at]):
-            return False  # different part changing from current seq
+            return False  # different part changing from current group
 
         self.entries.append(split)
         return True
+
+    def is_numeric(self):
+        e = self.entries
+        if len(e) < 2:
+            return False
+        diff_at = [i for i, (p1, p2) in enumerate(zip(e[0], e[1])) if p1 != p2][0]
+        for parts in e:
+            try:
+                int(parts[diff_at])
+            except ValueError:
+                return False
+        return True
+
+    def num_ranges(self, part_set):
+        pl = sorted(part_set, key=int)
+        ranges = [[pl[0], pl[0]]]
+        for part in pl[1:]:
+            if int(part) == int(ranges[-1][-1]) + 1:
+                ranges[-1][-1] = part
+            else:
+                ranges.append([part, part])
+
+        return [
+            f"{start}" if start == end else f"{start}-{end}"
+            for (start, end) in ranges
+        ]
 
     def __str__(self):
         res = []
@@ -231,21 +257,11 @@ class SourceGroup:
             if len(ps := set(matched_parts)) == 1:
                 res.append(ps.pop())
             else:
-                pl = sorted(ps, key=int)
-                ranges = [[pl[0], pl[0]]]
-                for part in pl[1:]:
-                    if int(part) == int(ranges[-1][-1]) + 1:
-                        ranges[-1][-1] = part
-                    else:
-                        ranges.append([part, part])
-
-                grp_part = ", ".join(
-                    [
-                        f"{start}" if start == end else f"{start}-{end}"
-                        for (start, end) in ranges
-                    ]
-                )
-                res.append("{" + grp_part + "}")
+                if self.is_numeric():
+                    pl = self.num_ranges(ps)
+                else:
+                    pl = sorted(ps)
+                res.append("{" + ", ".join(pl) + "}")
         return "".join(res)
 
 
