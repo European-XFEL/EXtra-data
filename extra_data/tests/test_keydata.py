@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import pandas as pd
 import xarray as xr
 import pytest
 
@@ -351,9 +352,14 @@ def test_string_arrays(mock_spb_raw_run):
     f = RunDirectory(mock_spb_raw_run)
     state = f['SPB_XTD9_XGM/DOOCS/MAIN', 'state']
 
-    for data in [state.ndarray(), state.xarray(), state.series()]:
+    for data in [state.ndarray(), state.xarray()]:
         assert data.dtype.hasobject
         assert (data[3:8] == ['OFF', 'OFF', 'ON', 'ON', 'ON']).all()
+
+    ser = state.series()
+    # pandas 3+ defaults to StringDtype, older versions to numpy object dtypes
+    assert isinstance(ser.dtype, pd.StringDtype) or ser.dtype.hasobject
+    assert (data[3:8] == ['OFF', 'OFF', 'ON', 'ON', 'ON']).all()
 
 
 def test_xarray_structured_data(mock_remi_run):
