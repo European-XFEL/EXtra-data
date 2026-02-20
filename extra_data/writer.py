@@ -248,7 +248,7 @@ class VirtualFileWriter(FileWriter):
         if srcdata.is_control:
             src_file = srcdata.files[0]
             run_path = f'RUN/{source}'
-            self.file[run_path] = h5py.ExternalLink(src_file.filename, run_path)
+            src_file.file.copy(run_path, self.file, run_path)
 
     def copy_dataset(self, source, key):
         """Copy data as a new dataset"""
