@@ -259,6 +259,11 @@ class MultimodDetectorBase:
 
     @classmethod
     def _data_is_raw(cls, data, source: str):
+        if '/CORR/' in source:
+            # Since 2026/1, corrected data always uses /CORR/ in its
+            # source names.
+            return False
+
         # For most detectors, raw data is uint16 & corrected is float32.
         # Overridden for AGIPD, where output dtype is configurable.
         kd = data[source, cls._main_data_key]
