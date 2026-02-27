@@ -205,8 +205,46 @@ class SourceGroup:
     def __bool__(self):
         return bool(self.entries)
 
+    @classmethod
+    def split_name(cls, name: str) -> list[str]:
+        """Split up a source name for possible grouping
+
+        Based on the behaviour of re.split(), elements 1, 3, 5... in the result
+        are the pieces where variations might make a group, and 0, 2, 4... must
+        match exactly. Grouping is typically on alphabetic & numeric pieces,
+        with some heuristics to avoid over-grouping. The list always has an
+        odd number of elements, starting and ending with separator parts.
+        """
+        components = name.split("/")
+        components[-1], _, pipeline = components[-1].partition(':')
+        res = cls._piece_re.split(components[0])
+        for c in components[1:]:
+            head, *tail = cls._piece_re.split(c)
+            # The first part is always a separator or empty string. Combine it
+            # with the previous separator/empty string.
+            res[-1] += "/" + head
+            match tail:
+                case []:  # Component empty or just a separator
+                    pass
+                case [s, '']:
+                    # The whole component is a simple name/number.
+                    # Try grouping only on short names (e.g. 'X', 'Y') & numbers.
+                    if len(s) <= 2 or s.isdigit():
+                        res.extend(tail)
+                    else:
+                        res[-1] += s  # Add to a non-grouping part
+                case _:
+                    # Component has >1 name/number parts we can group on
+                    res.extend(tail)
+        if pipeline:
+            head, *tail = cls._piece_re.split(pipeline)
+            res[-1] += ":" + head
+            res.extend(tail)
+        return res
+
     def add(self, name):
-        split = self._piece_re.split(name)  # parts 1, 3, ... are numeric
+        """Try to add a name to the group. Returns True if it's added."""
+        split = self.split_name(name)  # parts 1, 3, ... are matches
         if not self.entries:
             self.entries = [split]
             return True
@@ -226,18 +264,19 @@ class SourceGroup:
         return True
 
     def is_numeric(self):
+        """Whether the varying part holds numbers"""
         e = self.entries
         if len(e) < 2:
             return False
         diff_at = [i for i, (p1, p2) in enumerate(zip(e[0], e[1])) if p1 != p2][0]
-        for parts in e:
-            try:
-                int(parts[diff_at])
-            except ValueError:
-                return False
-        return True
+        return all(parts[diff_at].isdigit() for parts in e)
 
     def num_ranges(self, part_set):
+        """Find contiguous ranges of numeric parts
+
+        Returns a list of [start, end] pairs: '1' '2' '3' '5' -> [1 3] [5 5]
+        """
+        # We keep the parts as strings, to preserve '01' vs '1'
         pl = sorted(part_set, key=int)
         ranges = [[pl[0], pl[0]]]
         for part in pl[1:]:
