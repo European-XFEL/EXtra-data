@@ -33,6 +33,7 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.napoleon',
     'nbsphinx',
+    'sphinxcontrib.jquery',
     'sphinxcontrib_github_alt',
 ]
 
