@@ -34,7 +34,6 @@ extensions = [
     'sphinx.ext.napoleon',
     'nbsphinx',
     'sphinxcontrib_github_alt',
-    'sphinx_search.extension',
 ]
 
 # For :ghissue: and :ghpull: links.
