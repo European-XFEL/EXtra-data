@@ -35,6 +35,7 @@ extensions = [
     'nbsphinx',
     'sphinxcontrib.jquery',
     'sphinxcontrib_github_alt',
+    'sphinx_search.extension',
 ]
 
 # For :ghissue: and :ghpull: links.
