@@ -325,11 +325,14 @@ class SourceInfoFormatter:
     def src_data_detail(self, index_group):
         """Detail for how much data is present for an instrument group"""
         counts = self.src.data_counts(index_group=index_group)
-        ntrains_data = (counts > 0).sum()
+        counts = counts[counts > 0]
+        ntrains_data = len(counts)
+        cmin, cmax = counts.min(), counts.max()
+        count_range = f"{cmin}" if (cmin == cmax) else f"{cmin}–{cmax}"
         return (
             f'data for {ntrains_data} trains '
             f'({ntrains_data / len(self.src.train_ids):.2%}), '
-            f'up to {counts.max()} entries per train'
+            f'{count_range} entries per train'
         )
 
     def keys_detail(self, keys=None):
