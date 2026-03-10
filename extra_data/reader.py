@@ -1305,10 +1305,15 @@ class DataCollection:
                f"sources and {len(self.train_ids)} trains>"
 
     def info(self, details_for_sources=(), with_aggregators=False,
-             with_auxiliary=False):
+             with_auxiliary=False, group_sources=True):
         """Show information about the selected data."""
-        from .display import info
-        info(self, details_for_sources, with_aggregators, with_auxiliary)
+        from .display import InfoPrinter
+        InfoPrinter(
+            dc,
+            details_for_sources=details_for_sources,
+            with_aggregators=with_aggregators,
+            group_sources=group_sources,
+        ).show(with_auxiliary)
 
     def plot_missing_data(self, min_saved_pct=95, expand_instrument=False):
         """Plot sources that have missing data for some trains.

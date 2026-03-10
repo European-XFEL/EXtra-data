@@ -9,19 +9,18 @@ from .reader import DataCollection
 from .read_machinery import DETECTOR_SOURCE_RE
 from .sourcedata import SourceData
 
-def info(dc: DataCollection, details_for_sources=(), with_aggregators=False,
-         with_auxiliary=False):
-    """Show information about the selected data."""
-    InfoPrinter(dc, details_for_sources, with_aggregators).show(with_auxiliary)
-
 
 class InfoPrinter:
-    def __init__(self, dc: DataCollection, details_for_sources=(), with_aggregators=False):
+    def __init__(
+            self, dc: DataCollection, details_for_sources=(), with_aggregators=False,
+            group_sources=True,
+    ):
         self.dc = dc
         self.details_for_sources = details_for_sources
         self.details_sources_re = [re.compile(fnmatch.translate(p))
                                    for p in details_for_sources]
         self.with_aggregators = with_aggregators
+        self.group_sources = group_sources and not with_aggregators
 
         # Invert aliases for faster lookup.
         self.src_aliases = defaultdict(set)
@@ -103,7 +102,7 @@ class InfoPrinter:
 
         for s in sorted(srcs):
             show_detail = any(p.match(s) for p in self.details_sources_re)
-            show_solo = show_detail or self.with_aggregators or self.src_aliases[s]
+            show_solo = (not self.group_sources) or show_detail or self.src_aliases[s]
             if show_solo:
                 flush_group()
                 self.source_line(s)

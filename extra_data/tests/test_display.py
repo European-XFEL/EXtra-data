@@ -1,6 +1,7 @@
 import pytest
 
-from ..display import SourceGroup
+from extra_data import RunDirectory
+from ..display import InfoPrinter, SourceGroup
 
 @pytest.mark.parametrize(("name", "exp"), [
     ("SPB_IRU_INLINEMIC/MOTOR/MIC_AX", [
@@ -92,3 +93,19 @@ def test_group_fail(names):
     for name in names[:-1]:
         assert grp.add(name) is True
     assert grp.add(names[-1]) is False
+
+
+def test_show_grouped(mock_fxe_jungfrau_run, capsys):
+    run = RunDirectory(mock_fxe_jungfrau_run)
+    InfoPrinter(run, group_sources=True).show()
+    out, err = capsys.readouterr()
+    assert "FXE_XAD_JF1M/DET/JNGFR{01-02}" in out
+    assert "FXE_XAD_JF1M/DET/JNGFR01" not in out
+
+
+def test_show_ungrouped(mock_fxe_jungfrau_run, capsys):
+    run = RunDirectory(mock_fxe_jungfrau_run)
+    InfoPrinter(run, group_sources=False).show()
+    out, err = capsys.readouterr()
+    assert "FXE_XAD_JF1M/DET/JNGFR{01-02}" not in out
+    assert "FXE_XAD_JF1M/DET/JNGFR01" in out
