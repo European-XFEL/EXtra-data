@@ -1305,13 +1305,14 @@ class DataCollection:
                f"sources and {len(self.train_ids)} trains>"
 
     def info(self, details_for_sources=(), with_aggregators=False,
-             with_auxiliary=False, group_sources=True):
+             with_auxiliary=False, counts=False, group_sources=True):
         """Show information about the selected data."""
         from .display import InfoPrinter
         InfoPrinter(
             self,
             details_for_sources=details_for_sources,
             with_aggregators=with_aggregators,
+            data_counts=counts,
             group_sources=group_sources,
         ).show(with_auxiliary)
 
