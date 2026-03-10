@@ -108,34 +108,10 @@ class AuxiliaryIndexer:
 
     def _source_info(self, label, sources, details_for_sources=(),
                      with_aggregators=False, file=None):
+        from .display import SourceInfoFormatter
         details_sources_re = [re.compile(fnmatch.translate(p))
                               for p in details_for_sources]
         info_str = ''
-
-        def src_data_detail(s, keys, prefix=''):
-            """Detail for how much data is present for an instrument group"""
-            if not keys:
-                return ''
-
-            sd = self[s]
-            counts = sd[list(keys)[0]].data_counts()
-            ntrains_data = (counts > 0).sum()
-            return f'{prefix}data for {ntrains_data} trains ' \
-                   f'({ntrains_data / len(sd.train_ids):.2%}), ' \
-                   f'up to {counts.max()} entries per train\n'
-
-        def keys_detail(s, keys, prefix=''):
-            """Detail for a group of keys"""
-            keys_str = ''
-
-            for k in keys:
-                kd = self[s, k]
-                entry_info = f', entry shape {kd.entry_shape}'  \
-                    if kd.entry_shape else ''
-
-                keys_str += f'{prefix}{k}\t[{kd.dtype}{entry_info}]\n'
-
-            return keys_str
 
         print(f'{len(sources)} {label} sources:', file=file)
 
@@ -145,15 +121,16 @@ class AuxiliaryIndexer:
             if not any(p.match(s) for p in details_sources_re):
                 continue
 
+            sif = SourceInfoFormatter(self[s])
+
             # Detail for instrument sources:
             for group, keys in groupby(sorted(self[s].keys()),
                                        key=lambda k: k.split('.')[0]):
                 keys = list(keys)
                 print(f'    - {group}:', file=file)
-                print(src_data_detail(s, keys, prefix='      '),
-                      end='', file=file)
-                print(keys_detail(s, keys, prefix='      - '),
-                      end='', file=file)
+                print('      ' + sif.src_data_detail(keys), file=file)
+                for l in sif.keys_detail(keys):
+                    print('      ' + l)
 
         return info_str
 

@@ -1074,6 +1074,13 @@ def test_proc_legacy_sources(mock_modern_spb_proc_run):
     assert run.select(det_mod0).all_sources == {det_mod0}
 
 
+def test_legacy_sources_info(mock_modern_spb_proc_run, capsys):
+    run = RunDirectory(mock_modern_spb_proc_run)
+    run.info()
+    out = capsys.readouterr().out
+    assert f"SPB_DET_AGIPD1M-1/DET/* -> SPB_DET_AGIPD1M-1/CORR/*" in out
+
+
 def test_datacollection_contains(mock_fxe_control_data):
     run = H5File(mock_fxe_control_data)
 

@@ -12,13 +12,13 @@ from ..reader import H5File, RunDirectory
 
 
 def describe_file(path, details_for_sources=(), with_aggregators=False,
-                  with_auxiliary=False):
+                  with_auxiliary=False, group_sources=True):
     """Describe a single HDF5 data file"""
     basename = os.path.basename(path)
     print(basename, ": Data file")
 
     h5file = H5File(path)
-    h5file.info(details_for_sources, with_aggregators, with_auxiliary)
+    h5file.info(details_for_sources, with_aggregators, with_auxiliary, group_sources)
 
 
 def summarise_file(path):
@@ -30,13 +30,13 @@ def summarise_file(path):
 
 
 def describe_run(path, details_for_sources=(), with_aggregators=False,
-                 with_auxiliary=False):
+                 with_auxiliary=False, group_sources=True):
     basename = os.path.basename(path)
     print(basename, ": Run directory")
     print()
 
     run = RunDirectory(path)
-    run.info(details_for_sources, with_aggregators, with_auxiliary)
+    run.info(details_for_sources, with_aggregators, with_auxiliary, group_sources)
 
 
 def summarise_run(path, indent=''):
@@ -90,12 +90,16 @@ def main(argv=None):
         help="Include auxiliary sources alongside regular sources. "
              "Only used when inspecting a single run or file and can slow "
              "down lsxfel.")
+    ap.add_argument('--no-group', action='store_true',
+        help="Don't try to group similar source names; show each individually.")
     args = ap.parse_args(argv)
     paths = args.paths or [os.path.abspath(os.getcwd())]
 
     # If --detail doesn't contain glob wildcards, treat it as a substring
     detail_patterns = [p if re.search(r'[*?[]', p) else f'*{p}*'
                        for p in args.detail]
+
+    group_sources = not args.no_group
 
     if len(paths) == 1:
         path = paths[0]
@@ -106,7 +110,7 @@ def main(argv=None):
             if any(f.endswith('.h5') for f in contents):
                 # Run directory
                 describe_run(path, detail_patterns, args.aggregators,
-                             args.auxiliary)
+                             args.auxiliary, group_sources=group_sources)
             elif any(re.match(r'r\d+', f) for f in contents):
                 # Proposal directory, containing runs
                 print(basename, ": Proposal data directory")
@@ -128,7 +132,7 @@ def main(argv=None):
         elif os.path.isfile(path):
             if path.endswith('.h5'):
                 describe_file(path, detail_patterns, args.aggregators,
-                              args.auxiliary)
+                              args.auxiliary, group_sources=group_sources)
             else:
                 print(basename, ": Unrecognised file")
                 return 2
