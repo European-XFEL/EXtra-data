@@ -1309,7 +1309,7 @@ class DataCollection:
         """Show information about the selected data."""
         from .display import InfoPrinter
         InfoPrinter(
-            dc,
+            self,
             details_for_sources=details_for_sources,
             with_aggregators=with_aggregators,
             group_sources=group_sources,
