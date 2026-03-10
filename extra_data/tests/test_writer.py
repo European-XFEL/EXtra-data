@@ -41,7 +41,7 @@ def test_write_virtual(mock_fxe_raw_run):
             assert ds.is_virtual
 
             link = f.get('RUN/SPB_XTD9_XGM/DOOCS/MAIN', getlink=True)
-            assert isinstance(link, h5py.ExternalLink)
+            assert isinstance(link, h5py.HardLink)
 
         with H5File(new_file) as f:
             np.testing.assert_array_equal(f.train_ids,
