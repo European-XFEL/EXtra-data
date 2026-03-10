@@ -8,23 +8,7 @@ import re
 import sys
 
 from ..read_machinery import FilenameInfo
-from ..reader import H5File, RunDirectory
-
-
-def describe_file(path, sources=(), details_for_sources=(), with_aggregators=False,
-                  with_auxiliary=False, counts=False, group_sources=True):
-    """Describe a single HDF5 data file"""
-    basename = os.path.basename(path)
-    print(basename, ": Data file")
-
-    h5file = sel = H5File(path)
-    if sources:
-        sel = h5file.select(sources)
-        print(f"Showing {len(sel.all_sources)} / {len(h5file.all_sources)} sources")
-    print()
-
-    sel.info(details_for_sources, with_aggregators, with_auxiliary,
-            counts=counts, group_sources=group_sources)
+from ..reader import DataCollection, H5File, RunDirectory
 
 
 def summarise_file(path):
@@ -33,21 +17,6 @@ def summarise_file(path):
 
     f = H5File(path)
     print(f"  {len(f.train_ids)} trains, {len(f.all_sources)} sources")
-
-
-def describe_run(path, sources=(), details_for_sources=(), with_aggregators=False,
-                 with_auxiliary=False, counts=False, group_sources=True):
-    basename = os.path.basename(path)
-    print(basename, ": Run directory")
-
-    sel = run = RunDirectory(path)
-    if sources:
-        sel = run.select(sources)
-        print(f"Showing {len(sel.all_sources)} / {len(run.all_sources)} sources")
-    print()
-
-    sel.info(details_for_sources, with_aggregators, with_auxiliary,
-             counts=counts, group_sources=group_sources)
 
 
 def summarise_run(path, indent=''):
@@ -118,7 +87,20 @@ def main(argv=None):
     source_patterns = [p if re.search(r'[*?[]', p) else f'*{p}*'
                        for p in args.source]
 
-    group_sources = not args.no_group
+    def dc_info(dc: DataCollection):
+        if source_patterns:
+            sel = dc.select(source_patterns)
+            print(f"Showing {len(sel.all_sources)} / {len(dc.all_sources)} sources")
+        else:
+            sel = dc
+        print()
+        sel.info(
+            detail_patterns,
+            counts=args.counts,
+            group_sources=(not args.no_group),
+            with_aggregators=args.aggregators,
+            with_auxiliary=args.auxiliary,
+        )
 
     if len(paths) == 1:
         path = paths[0]
@@ -128,10 +110,8 @@ def main(argv=None):
             contents = sorted(os.listdir(path))
             if any(f.endswith('.h5') for f in contents):
                 # Run directory
-                describe_run(
-                    path, source_patterns, detail_patterns, args.aggregators,
-                    args.auxiliary, counts=args.counts, group_sources=group_sources
-                )
+                print(basename, ": Run directory")
+                dc_info(RunDirectory(path))
             elif any(re.match(r'r\d+', f) for f in contents):
                 # Proposal directory, containing runs
                 print(basename, ": Proposal data directory")
@@ -152,10 +132,8 @@ def main(argv=None):
                 print(basename, ": Unrecognised directory")
         elif os.path.isfile(path):
             if path.endswith('.h5'):
-                describe_file(
-                    path, source_patterns, detail_patterns, args.aggregators,
-                    args.auxiliary, counts=args.counts, group_sources=group_sources
-                )
+                print(basename, ": Data file")
+                dc_info(H5File(path))
             else:
                 print(basename, ": Unrecognised file")
                 return 2
