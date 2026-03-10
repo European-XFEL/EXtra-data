@@ -1304,9 +1304,24 @@ class DataCollection:
         return f"<extra_data.DataCollection for {len(self.all_sources)} " \
                f"sources and {len(self.train_ids)} trains>"
 
-    def info(self, details_for_sources=(), with_aggregators=False,
-             with_auxiliary=False, counts=False, group_sources=True):
-        """Show information about the selected data."""
+    def info(self, details_for_sources=(), *, counts=False, group_sources=True,
+             with_aggregators=False, with_auxiliary=False):
+        """Show information about the selected data.
+
+        Parameters
+        ----------
+
+        details_for_sources: list of str
+            Glob patterns selecting sources to show additional information.
+        counts: bool
+            Show data counts for all instrument sources.
+        group_sources: bool
+            Group similar source names together if possible (on by default).
+        with_aggregators: bool
+            Show which data aggregator each source was saved by.
+        with_auxiliary: bool
+            Show auxiliary sources (REDUCTION & ERRATA)
+        """
         from .display import InfoPrinter
         InfoPrinter(
             self,
