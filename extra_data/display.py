@@ -13,14 +13,15 @@ from .sourcedata import SourceData
 class InfoPrinter:
     def __init__(
             self, dc: DataCollection, details_for_sources=(), with_aggregators=False,
-            group_sources=True,
+            data_counts=False, group_sources=True,
     ):
         self.dc = dc
         self.details_for_sources = details_for_sources
         self.details_sources_re = [re.compile(fnmatch.translate(p))
                                    for p in details_for_sources]
         self.with_aggregators = with_aggregators
-        self.group_sources = group_sources and not with_aggregators
+        self.data_counts = data_counts
+        self.group_sources = group_sources and not (with_aggregators or data_counts)
 
         # Invert aliases for faster lookup.
         self.src_aliases = defaultdict(set)
@@ -92,7 +93,7 @@ class InfoPrinter:
         agg_str = f" [{self.dc[s].aggregator}]" if self.with_aggregators else ""
         print(f"  -{agg_str} {s} {self.src_alias_list(s)}")
 
-    def list_sources(self, srcs: list, detail: Callable):
+    def list_sources(self, srcs: list, detail: Callable, data_counts=False):
         current_group = SourceGroup()
         def flush_group():
             nonlocal current_group
@@ -108,6 +109,8 @@ class InfoPrinter:
                 self.source_line(s)
                 if show_detail:
                     detail(s)
+                elif data_counts:
+                    self.inst_data(s)
             else:
                 if not current_group.add(s):
                     flush_group()
@@ -127,17 +130,28 @@ class InfoPrinter:
             )
             print(len(displayed_inst_srcs), "instrument sources (excluding XTDF detectors):")
 
-        self.list_sources(displayed_inst_srcs, self.inst_detail)
+        self.list_sources(displayed_inst_srcs, self.inst_detail, self.data_counts)
         print()
+
+    def inst_data(self, s):
+        # Show data volume, without list of keys
+        sd = self.dc[s]
+        sif = SourceInfoFormatter(self.dc[s])
+        index_groups = sorted(sd.index_groups)
+        if len(index_groups) == 1:
+            print(f"    {sif.src_data_detail(index_groups[0])}")
+        else:
+            for group in index_groups:
+                print(f"    {group}: {sif.src_data_detail(group)}")
 
     def inst_detail(self, s):
         # Detail for instrument sources:
         sd = self.dc[s]
-        sif = SourceInfoFormatter(self.dc[s], self.srckey_aliases[s])
+        sif = SourceInfoFormatter(sd, self.srckey_aliases[s])
         for group, keys in groupby(sorted(sd.keys()), key=lambda k: k.split(".")[0]):
             print(f"    - {group}:")
             keys = list(keys)
-            print("      " + sif.src_data_detail(keys))
+            print("      " + sif.src_data_detail(group))
             for l in sif.keys_detail(keys):
                 print("      " + l)
 
@@ -308,11 +322,9 @@ class SourceInfoFormatter:
         self.src = src
         self.key_aliases = key_aliases or {}
 
-    def src_data_detail(self, keys):
+    def src_data_detail(self, index_group):
         """Detail for how much data is present for an instrument group"""
-        if not keys:
-            return
-        counts = self.src[list(keys)[0]].data_counts()
+        counts = self.src.data_counts(index_group=index_group)
         ntrains_data = (counts > 0).sum()
         return (
             f'data for {ntrains_data} trains '
