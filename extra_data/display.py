@@ -119,7 +119,7 @@ class InfoPrinter:
 
     def inst_sources(self):
         srcs = self.dc.instrument_sources
-        if self.details_sources_re:
+        if (self.details_sources_re or self.data_counts):
             # All instrument sources with details enabled.
             displayed_inst_srcs = srcs - self.dc.legacy_sources.keys()
             print(len(displayed_inst_srcs), "instrument sources:")
@@ -196,7 +196,7 @@ class InfoPrinter:
 
     def show(self, with_auxiliary=False):
         self.trains()
-        if not self.details_sources_re:
+        if not (self.details_sources_re or self.data_counts):
             self.xtdf()
         self.inst_sources()
         self.ctrl_sources()
@@ -327,7 +327,7 @@ class SourceInfoFormatter:
         counts = self.src.data_counts(index_group=index_group)
         counts = counts[counts > 0]
         ntrains_data = len(counts)
-        cmin, cmax = counts.min(), counts.max()
+        cmin, cmax = (counts.min(), counts.max()) if ntrains_data else (0, 0)
         count_range = f"{cmin}" if (cmin == cmax) else f"{cmin}–{cmax}"
         return (
             f'data for {ntrains_data} trains '
