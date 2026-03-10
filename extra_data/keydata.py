@@ -539,24 +539,24 @@ class KeyData:
         """Generate first and last indices of trains to use alongside data
         from ``.ndarray()``.
 
-        If *labelled* is True, returns a pandas dataframe with columns first
-        and last. Otherwise, returns a tuple of two NumPy arrays.
+        If *labelled* is True, returns a pandas dataframe with columns start
+        and stop. Otherwise, returns a tuple of two NumPy arrays.
         """
 
         counts = self.data_counts(labelled)
-        first = counts.copy()
+        start = counts.copy()
 
         if labelled:
-            first.iloc[0] = 0
-            first.iloc[1:] = counts.cumsum().iloc[:-1]
-            last = first + counts
+            start.iloc[0] = 0
+            start.iloc[1:] = counts.cumsum().iloc[:-1]
+            stop = start + counts
             import pandas as pd
             return pd.concat(
-                [first.rename('first'), last.rename('last')], axis=1)
+                [start.rename('start'), stop.rename('stop')], axis=1)
         else:
-            first[0] = 0
-            first[1:] = counts.cumsum()[:-1]
-            return first, first + counts
+            start[0] = 0
+            start[1:] = counts.cumsum()[:-1]
+            return start, start + counts
 
     def xarray(self, extra_dims=None, roi=(), name=None, extra_coords=None):
         """Load this data as a labelled xarray array or dataset.

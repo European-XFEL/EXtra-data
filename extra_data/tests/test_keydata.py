@@ -256,23 +256,23 @@ def test_train_index_bounds(mock_spb_raw_run, labelled):
     bounds = agipd_m0.train_index_bounds(labelled)
 
     if labelled:
-        first, last = bounds['first'], bounds['last']
+        start, stop = bounds['start'], bounds['stop']
     else:
-        first, last = bounds
+        start, stop = bounds
 
-    np.testing.assert_array_equal(first, np.arange(0, 4032+1, 64))
-    np.testing.assert_array_equal(last, first+64)
+    np.testing.assert_array_equal(start, np.arange(0, 4032+1, 64))
+    np.testing.assert_array_equal(stop, start+64)
 
     xgm = run['SPB_XTD9_XGM/DOOCS/MAIN', 'pulseEnergy.photonFlux']
     bounds = xgm.train_index_bounds(labelled)
 
     if labelled:
-        first, last = bounds['first'], bounds['last']
+        start, stop = bounds['start'], bounds['stop']
     else:
-        first, last = bounds
+        start, stop = bounds
 
-    np.testing.assert_array_equal(first, np.arange(len(first)))
-    np.testing.assert_array_equal(last, first+1)
+    np.testing.assert_array_equal(start, np.arange(len(start)))
+    np.testing.assert_array_equal(stop, start+1)
 
 
 def test_select_by(mock_spb_raw_run):
