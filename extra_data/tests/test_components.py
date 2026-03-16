@@ -15,6 +15,7 @@ def test_get_array(mock_fxe_raw_run):
     run = RunDirectory(mock_fxe_raw_run)
     det = LPD1M(run.select_trains(by_index[:3]))
     assert det.detector_name == 'FXE_DET_LPD1M-1'
+    assert 'raw data' in repr(det)
 
     arr = det.get_array('image.data')
     assert arr.dtype == np.uint16
@@ -582,6 +583,7 @@ def test_modern_corr_sources(mock_modern_spb_proc_run, mock_spb_raw_run_fmt1):
     agipd_raw = AGIPD1M(combined, raw=True)
     assert agipd_raw.data.all_sources == det_sources
     assert 'image.mask' not in agipd_raw
+    assert 'raw data' in repr(agipd_raw)
 
     # Specify that we want corrected data
     with pytest.raises(Exception):
@@ -590,6 +592,7 @@ def test_modern_corr_sources(mock_modern_spb_proc_run, mock_spb_raw_run_fmt1):
     agipd_proc = AGIPD1M(combined, raw=False)
     assert agipd_proc.data.all_sources == corr_sources
     assert 'image.mask' in agipd_proc
+    assert 'proc data' in repr(agipd_proc)
 
     # Legacy behaviour: prefer corrected, allow raw if only that is found
     assert AGIPD1M(run_raw).data.all_sources == det_sources
