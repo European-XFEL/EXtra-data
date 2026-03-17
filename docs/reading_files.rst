@@ -229,6 +229,8 @@ below, e.g.::
 
    .. automethod:: train_id_coordinates
 
+   .. automethod:: train_index_bounds
+
    .. automethod:: select_trains
    
    .. automethod:: split_trains

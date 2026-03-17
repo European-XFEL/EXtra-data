@@ -1,6 +1,34 @@
 Release Notes
 =============
 
+.. _rel-1.24:
+
+1.24
+----
+
+- New options for :ref:`cmd-lsxfel` and :meth:`~.DataCollection.info` to show
+  data counts for instrument sources, separate from key names (:ghpull:`727`).
+- New :option:`lsxfel --source` option to select sources (:ghpull:`727`).
+- :ref:`cmd-lsxfel` and :meth:`~.DataCollection.info` will now group together
+  similar source names, e.g. numbered motors, for a more concise display
+  (:ghpull:`715`). This can be disabled if necessary.
+- New method :meth:`.KeyData.train_index_bounds` to get the start & end location
+  of each train in an array of data (:ghpull:`704`).
+- New virtual overview files will now contain a copy of the ``RUN`` section
+  from runs, rather than external links, making it faster to scan sources by
+  device class (:ghpull:`723`).
+- Fix getting units in some specific cases, and don't fail in
+  :meth:`~.KeyData.xarray` if there's an error getting units (:ghpull:`696`).
+- Fix :meth:`~.KeyData.data_counts` in with out-of-order train IDs and
+  ``labelled=False`` (:ghpull:`697`).
+- Opening many files in a folder in parallel no longer uses forked processes,
+  avoiding some rare but tricky bugs (:ghpull:`702`).
+- Detector :doc:`component classes <agipd_lpd_data>` now warn if they fall back
+  to raw data without the caller specifying ``raw=True``. This will likely
+  become an error in the future.
+- The identification of raw & corrected data in detector component classes was
+  made more robust (:ghpull:`713`).
+
 .. _rel-1.23.2:
 
 1.23.2
