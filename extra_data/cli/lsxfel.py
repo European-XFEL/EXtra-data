@@ -85,7 +85,7 @@ def main(argv=None):
     detail_patterns = [p if re.search(r'[*?[]', p) else f'*{p}*'
                        for p in args.detail]
     source_patterns = [p if re.search(r'[*?[]', p) else f'*{p}*'
-                       for p in args.source]
+                       for p in (args.source or args.detail)]
 
     def dc_info(dc: DataCollection):
         if source_patterns:

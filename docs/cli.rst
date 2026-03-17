@@ -33,7 +33,8 @@ The options below are only relevant when inspecting a single run or file.
 .. option:: --detail <source-pattern>
 
    Show more detail on the keys and data of the sources selected by a pattern,
-   in the same formats as ``--source``. Can be used several times.
+   in the same formats as ``--source``. Can be used several times. Only the
+   selected sources are shown, unless you also use ``--source``.
 
    This option can make ``lsxfel`` considerably slower.
 
