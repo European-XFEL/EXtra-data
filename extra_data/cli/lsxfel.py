@@ -89,7 +89,10 @@ def main(argv=None):
 
     def dc_info(dc: DataCollection):
         if source_patterns:
-            sel = dc.select(source_patterns)
+            try:
+                sel = dc.select(source_patterns)
+            except ValueError as e:  # No matching sources
+                sys.exit(str(e))
             print(f"Showing {len(sel.all_sources)} / {len(dc.all_sources)} sources")
         else:
             sel = dc
