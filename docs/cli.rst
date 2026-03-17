@@ -22,18 +22,38 @@ file:
 
 .. program:: lsxfel
 
+The options below are only relevant when inspecting a single run or file.
+
+.. option:: --source <source-pattern>, -s <source-pattern>
+
+   Select which sources to show, using a pattern like ``*/BAM*:output`` or
+   a substring like ``BAM``. Can be used several times to select different
+   patterns.
+
 .. option:: --detail <source-pattern>
 
-   Show more detail on the keys and data of the sources selected by a pattern
-   like ``*/XGM/*``. Only applies when inspecting a single run or file.
-   Can be used several times to select different patterns.
+   Show more detail on the keys and data of the sources selected by a pattern,
+   in the same formats as ``--source``. Can be used several times.
 
    This option can make ``lsxfel`` considerably slower.
+
+.. option:: --counts
+
+   Show data counts for instrument sources.
+
+.. option:: --no-group
+
+   Don't try to group similar source names; show each individually.
 
 .. option:: --aggregators, -g
 
    Show the data aggregator in which each source is saved. This option
    can make ``lsxfel`` considerably slower.
+
+.. option:: --auxiliary, -x
+
+   Include auxiliary sources alongside regular sources. This can make ``lsxfel``
+   slower.
 
 .. _cmd-validate:
 

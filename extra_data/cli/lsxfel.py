@@ -66,6 +66,10 @@ def main(argv=None):
              "Can be used more than once to include several patterns. "
              "Only used when inspecting a single run or file."
     )
+    ap.add_argument('--counts', '-c', action='store_true',
+        help="Show data counts for instrument sources.")
+    ap.add_argument('--no-group', action='store_true',
+        help="Don't try to group similar source names; show each individually.")
     ap.add_argument('--aggregators', '-g', action='store_true',
         help="Include the aggregator each source is saved in. "
              "Only used when inspecting a single run or file and can slow "
@@ -74,10 +78,6 @@ def main(argv=None):
         help="Include auxiliary sources alongside regular sources. "
              "Only used when inspecting a single run or file and can slow "
              "down lsxfel.")
-    ap.add_argument('--counts', '-c', action='store_true',
-        help="Show data counts for instrument sources.")
-    ap.add_argument('--no-group', action='store_true',
-        help="Don't try to group similar source names; show each individually.")
     args = ap.parse_args(argv)
     paths = args.paths or [os.path.abspath(os.getcwd())]
 
