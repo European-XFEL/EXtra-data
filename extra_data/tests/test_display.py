@@ -109,3 +109,11 @@ def test_show_ungrouped(mock_fxe_jungfrau_run, capsys):
     out, err = capsys.readouterr()
     assert "FXE_XAD_JF1M/DET/JNGFR{01-02}" not in out
     assert "FXE_XAD_JF1M/DET/JNGFR01" in out
+
+
+def test_show_counts(mock_fxe_raw_run, capsys):
+    run = RunDirectory(mock_fxe_raw_run)
+    run.info(counts=True)
+    out, err = capsys.readouterr()
+    assert "data for 0 trains" in out  # FXE_XAD_GEC/CAM/CAMERA_NODATA
+    assert "data for 480 trains" in out

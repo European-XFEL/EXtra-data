@@ -8,17 +8,7 @@ import re
 import sys
 
 from ..read_machinery import FilenameInfo
-from ..reader import H5File, RunDirectory
-
-
-def describe_file(path, details_for_sources=(), with_aggregators=False,
-                  with_auxiliary=False, group_sources=True):
-    """Describe a single HDF5 data file"""
-    basename = os.path.basename(path)
-    print(basename, ": Data file")
-
-    h5file = H5File(path)
-    h5file.info(details_for_sources, with_aggregators, with_auxiliary, group_sources)
+from ..reader import DataCollection, H5File, RunDirectory
 
 
 def summarise_file(path):
@@ -27,16 +17,6 @@ def summarise_file(path):
 
     f = H5File(path)
     print(f"  {len(f.train_ids)} trains, {len(f.all_sources)} sources")
-
-
-def describe_run(path, details_for_sources=(), with_aggregators=False,
-                 with_auxiliary=False, group_sources=True):
-    basename = os.path.basename(path)
-    print(basename, ": Run directory")
-    print()
-
-    run = RunDirectory(path)
-    run.info(details_for_sources, with_aggregators, with_auxiliary, group_sources)
 
 
 def summarise_run(path, indent=''):
@@ -74,6 +54,10 @@ def main(argv=None):
         prog='lsxfel', description="Summarise XFEL data in files or folders"
     )
     ap.add_argument('paths', nargs='*', help="Files/folders to look at")
+    ap.add_argument('--source', '-s', action='append', default=[],
+        help="Filter the list of sources, with wildcard patterns like "
+             "'*XGM/*:output' or partial matches like 'XGM'. Can be used more "
+             "than once.")
     ap.add_argument('--detail', '-d', action='append', default=[],
         help="Show details on keys & data for specified sources. "
              "This can slow down lsxfel considerably. "
@@ -82,6 +66,10 @@ def main(argv=None):
              "Can be used more than once to include several patterns. "
              "Only used when inspecting a single run or file."
     )
+    ap.add_argument('--counts', '-c', action='store_true',
+        help="Show data counts for instrument sources.")
+    ap.add_argument('--no-group', action='store_true',
+        help="Don't try to group similar source names; show each individually.")
     ap.add_argument('--aggregators', '-g', action='store_true',
         help="Include the aggregator each source is saved in. "
              "Only used when inspecting a single run or file and can slow "
@@ -90,16 +78,32 @@ def main(argv=None):
         help="Include auxiliary sources alongside regular sources. "
              "Only used when inspecting a single run or file and can slow "
              "down lsxfel.")
-    ap.add_argument('--no-group', action='store_true',
-        help="Don't try to group similar source names; show each individually.")
     args = ap.parse_args(argv)
     paths = args.paths or [os.path.abspath(os.getcwd())]
 
     # If --detail doesn't contain glob wildcards, treat it as a substring
     detail_patterns = [p if re.search(r'[*?[]', p) else f'*{p}*'
                        for p in args.detail]
+    source_patterns = [p if re.search(r'[*?[]', p) else f'*{p}*'
+                       for p in args.source]
 
-    group_sources = not args.no_group
+    def dc_info(dc: DataCollection):
+        if source_patterns:
+            try:
+                sel = dc.select(source_patterns)
+            except ValueError as e:  # No matching sources
+                sys.exit(str(e))
+            print(f"Showing {len(sel.all_sources)} / {len(dc.all_sources)} sources")
+        else:
+            sel = dc
+        print()
+        sel.info(
+            detail_patterns,
+            counts=args.counts,
+            group_sources=(not args.no_group),
+            with_aggregators=args.aggregators,
+            with_auxiliary=args.auxiliary,
+        )
 
     if len(paths) == 1:
         path = paths[0]
@@ -109,8 +113,8 @@ def main(argv=None):
             contents = sorted(os.listdir(path))
             if any(f.endswith('.h5') for f in contents):
                 # Run directory
-                describe_run(path, detail_patterns, args.aggregators,
-                             args.auxiliary, group_sources=group_sources)
+                print(basename, ": Run directory")
+                dc_info(RunDirectory(path))
             elif any(re.match(r'r\d+', f) for f in contents):
                 # Proposal directory, containing runs
                 print(basename, ": Proposal data directory")
@@ -131,8 +135,8 @@ def main(argv=None):
                 print(basename, ": Unrecognised directory")
         elif os.path.isfile(path):
             if path.endswith('.h5'):
-                describe_file(path, detail_patterns, args.aggregators,
-                              args.auxiliary, group_sources=group_sources)
+                print(basename, ": Data file")
+                dc_info(H5File(path))
             else:
                 print(basename, ": Unrecognised file")
                 return 2
