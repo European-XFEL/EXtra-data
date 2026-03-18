@@ -19,8 +19,6 @@ to use in other environments with Python 3:
 
     pip install extra_data
 
-If you get a permissions error, add the `--user` flag to that command.
-
 
 Contributing
 ===========
