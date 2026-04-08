@@ -113,7 +113,10 @@ sys.exit(check_access(Path({!r})))
                 timeout=args.timeout, capture_output=True,
                 env={'OMP_NUM_THREADS': '1'})
         except subprocess.TimeoutExpired as e:
-            path_states[path] = e.stdout.decode().splitlines()[-1]
+            if e.stdout is None:
+                path_states[path] = "Status unknown, no output from check command"
+            else:
+                path_states[path] = e.stdout.decode().splitlines()[-1]
             return 'T'
         else:
             path_states[path] = p.stdout.decode().splitlines()[-1]
