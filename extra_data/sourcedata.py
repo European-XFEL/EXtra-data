@@ -118,6 +118,7 @@ class SourceData:
             section=self.section,
             dtype=ds0.dtype,
             eshape=ds0.shape[1:],
+            is_single_run=self.is_single_run,
             inc_suspect_trains=self.inc_suspect_trains,
         )
 
