@@ -187,7 +187,7 @@ def test_run_value(mock_spb_raw_run):
     assert 'pulseEnergy.conversion.timestamp' not in values_dict
 
     with pytest.raises(ValueError):
-        # no run values for instrument sources
+        # no run values for AGIPD instrument data.
         am0.run_values()
 
 

@@ -473,12 +473,12 @@ class SourceData:
 
         Returns the RUN parameter value corresponding to the *key* argument.
         """
+
         if not (self.is_single_run or allow_multi_run):
             raise MultiRunError()
 
-        if not self.is_control:
-            raise ValueError('Only CONTROL sources have run values, '
-                             f'{self.source} is a/an {self.section} source')
+        if self.source not in self.files[0].file['RUN']:
+            raise ValueError(f'{self.source} has no RUN values')
 
         # Arbitrary file - should be the same across a run
         ds = self.files[0].file['RUN'][self.source].get(key.replace('.', '/'))
@@ -501,9 +501,8 @@ class SourceData:
         if not self.is_single_run:
             raise MultiRunError()
 
-        if not self.is_control:
-            raise ValueError('Only CONTROL sources have run values, '
-                             f'{self.source} is a/an {self.section} source')
+        if self.source not in self.files[0].file['RUN']:
+            raise ValueError(f'{self.source} has no RUN values')
 
         res = {}
         def visitor(path, obj):
