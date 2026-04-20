@@ -186,6 +186,9 @@ def test_run_value(mock_spb_raw_run):
     assert 'pulseEnergy.conversion' in values_dict
     assert 'pulseEnergy.conversion.timestamp' not in values_dict
 
+    assert xgm.run_keys() == xgm.keys() | {'classId.timestamp', 'classId.value'}
+    assert xgm.run_keys(False) == xgm.keys(False) | {'classId'}
+
     with pytest.raises(ValueError):
         # no run values for AGIPD instrument data.
         am0.run_values()

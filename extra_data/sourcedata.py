@@ -493,6 +493,29 @@ class SourceData:
             return val.decode('utf-8', 'surrogateescape')
         return val
 
+    def run_keys(self, inc_timestamps=True):
+        """Get a set of RUN keys for this source.
+
+        Unlike :meth:`keys`, RUN keys are not affected by selection.
+        """
+
+        if not self.is_single_run:
+            raise MultiRunError()
+
+        if self.source not in self.files[0].file['RUN']:
+            raise ValueError(f'{self.source} has no RUN values')
+
+        res = set()
+        def visitor(path, obj):
+            if isinstance(obj, h5py.Dataset):
+                res.add(path.replace('/', '.'))
+
+        # Arbitrary file - should be the same across a run
+        self.files[0].file['RUN'][self.source].visititems(visitor)
+        if not inc_timestamps:
+            return {k[:-6] for k in res if k.endswith('.value')}
+        return res
+
     def run_values(self, inc_timestamps=True):
         """Get a dict of all RUN values for this source
 
