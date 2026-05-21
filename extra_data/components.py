@@ -1781,32 +1781,7 @@ class DSSC1M(XtdfDetectorBase):
     module_shape = (128, 512)
 
 
-@multimod_detectors
-class LPD1M(XtdfDetectorBase):
-    """An interface to LPD-1M data.
-
-    Parameters
-    ----------
-    data: DataCollection
-      A data collection, e.g. from :func:`.RunDirectory`.
-    modules: set of ints, optional
-      Detector module numbers to use. By default, all available modules
-      are used.
-    detector_name: str, optional
-      Name of a detector, e.g. 'FXE_DET_LPD1M-1'. This is only needed
-      if the dataset includes more than one LPD detector.
-    min_modules: int
-      Include trains where at least n modules have data. Default is 1.
-    raw: bool
-      True to access raw data, False for corrected. The default is to use
-      corrected if available & raw otherwise.
-    parallel_gain: bool
-      Set to True to read this data as parallel gain data, where high, medium
-      and low gain data are stored sequentially within each train. This will
-      repeat the pulse & cell IDs from the first 1/3 of each train, and add gain
-      stage labels from 0 (high-gain) to 2 (low-gain).
-    """
-    _det_name_pat = r'[^/]+_LPD1M[^/]*'
+class LPDBase(XtdfDetectorBase):
     _source_raw_pat = r'/DET/(?P<modno>\d+)CH'
     _source_corr_pat = r'/CORR/(?P<modno>\d+)CH'
     module_shape = (256, 256)
@@ -1893,6 +1868,62 @@ class LPD1M(XtdfDetectorBase):
         return pd.MultiIndex.from_arrays(
             [tids, gain, inner_ids_fixed], names=['train', 'gain', inner_name]
         )
+
+
+@multimod_detectors
+class LPD1M(LPDBase):
+    """An interface to LPD-1M data.
+
+    Parameters
+    ----------
+    data: DataCollection
+      A data collection, e.g. from :func:`.RunDirectory`.
+    modules: set of ints, optional
+      Detector module numbers to use. By default, all available modules
+      are used.
+    detector_name: str, optional
+      Name of a detector, e.g. 'FXE_DET_LPD1M-1'. This is only needed
+      if the dataset includes more than one LPD-1M detector.
+    min_modules: int
+      Include trains where at least n modules have data. Default is 1.
+    raw: bool
+      True to access raw data, False for corrected. The default is to use
+      corrected if available & raw otherwise.
+    parallel_gain: bool
+      Set to True to read this data as parallel gain data, where high, medium
+      and low gain data are stored sequentially within each train. This will
+      repeat the pulse & cell IDs from the first 1/3 of each train, and add gain
+      stage labels from 0 (high-gain) to 2 (low-gain).
+    """
+    _det_name_pat = r'[^/]+_LPD1M[^/]*'
+
+
+@multimod_detectors
+class LPDSolo(LPDBase):
+    """An interface to LPD Solo data (one LPD supermodule, 256 x 256 pixels)
+
+    Parameters
+    ----------
+    data: DataCollection
+      A data collection, e.g. from :func:`.RunDirectory`.
+    modules: set of ints, optional
+      Not applicable for a single module detector.
+    detector_name: str, optional
+      Name of a detector, e.g. 'FXE_DET_LPD_SOLO'. This is only needed
+      if the dataset includes more than one LPD Solo detector.
+    min_modules: int
+      Include trains where at least n modules have data. Default is 1.
+    raw: bool
+      True to access raw data, False for corrected. The default is to use
+      corrected if available & raw otherwise.
+    parallel_gain: bool
+      Set to True to read this data as parallel gain data, where high, medium
+      and low gain data are stored sequentially within each train. This will
+      repeat the pulse & cell IDs from the first 1/3 of each train, and add gain
+      stage labels from 0 (high-gain) to 2 (low-gain).
+    """
+    n_modules = 1
+    _det_name_pat = r'[^/]+_LPD_SOLO[^/]*'
 
 
 @multimod_detectors

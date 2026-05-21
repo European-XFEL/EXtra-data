@@ -53,6 +53,10 @@ DSSC and JUNGFRAU, pulling together the separate modules into a single array.
 
    :doc:`lpd_data`: An example using the class above.
 
+.. autoclass:: LPDSolo
+
+   The methods of this class are identical to those of :class:`LPD1M` above.
+
 .. autoclass:: JUNGFRAU
 
    Selecting a key from the detector, e.g. ``jf['data.adc']``, gives an
