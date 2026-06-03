@@ -17,3 +17,8 @@ updates:
       actions:
         patterns:
           - "*"
+    # We currently only specify a major version of actions (e.g. actions/checkout@v6)
+    # So we only want to change it when the major version changes.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
