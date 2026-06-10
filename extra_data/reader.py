@@ -26,7 +26,6 @@ from itertools import chain
 from multiprocessing import current_process
 from operator import index
 from pathlib import Path
-from typing import Tuple
 from warnings import warn
 
 import h5py
@@ -38,7 +37,7 @@ from .exceptions import (MultiRunError, PropertyNameError, SourceNameError,
 from .file_access import FileAccess
 from .keydata import KeyData
 from .read_machinery import (DETECTOR_SOURCE_RE, by_id, by_index,
-                             data_root_dir, find_proposal, glob_wildcards_re,
+                             find_proposal, glob_wildcards_re,
                              is_int_like, same_run, select_train_ids,
                              sw_root_dir)
 from .run_files_map import RunFilesMap
@@ -1288,7 +1287,7 @@ class DataCollection:
         """
         return self._get_key_data(source, key)._data_chunks
 
-    def _find_data(self, source, train_id) -> Tuple[FileAccess, int]:
+    def _find_data(self, source, train_id) -> tuple[FileAccess | None, int | None]:
         for f in self._sources_data[source].files:
             ixs = (f.train_ids == train_id).nonzero()[0]
             if self.inc_suspect_trains and ixs.size > 0:
@@ -1564,7 +1563,7 @@ class DataCollection:
             series = pd.Series(arr, index=self.train_ids).dt.tz_localize('UTC')
             return series.dt.tz_convert('Europe/Berlin') if euxfel_local_time else series
         elif pydatetime:
-            from datetime import datetime, timezone
+            from datetime import timezone
             res = []
             for npdt in arr:
                 pydt = npdt.astype('datetime64[ms]').item()

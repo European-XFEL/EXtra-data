@@ -9,7 +9,6 @@ import os
 import os.path as osp
 import re
 import time
-from glob import iglob
 from numbers import Integral
 from pathlib import Path
 from warnings import warn
@@ -21,7 +20,7 @@ from .utils import isinstance_no_import
 log = logging.getLogger(__name__)
 
 DETECTOR_NAMES = {'AGIPD', 'DSSC', 'LPD'}
-DETECTOR_SOURCE_RE = re.compile(r'(.+\/(?:DET|CORR))\/(\d+)CH')
+DETECTOR_SOURCE_RE = re.compile(r'(.+/(?:DET|CORR))/(\d+)CH')
 
 
 def data_root_dir():
@@ -173,7 +172,7 @@ def select_train_ids(train_ids, sel):
         raise TypeError(type(sel))
 
 
-def split_trains(n_trains, parts=None, trains_per_part=None) -> [slice]:
+def split_trains(n_trains, parts=None, trains_per_part=None) -> list[slice]:
     if trains_per_part is not None:
         assert trains_per_part >= 1
         n_parts = math.ceil(n_trains / trains_per_part)
