@@ -134,12 +134,12 @@ class FileAccess(metaclass=MetaFileAccess):
     # Paths starting with /gpfs/exfel/exp are either the canonical link
     # on Maxwell or an ONC path.
     euxfel_exp_path_pattern = re.compile(
-        r'\/gpfs\/exfel\/exp\/(\w+)\/(\d{6})\/p(\d{6})\/([a-z]+)\/(?:r(\d{4})|.extra_data)')
+        r'/gpfs/exfel/exp/(\w+)/(\d{6})/p(\d{6})/([a-z]+)/(?:r(\d{4})|.extra_data)')
 
     # Otherwise it is a direct GPFS or dCache path on Maxwell.
     euxfel_direct_path_pattern = re.compile(
-        r'\/(gpfs\/exfel\/d|gpfs\/exfel\/u|pnfs\/xfel.eu\/exfel\/archive\/XFEL)'
-        r'\/([a-z]+)\/(\w+)\/(\d{6})\/p(\d{6})\/(?:r(\d{4})|.extra_data)'
+        r'/(gpfs/exfel/d|gpfs/exfel/u|pnfs/xfel.eu/exfel/archive/XFEL)'
+        r'/([a-z]+)/(\w+)/(\d{6})/p(\d{6})/(?:r(\d{4})|.extra_data)'
     )
 
     euxfel_filename_pattern = re.compile(r'([A-Z]+)-R(\d{4})-(\w+)(?:-S(\d{5}))?.h5')

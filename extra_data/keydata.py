@@ -1,4 +1,3 @@
-from typing import List, Optional, Tuple
 from warnings import warn
 
 import h5py
@@ -110,7 +109,7 @@ class KeyData:
         self.source = source
         self.key = key
         self.train_ids = train_ids
-        self.files: List[FileAccess] = files
+        self.files: list[FileAccess] = files
         self.section = section
         self.dtype = dtype
         self.entry_shape = eshape
@@ -144,7 +143,7 @@ class KeyData:
     _cached_chunks = None
 
     @property
-    def _data_chunks(self) -> List[DataChunk]:
+    def _data_chunks(self) -> list[DataChunk]:
         """An ordered list of chunks containing data"""
         if self._cached_chunks is None:
             self._cached_chunks = sorted(
@@ -153,7 +152,7 @@ class KeyData:
         return self._cached_chunks
 
     @property
-    def _data_chunks_nonempty(self) -> List[DataChunk]:
+    def _data_chunks_nonempty(self) -> list[DataChunk]:
         return [c for c in self._data_chunks if c.total_count]
 
     def __repr__(self):
@@ -740,7 +739,7 @@ class KeyData:
 
     # Getting data by train: --------------------------------------------------
 
-    def _find_tid(self, tid) -> Tuple[Optional[FileAccess], int]:
+    def _find_tid(self, tid) -> tuple[FileAccess | None, int]:
         for fa in self.files:
             matches = (fa.train_ids == tid).nonzero()[0]
             if self.inc_suspect_trains and matches.size > 0:
