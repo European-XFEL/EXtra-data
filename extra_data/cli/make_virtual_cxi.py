@@ -61,6 +61,11 @@ def main(argv=None):
              ' incorrect train IDs in the data, but may mean less data is'
              ' available.'
     )
+    ap.add_argument(
+        '--detector-name', default=None,
+        help='Name of the detector to make a VDS for. This can be omitted if'
+             ' only one multi-module detector is being used.'
+    )
     args = ap.parse_args(argv)
     out_file = args.output
     fill_values = None
@@ -100,7 +105,7 @@ def main(argv=None):
     inc_suspect = not args.exc_suspect_trains
     run = RunDirectory(run_dir, inc_suspect_trains=inc_suspect)
 
-    _, det_class = identify_multimod_detectors(run, single=True)
+    _, det_class = identify_multimod_detectors(run, detector_name=args.detector_name, single=True)
 
     n_modules = det_class.n_modules
     kwargs = {}
