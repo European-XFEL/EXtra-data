@@ -245,11 +245,14 @@ class VirtualCXIWriterBase:
                                  dtype=h5py.special_dtype(vlen=str))
             d[:] = experiment_ids
 
-            # proposal, run, pulseId, trainId, cellId are not part of the CXI standard,
-            # but it allows extra data.
+            # proposal, run, pulseId, trainId, cellId are not part of
+            # the CXI standard, but it allows extra data.
             run_metadata = self.detdata.data.run_metadata()
-            f.create_dataset(f'entry_1/proposal', data=run_metadata['proposalNumber'])
-            f.create_dataset(f'entry_1/run', data=run_metadata['runNumber'])
+            if 'proposalNumber' in run_metadata and 'runNumber' in run_metadata:
+                f.create_dataset(f'entry_1/proposalNumber',
+                                 data=run_metadata['proposalNumber'])
+                f.create_dataset(f'entry_1/runNumber',
+                                 data=run_metadata['runNumber'])
             f.create_dataset(f'entry_1/{self.pulse_id_label}', data=pulse_ids)
             f.create_dataset('entry_1/trainId', data=self.train_ids_perframe)
             cellids = f.create_virtual_dataset('entry_1/cellId',
