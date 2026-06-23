@@ -240,26 +240,26 @@ class VirtualCXIWriterBase:
         # be read by HDF5 1.10.
         with h5py.File(filename, 'w', libver=('v110', 'v110')) as f:
             f.create_dataset('cxi_version', data=[150])
-            d = f.create_dataset('entry_1/experiment_identifier',
-                                 shape=experiment_ids.shape,
-                                 dtype=h5py.special_dtype(vlen=str))
+            expgrp = f.create_group('entry_1')
+            d = expgrp.create_dataset(
+                'experiment_identifier',
+                shape=experiment_ids.shape,
+                dtype=h5py.special_dtype(vlen=str)
+            )
             d[:] = experiment_ids
 
             # proposal, run, pulseId, trainId, cellId are not part of
             # the CXI standard, but it allows extra data.
             run_metadata = self.detdata.data.run_metadata()
             if 'proposalNumber' in run_metadata and 'runNumber' in run_metadata:
-                f.create_dataset(f'entry_1/proposalNumber',
-                                 data=run_metadata['proposalNumber'])
-                f.create_dataset(f'entry_1/runNumber',
-                                 data=run_metadata['runNumber'])
-            f.create_dataset(f'entry_1/{self.pulse_id_label}', data=pulse_ids)
-            f.create_dataset('entry_1/trainId', data=self.train_ids_perframe)
-            cellids = f.create_virtual_dataset('entry_1/cellId',
-                                               layouts[self.cell_id_label])
+                expgrp.attrs['proposalNumber'] = run_metadata['proposalNumber']
+                expgrp.attrs['runNumber'] = run_metadata['runNumber']
+            expgrp.create_dataset(f'{self.pulse_id_label}', data=pulse_ids)
+            expgrp.create_dataset('trainId', data=self.train_ids_perframe)
+            cellids = expgrp.create_virtual_dataset('cellId', layouts[self.cell_id_label])
             cellids.attrs['axes'] = 'experiment_identifier:module_identifier'
 
-            dgrp = f.create_group('entry_1/instrument_1/detector_1')
+            dgrp = expgrp.create_group('instrument_1/detector_1')
             if len(layouts[data_label].shape) == 4:
                 axes_s = 'experiment_identifier:module_identifier:y:x'
             else:
