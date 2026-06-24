@@ -260,6 +260,8 @@ class VirtualCXIWriterBase:
             cellids.attrs['axes'] = 'experiment_identifier:module_identifier'
 
             dgrp = expgrp.create_group('instrument_1/detector_1')
+            # Store detector name as an attribute
+            dgrp.attrs['name'] = self.detdata.detector_name
             if len(layouts[data_label].shape) == 4:
                 axes_s = 'experiment_identifier:module_identifier:y:x'
             else:
