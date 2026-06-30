@@ -254,8 +254,8 @@ class VirtualCXIWriterBase:
             if 'proposalNumber' in run_metadata and 'runNumber' in run_metadata:
                 expgrp.attrs['name'] = f"EuXFEL proposal {run_metadata['proposalNumber']}" \
                                        f" run {run_metadata['runNumber']}"
-                expgrp.attrs['proposalNumber'] = run_metadata['proposalNumber']
-                expgrp.attrs['runNumber'] = run_metadata['runNumber']
+                expgrp.attrs['euxfelProposalNumber'] = run_metadata['proposalNumber']
+                expgrp.attrs['euxfelRunNumber'] = run_metadata['runNumber']
             expgrp.create_dataset(f'{self.pulse_id_label}', data=pulse_ids)
             expgrp.create_dataset('trainId', data=self.train_ids_perframe)
             cellids = expgrp.create_virtual_dataset('cellId', layouts[self.cell_id_label])
