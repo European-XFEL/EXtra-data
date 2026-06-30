@@ -252,6 +252,8 @@ class VirtualCXIWriterBase:
             # the CXI standard, but it allows extra data.
             run_metadata = self.detdata.data.run_metadata()
             if 'proposalNumber' in run_metadata and 'runNumber' in run_metadata:
+                expgrp.attrs['name'] = f"EuXFEL proposal {run_metadata['proposalNumber']}" \
+                                       f" run {run_metadata['runNumber']}"
                 expgrp.attrs['proposalNumber'] = run_metadata['proposalNumber']
                 expgrp.attrs['runNumber'] = run_metadata['runNumber']
             expgrp.create_dataset(f'{self.pulse_id_label}', data=pulse_ids)
