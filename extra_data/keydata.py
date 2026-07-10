@@ -764,7 +764,7 @@ class KeyData:
             shape = (0,) + self.entry_shape
             dask_arr = da.zeros(shape=shape, dtype=self.dtype, chunks=shape)
 
-        dask_arr = dask_arr[:, *roi]
+        dask_arr = dask_arr[(slice(None),) + roi]
 
         if labelled:
             return self._wrap_xarray(
