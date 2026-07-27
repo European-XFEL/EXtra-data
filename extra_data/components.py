@@ -13,7 +13,7 @@ import pandas as pd
 from .exceptions import SourceNameError
 from .reader import DataCollection, by_id, by_index
 from .read_machinery import DataChunk, roi_shape, split_trains
-from .utils import default_num_threads
+from .utils import default_num_threads, unstack_regular
 from .writer import FileWriter
 from .write_cxi import XtdfCXIWriter, JUNGFRAUCXIWriter
 
@@ -1342,10 +1342,7 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         out = self._wrap_xarray(arr, subtrain_index)
 
         if unstack_pulses:
-            # Separate train & pulse dimensions, and arrange dimensions
-            # so that the data is contiguous in memory.
-            dim_order = ['module'] + out.indexes['train_pulse'].names + self.dimensions[2:]
-            return out.unstack('train_pulse').transpose(*dim_order)
+            return unstack_regular(out, 'train_pulse', fallback=True)
 
         return out
 
@@ -1600,8 +1597,7 @@ class MPxDetectorTrainIterator:
 
         # Separate train & pulse dimensions, and arrange dimensions
         # so that the data is contiguous in memory.
-        dim_order = train_pulse_ids.names + dims[1:]
-        return arr.unstack('train_pulse').transpose(*dim_order)
+        return unstack_regular(arr, 'train_pulse', fallback=True)
 
     def _select_pulse_ids(self, pulse_ids):
         """Select pulses by ID
