@@ -104,7 +104,7 @@ class KeyData:
     """
     def __init__(
             self, source, key, *, train_ids, files, section, dtype, eshape,
-            inc_suspect_trains=True,
+            is_single_run, inc_suspect_trains=True,
     ):
         self.source = source
         self.key = key
@@ -114,6 +114,7 @@ class KeyData:
         self.dtype = dtype
         self.entry_shape = eshape
         self.ndim = len(eshape) + 1
+        self.is_single_run = is_single_run
         self.inc_suspect_trains = inc_suspect_trains
 
     def _find_chunks(self):
@@ -342,6 +343,7 @@ class KeyData:
             section=self.section,
             dtype=self.dtype,
             eshape=self.entry_shape,
+            is_single_run=self.is_single_run,
             inc_suspect_trains=self.inc_suspect_trains,
         )
 
@@ -470,6 +472,29 @@ class KeyData:
                              f'(absolute: {adev:.3g}, relative: {rdev:.3g})')
 
         return value
+
+    def run_value(self, allow_multi_run=False):
+        """Get the RUN value for this key if it exists.
+
+        This method is intended for use with data from a single run. If you
+        combine data from multiple runs, it will raise MultiRunError.
+
+        Returns the RUN parameter value corresponding to this key.
+        """
+
+        from .sourcedata import SourceData  # Prevent cyclic import.
+
+        # Construct minimal SourceData object to obtain RUN value.
+        return SourceData(
+            self.source,
+            sel_keys=None,
+            train_ids=self.train_ids,
+            files=self.files,
+            section=self.section,
+            canonical_name=self.source,
+            is_single_run=self.is_single_run,
+            inc_suspect_trains=self.inc_suspect_trains
+        ).run_value(self.key, allow_multi_run=allow_multi_run)
 
     # Getting data as different kinds of array: -------------------------------
 
