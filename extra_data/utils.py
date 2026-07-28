@@ -62,6 +62,9 @@ def _multiindex_regular_labels(mix: "pandas.MultiIndex"):
     if mix.has_duplicates:
         return None
 
+    if len(mix) == 0:  # Empty dimension counts as regular
+        return tuple([mix.get_level_values(i) for i in range(mix.nlevels)])
+
     k1_sel, k1_subix = mix.get_loc_level(mix[0][0])
     rpt_len = len(k1_subix)
     rpt, rem = divmod(len(mix), rpt_len)
