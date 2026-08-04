@@ -425,6 +425,17 @@ class MultimodDetectorBase:
         return (f"<{det}: Data interface for detector {self.detector_name!r} "
                 f"- {rp} data with {len(self.source_to_modno)} modules>")
 
+    def _with_train_sel_data(self, data_sel):
+        # Used in select_trains & split_trains below
+        # Using a copy to bypass the source & train checks in __init__
+        res = copy(self)
+        res.data = data_sel
+        res.frame_counts = self.frame_counts[res.data.train_ids]
+        res.train_ids_perframe = np.repeat(
+            res.frame_counts.index.values, res.frame_counts.values.astype(np.intp)
+        )
+        return res
+
     def select_trains(self, trains):
         """Select a subset of trains from this data as a new object.
 
@@ -438,14 +449,7 @@ class MultimodDetectorBase:
             sel1 = det.select_trains(by_id[142844490 : 142844495])
             sel2 = det.select_trains(by_id[[142844490, 142844493, 142844494]])
         """
-        # Using a copy to bypass the source & train checks in __init__
-        res = copy(self)
-        res.data = self.data.select_trains(trains)
-        res.frame_counts = self.frame_counts[res.data.train_ids]
-        res.train_ids_perframe = np.repeat(
-            res.frame_counts.index.values, res.frame_counts.values.astype(np.intp)
-        )
-        return res
+        return self._with_train_sel_data(self.data.select_trains(trains))
 
     def split_trains(self, parts=None, trains_per_part=None, frames_per_part=None):
         """Split this data into chunks with a fraction of the trains each.
@@ -474,9 +478,21 @@ class MultimodDetectorBase:
             raise ValueError(
                 "One of parts, trains_per_part, frames_per_part must be specified"
             )
+        if frames_per_part is not None:
+            # If possible, convert frames_per_part to trains_per_part, which
+            # uses the more efficient code path.
+            try:
+                fpt = self.frames_per_train
+            except ValueError:
+                pass
+            else:
+                ntpp = max(1, frames_per_part // fpt)
+                trains_per_part = min(ntpp, trains_per_part or ntpp)
+                frames_per_part = None
+
         if frames_per_part is None:
-            for s in split_trains(len(self.train_ids), parts, trains_per_part):
-                yield self.select_trains(s)
+            for part in self.data.split_trains(parts=parts, trains_per_part=trains_per_part):
+                yield self._with_train_sel_data(part)
         else:
             # frames_per_part was specified. We don't assume that the number
             # of frames per train is constant, so we'll iterate over trains
