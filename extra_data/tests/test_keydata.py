@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import pytest
+from functools import partial
 
 import h5py
 
@@ -566,7 +567,7 @@ def test_xarray_extra_dims_and_coords(mock_spb_raw_run):
     assert 'b' not in da8.coords
     np.testing.assert_allclose(da8.coords['fs'], custom_fs)
 
-    # Passing only extra_coords (no extra_dims)
+    # Passing only extra_coords (no extra_dims), name not already in dims
     with pytest.raises(ValueError):
         am0.xarray(roi=np.s_[:, 10:20, 5:15], extra_coords={'fs': np.arange(5, 15)})
 
@@ -578,6 +579,100 @@ def test_xarray_extra_dims_and_coords(mock_spb_raw_run):
 
     # extra_coords == True
     da11 = am0.xarray(roi=np.s_[:, 15, 5:15], extra_coords=True)
+    assert da11.shape == (64, 2, 10)
+    assert da11.dims == ('trainId', 'dim_0', 'dim_2')
+    assert set(da11.coords) == {'trainId', 'dim_0', 'dim_1', 'dim_2'}
+    np.testing.assert_array_equal(da11.coords['dim_0'], np.arange(2))
+    np.testing.assert_array_equal(da11.coords['dim_1'], np.arange(15, 16))
+    np.testing.assert_array_equal(da11.coords['dim_2'], np.arange(5, 15))
+
+
+def test_dask_array_extra_dims_and_coords(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.data'][0]
+    assert am0.entry_shape == (2, 512, 128)
+
+    lda = partial(am0.dask_array, labelled=True)
+
+    # No extra dims and extra_coords==False -> only trainId coordinate
+    da_default = lda()
+    assert da_default.shape == (64, 2, 512, 128)
+    assert da_default.dims == ('trainId', 'dim_0', 'dim_1', 'dim_2')
+    assert set(da_default.coords) == {'trainId'}
+
+    # ROI with slices, with extra_dims -> generate coords
+    da1 = lda(roi=np.s_[:, 10:20, 5:15], extra_dims=['raw_proc', 'ss', 'fs'])
+    assert da1.shape == (64, 2, 10, 10)
+    assert da1.dims == ('trainId', 'raw_proc', 'ss', 'fs')
+    np.testing.assert_array_equal(da1.coords['raw_proc'], np.arange(2))
+    np.testing.assert_array_equal(da1.coords['ss'], np.arange(10, 20))
+    np.testing.assert_array_equal(da1.coords['fs'], np.arange(5, 15))
+
+    # Short ROI: explicit non-full slice on first entry dim
+    da2 = lda(roi=np.s_[:1, 30:40, ...], extra_dims=['a', 'b', 'c'])
+    assert da2.shape == (64, 1, 10, 128)
+    assert da2.dims == ('trainId', 'a', 'b', 'c')
+    np.testing.assert_array_equal(da2.coords['a'], np.arange(0, 1))
+    np.testing.assert_array_equal(da2.coords['b'], np.arange(30, 40))
+    np.testing.assert_array_equal(da2.coords['c'], np.arange(128))
+
+    # Ellipsis at the start
+    da3 = lda(roi=np.s_[..., 30:40], extra_dims=['a', 'b', 'c'])
+    assert da3.shape == (64, 2, 512, 10)
+    assert da3.dims == ('trainId', 'a', 'b', 'c')
+    np.testing.assert_array_equal(da3.coords['a'], np.arange(2))
+    np.testing.assert_array_equal(da3.coords['b'], np.arange(512))
+    np.testing.assert_array_equal(da3.coords['c'], np.arange(30, 40))
+
+    # Integer-only index on first entry dim with extra_dims -> keep dim with size 1
+    da4 = lda(roi=np.s_[0, :, :], extra_dims=['a', 'b', 'c'])
+    # The data is a single index in the first entry, dim is dropped
+    assert da4.shape == (64, 512, 128)
+    assert da4.dims == ('trainId', 'b', 'c')
+    # Coordinate for the dropped dimension is the selected index
+    a_coord = np.asarray(da4.coords['a'])
+    np.testing.assert_array_equal(a_coord, np.array(0))
+
+    # Fancy indexing with list of indices
+    da5 = lda(roi=np.s_[:, [30, 33], :], extra_dims=['a', 'b', 'c'])
+    assert da5.shape == (64, 2, 2, 128)
+    np.testing.assert_array_equal(da5.coords['b'], np.array([30, 33]))
+
+    # Boolean indexing
+    mask = np.zeros((512,), dtype=bool)
+    mask[::2] = True
+    da6 = lda(roi=np.s_[:, mask, 5:15], extra_dims=['a', 'ss', 'fs'])
+    assert da6.shape == (64, 2, 256, 10)
+    np.testing.assert_array_equal(da6.coords['ss'], np.arange(0, 512, 2))
+    np.testing.assert_array_equal(da6.coords['fs'], np.arange(5, 15))
+
+    # Negative indexing on last two dims
+    da7 = lda(roi=np.s_[:, -10:, [-10, -5, -1]], extra_dims=['a', 'b', 'c'])
+    assert da7.shape == (64, 2, 10, 3)
+    np.testing.assert_array_equal(da7.coords['b'], np.arange(502, 512))
+    np.testing.assert_array_equal(da7.coords['c'], np.array([118, 123, 127]))
+
+    # Custom coordinates via extra_coords
+    custom_fs = np.linspace(0.0, 9.0, 10)
+    da8 = lda(roi=np.s_[:, 10:20, 5:15], extra_dims=['a', 'b', 'fs'], extra_coords={'fs': custom_fs})
+    assert da8.shape == (64, 2, 10, 10)
+    assert da8.dims == ('trainId', 'a', 'b', 'fs')
+    assert 'a' not in da8.coords
+    assert 'b' not in da8.coords
+    np.testing.assert_allclose(da8.coords['fs'], custom_fs)
+
+    # Passing only extra_coords (no extra_dims), name not already in dims
+    with pytest.raises(ValueError):
+        lda(roi=np.s_[:, 10:20, 5:15], extra_coords={'fs': np.arange(5, 15)})
+
+    da9 = lda(roi=np.s_[:, 10:20, 5:15], extra_dims=['r/p', 'ss', 'fs'], extra_coords={'fs': np.arange(5, 15)})
+    assert list(da9.coords) >= ['trainId', 'fs']
+
+    da10 = lda(roi=np.s_[:, 15, 5:15], extra_coords={'dim_0': [100, 200]})
+    assert list(da10.coords) >= ['trainId', 'dim_0']
+
+    # extra_coords == True
+    da11 = lda(roi=np.s_[:, 15, 5:15], extra_coords=True)
     assert da11.shape == (64, 2, 10)
     assert da11.dims == ('trainId', 'dim_0', 'dim_2')
     assert set(da11.coords) == {'trainId', 'dim_0', 'dim_1', 'dim_2'}

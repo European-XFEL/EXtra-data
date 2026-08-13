@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from warnings import warn
 
 import h5py
@@ -9,6 +10,25 @@ from .read_machinery import (
     contiguous_regions, DataChunk, select_train_ids, split_trains, roi_shape,
     trains_files_index,
 )
+
+
+def _expand_ellipsis(ndim, indexing):
+    """Expand numpy indexing to one slice/index per dimension"""
+    # expanding Ellipsis
+    if any(x is Ellipsis for x in indexing):
+        ellipsis_idx = indexing.index(Ellipsis)
+        # Count non-Ellipsis
+        n_before = len(indexing[:ellipsis_idx])
+        n_after = len(indexing[ellipsis_idx + 1:])
+        n_ellipsis = max(0, ndim - n_before - n_after)
+
+        # Replace Ellipsis with appropriate number of colons
+        indexing = (indexing[:ellipsis_idx] +
+                    (slice(None),) * n_ellipsis +
+                    indexing[ellipsis_idx + 1:])
+
+    # Pad with slice(None) if indexing is shorter than ndim
+    return indexing + (slice(None),) * (ndim - len(indexing))
 
 
 def expand_indexing(shape, indexing):
@@ -32,23 +52,7 @@ def expand_indexing(shape, indexing):
     if not isinstance(indexing, tuple):
         indexing = (indexing,)
 
-    ndim = len(shape)
-
-    # expanding Ellipsis
-    if any(x is Ellipsis for x in indexing):
-        ellipsis_idx = indexing.index(Ellipsis)
-        # Count non-Ellipsis
-        n_before = len(indexing[:ellipsis_idx])
-        n_after = len(indexing[ellipsis_idx + 1:])
-        n_ellipsis = max(0, ndim - n_before - n_after)
-
-        # Replace Ellipsis with appropriate number of colons
-        indexing = (indexing[:ellipsis_idx] + 
-                   (slice(None),) * n_ellipsis + 
-                   indexing[ellipsis_idx + 1:])
-
-    # Pad with slice(None) if indexing is shorter than ndim
-    indexing += (slice(None),) * (ndim - len(indexing))
+    indexing = _expand_ellipsis(len(shape), indexing)
 
     # Process each index and expand coordinates
     result = []
@@ -104,7 +108,7 @@ class KeyData:
     """
     def __init__(
             self, source, key, *, train_ids, files, section, dtype, eshape,
-            inc_suspect_trains=True,
+            edims=None, roi=(), inc_suspect_trains=True,
     ):
         self.source = source
         self.key = key
@@ -114,6 +118,10 @@ class KeyData:
         self.dtype = dtype
         self.entry_shape = eshape
         self.ndim = len(eshape) + 1
+        if edims is None:
+            edims = {f"dim_{i}": None for i in range(len(eshape))}
+        self._entry_dims = edims
+        self._roi = roi
         self.inc_suspect_trains = inc_suspect_trains
 
     def _find_chunks(self):
@@ -274,6 +282,8 @@ class KeyData:
             section=self.section,
             dtype=self.dtype,
             eshape=self.entry_shape,
+            edims=self._entry_dims,
+            roi=self._roi,
             inc_suspect_trains=self.inc_suspect_trains,
         )
 
@@ -342,6 +352,8 @@ class KeyData:
             section=self.section,
             dtype=self.dtype,
             eshape=self.entry_shape,
+            edims=self._entry_dims,
+            roi=self._roi,
             inc_suspect_trains=self.inc_suspect_trains,
         )
 
@@ -597,39 +609,43 @@ class KeyData:
             given, it should map dimension names to coordinate arrays. If True,
             default coordinate arrays will be generated.
         """
-        import xarray
+        import xarray  # Fail before loading data if xarray is missing
 
         ndarr = self.ndarray(roi=roi)
 
-        # Train ID index
-        coords = {'trainId': self.train_id_coordinates()}
-        dims = ['trainId']
+        return self._wrap_xarray(
+            ndarr, extra_dims=extra_dims, roi=roi, name=name, extra_coords=extra_coords
+        )
 
-        def _dim_name(idx):
-            if extra_dims is not None:
-                return extra_dims[idx]
-            else:
-                return f'dim_{idx}'
+    def _wrap_xarray(self, arr, extra_dims=None, roi=(), name=None, extra_coords=None):
+        import xarray
 
-        # Dimension labels after the train dimension
-        if extra_dims is not None and isinstance(extra_coords, dict):
-            dims += extra_dims
-            coords |= extra_coords
+        if (extra_dims is not None) or (extra_coords is not None):
+            if extra_coords is None:
+                dim_info = extra_dims
+            elif (extra_dims is None) and (extra_coords is True):
+                # Pass a sequence of names so that with_entry_dims will generate
+                # integer coordinates.
+                dim_info = list(self._entry_dims.keys())
+            elif extra_dims is None:
+                # Allowed to attach coordinates to a subset of existing dimensions
+                if missing := set(extra_coords) - set(self._entry_dims):
+                    raise ValueError(f"No dimensions named {missing}")
+                dim_info = {k: extra_coords.get(k, v)
+                            for (k, v) in self._entry_dims.items()}
+            else:  # Both specified
+                dim_info = {n: extra_coords.get(n, None) for n in extra_dims}
 
-        elif isinstance(extra_coords, dict):
-            coords |= extra_coords
-            dims += ['dim_%d' % i for i in range(ndarr.ndim - 1)]
+            return self.with_entry_dims(dim_info, roi=roi)._wrap_xarray(arr, name=name)
 
-        elif extra_coords or extra_dims is not None:
-            # add default coordinates if extra_coords is True or extra_dims given.
-            for idx, coord in enumerate(expand_indexing(self.entry_shape, roi)):
-                dim = _dim_name(idx)
-                coords[dim] = coord
+        roi = _expand_ellipsis(len(self.entry_shape), self._roi)
+        dims = ['trainId'] + [
+            n for n, sel in zip(self._entry_dims, roi) if not isinstance(sel, int)
+        ]
 
-                if not isinstance(coord, int):
-                    dims.append(dim)
-        else:
-            dims += ['dim_%d' % i for i in range(ndarr.ndim - 1)]
+        coords = {'trainId': self.train_id_coordinates()} | {
+            k: v for (k, v) in self._entry_dims.items() if (v is not None)
+        }
 
         # xarray attributes
         attrs = {}
@@ -639,11 +655,12 @@ class KeyData:
         except Exception as e:
             warn(f"Exception fetching units: {e}")
 
-        if ndarr.dtype.names is not None:
+        if arr.dtype.names is not None:
             # Structured dtype.
             return xarray.Dataset(
-                {field: (dims, ndarr[field]) for field in ndarr.dtype.names},
-                coords=coords, attrs=attrs)
+                {field: (dims, arr[field]) for field in arr.dtype.names},
+                coords=coords, attrs=attrs
+            )
         else:
             if name is None:
                 name = f'{self.source}.{self.key}'
@@ -653,7 +670,8 @@ class KeyData:
 
             # Primitive dtype.
             return xarray.DataArray(
-                ndarr, dims=dims, coords=coords, name=name, attrs=attrs)
+                arr, dims=dims, coords=coords, name=name, attrs=attrs
+            )
 
     def series(self):
         """Load this data as a pandas Series. Only for 1D data.
@@ -671,7 +689,8 @@ class KeyData:
         data = self.ndarray()
         return pd.Series(data, name=name, index=index)
 
-    def dask_array(self, labelled=False):
+    def dask_array(self, labelled=False, *, roi=(), name=None, extra_dims=None,
+                   extra_coords=None):
         """Make a Dask array for this data.
 
         Dask is a system for lazy parallel computation. This method doesn't
@@ -691,6 +710,26 @@ class KeyData:
         labelled: bool
             If True, label the train IDs for the data, returning an
             xarray.DataArray object wrapping a Dask array.
+        roi: numpy.s_[], slice, or tuple of slices
+            The region of interest. This expression selects data in all
+            dimensions apart from the first (trains) dimension. If the data
+            holds a 1D array for each entry, roi=np.s_[:8] would get the first 8
+            values from every train. If the data is 2D or more at each entry,
+            selection looks like roi=np.s_[:8, 5:10] .
+        name: str
+            Name the array itself. The default is the source and key joined by a
+            dot. Ignored if labelled is False, and for structured data when a
+            dataset is returned.
+        extra_dims: list of str
+            Name extra dimensions in the array. The first dimension is
+            automatically called 'train'. The default for extra dimensions is
+            dim_0, dim_1, ... Ignored if labelled is False.
+        extra_coords: bool or dict
+            Add coordinates to the returned DataArray. If roi is used, the
+            coordinates will match the selected region of interest. If a dict is
+            given, it should map dimension names to coordinate arrays. If True,
+            default coordinate arrays will be generated. Ignored if labelled is
+            False.
         """
         import dask.array as da
 
@@ -725,17 +764,79 @@ class KeyData:
             shape = (0,) + self.entry_shape
             dask_arr = da.zeros(shape=shape, dtype=self.dtype, chunks=shape)
 
+        dask_arr = dask_arr[(slice(None),) + roi]
+
         if labelled:
-            # Dimension labels
-            dims = ['trainId'] + ['dim_%d' % i for i in range(dask_arr.ndim - 1)]
-
-            # Train ID index
-            coords = {'trainId': self.train_id_coordinates()}
-
-            import xarray
-            return xarray.DataArray(dask_arr, dims=dims, coords=coords)
+            return self._wrap_xarray(
+                dask_arr,
+                extra_dims=extra_dims,
+                roi=roi, name=name,
+                extra_coords=extra_coords
+            )
         else:
             return dask_arr
+
+    def with_entry_dims(self, dims=None, roi=None, **kwargs):
+        """Attach dimension names, ROI and optional coordinate labels
+
+        Parameters
+        ----------
+
+        dims: list or dict
+            Either a list of dimension names, or a dictionary mapping dimension
+            names to coordinate labels. Every dimension except for the trains/
+            entries dimension must be named, but coordinate labels are optional.
+            Uses None in the dict format to omit coordinate labels. If a ROI
+            is specified, coordinate labels should be only for that selection.
+        roi: numpy.s_[], slice, or tuple of slices
+            The region of interest. This expression selects data in all
+            dimensions apart from the first (trains) dimension. If the data
+            holds a 1D array for each entry, roi=np.s_[:8] would get the first 8
+            values from every train. If the data is 2D or more at each entry,
+            selection looks like roi=np.s_[:8, 5:10] .
+        kwargs:
+            The dictionary format for dims can be passed as keyword arguments
+            instead. Don't mix keyword arguments with a dims list/dict.
+        """
+        if not isinstance(roi, tuple):
+            roi = roi,
+
+        if dims is None:
+            if not kwargs:
+                raise TypeError("No dimension information specified")
+            coords = kwargs
+        elif kwargs:
+            raise TypeError("Mixing positional and keyword arguments is not supported")
+        elif isinstance(dims, str):
+            coords = {dims: None}
+        elif isinstance(dims, Sequence):
+            # If we are given names, generate integer indexes
+            coords = {name: coord for (name, coord) in
+                      zip(dims, expand_indexing(self.entry_shape, roi))}
+        elif isinstance(dims, dict):
+            coords = dims
+        else:
+            raise TypeError(
+                f"Unexpected type for dimension/coordinate info: {type(dims)}"
+            )
+
+        if len(coords) != len(self.entry_shape):
+            raise TypeError(
+                f"Expected names for {len(self.entry_shape)} dimensions, got {len(coords)}"
+            )
+
+        return KeyData(
+            self.source, self.key,
+            train_ids=self.train_ids,
+            files=self.files,
+            section=self.section,
+            dtype=self.dtype,
+            eshape=self.entry_shape,
+            edims=coords,
+            roi=roi,
+            inc_suspect_trains=self.inc_suspect_trains,
+        )
+
 
     # Getting data by train: --------------------------------------------------
 
