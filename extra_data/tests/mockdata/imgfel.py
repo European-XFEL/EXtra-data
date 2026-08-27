@@ -3,6 +3,8 @@ from .control_common import interlock_keys, triggers_keys
 
 
 class IMGFELCamera(DeviceBase):
+    fill_instrument = False
+
     control_keys = [
         ('Logger/file/maxBackupIndex', 'u4', ()),
         ('Logger/file/maxFileSize', 'u4', ()),

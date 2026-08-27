@@ -1,6 +1,8 @@
 import numpy as np
 import h5py
 
+from .base import make_dataset
+
 class DetectorModule:
     # Overridden in subclasses:
     image_dims = ()
@@ -19,7 +21,8 @@ class DetectorModule:
     ]
 
     def __init__(self, device_id, frames_per_train=64, raw=True,
-                 channel_name='xtdf', legacy_name=None):
+                 channel_name='xtdf', legacy_name=None, fill_image=False):
+        self.fill_image = fill_image
         self.device_id = device_id
         self._frames_per_train = frames_per_train
         if not raw:
@@ -143,26 +146,27 @@ class DetectorModule:
 
         max_len = None if self.raw else nframes
         for (key, datatype, dims, kw) in self.image_keys:
-            if dims == self.image_dims and 'chunks' not in kw:
-                kw['chunks'] = (1,) + dims
-            f.create_dataset(
-                f'INSTRUMENT/{inst_source}/image/{key}',
+            make_dataset(
+                f, f'INSTRUMENT/{inst_source}/image/{key}',
                 shape=(nframes,) + dims,
                 dtype=datatype,
                 maxshape=((max_len,) + dims),
+                fill=self.fill_image,
                 **kw
             )
 
 
         # INSTRUMENT (other parts)
         for part in ['detector', 'header', 'trailer']:
-            ds = f.create_dataset(f'INSTRUMENT/{inst_source}/{part}/trainId',
-                                  (ntrains_pad,), 'u8', maxshape=(None,))
+            ds = make_dataset(f, f'INSTRUMENT/{inst_source}/{part}/trainId',
+                              (ntrains_pad,), 'u8', maxshape=(None,),
+                              nrows=self.ntrains)
             ds[:self.ntrains] = trainids
 
         for (key, datatype, dims) in self.other_keys:
-            f.create_dataset(f'INSTRUMENT/{inst_source}/{key}',
-                     (ntrains_pad,) + dims, datatype, maxshape=((None,) + dims))
+            make_dataset(f, f'INSTRUMENT/{inst_source}/{key}',
+                         (ntrains_pad,) + dims, datatype,
+                         maxshape=((None,) + dims), nrows=self.ntrains)
 
         if self.legacy_name is not None:
             # The legacy source name for corrected data is the same as for

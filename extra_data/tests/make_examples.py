@@ -224,7 +224,7 @@ def make_data_file_bad_device_name(path, format_version='0.5'):
     """Not all devices have the Karabo standard A/B/C naming convention"""
     write_file(path, [
         BaslerCam('SPB_IRU_SIDEMIC_CAM', sensor_size=(1000, 1000))
-    ], ntrains=500, chunksize=50, format_version=format_version)
+    ], ntrains=10, chunksize=50, format_version=format_version)
 
 def make_agipd_file(path, format_version='0.5'):
     write_file(path, [
@@ -275,11 +275,13 @@ def make_lpd_parallelgain_run(dir_path, raw=True, format_version='0.5'):
 
 def make_lpd_run_mini_missed_train(dir_path):
     write_file(osp.join(dir_path, 'RAW-R0450-LPD00-S00000.h5'), [
-        LPDModule('FXE_DET_LPD1M-1/DET/0CH0', frames_per_train=10),
+        LPDModule('FXE_DET_LPD1M-1/DET/0CH0', frames_per_train=10,
+                  fill_image=True),
     ], ntrains=5, chunksize=5, format_version='1.0')
     mod1_f = osp.join(dir_path, 'RAW-R0450-LPD01-S00000.h5')
     write_file(mod1_f, [
-        LPDModule('FXE_DET_LPD1M-1/DET/1CH0', frames_per_train=10),
+        LPDModule('FXE_DET_LPD1M-1/DET/1CH0', frames_per_train=10,
+                  fill_image=True),
     ], ntrains=4, chunksize=5, format_version='1.0')
 
     # Modify the file for module 1, as if it missed train 10002
