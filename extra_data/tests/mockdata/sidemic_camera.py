@@ -1,6 +1,8 @@
 from .base import DeviceBase
 
 class SidemicCamera(DeviceBase):
+    fill_instrument = False
+
     # Based on example in /gpfs/exfel/d/raw/SPB/201701/p002012/r0309/RAW-R0309-DA01-S00000.h5
 
     # Technically, only the part before the / is the output channel.

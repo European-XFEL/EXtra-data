@@ -2,6 +2,7 @@ from .base import DeviceBase
 
 class JUNGFRAUModule(DeviceBase):
     output_channels = ('daqOutput/data',)
+    fill_instrument = False
 
     def __init__(self, device_id, nsamples=None, raw=False):
         super().__init__(device_id, nsamples)
