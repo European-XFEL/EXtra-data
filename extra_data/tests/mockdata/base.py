@@ -8,12 +8,8 @@ from packaging import version
 
 def make_dataset(f, path, shape, dtype, maxshape=None, fill=True, nrows=None,
                  **kwargs):
-    """Create a dataset and write zeros into the first `nrows` rows.
-
-    A dataset which is never written has no chunks in the file, so reading it
-    gives fill values without touching the disk and never exercises the direct
-    reader. The rows past `nrows` are padding so we don't care about them.
-    """
+    # Write zeros into the first `nrows` rows so that chunks are allocated in
+    # the file, otherwise reads never touch the disk.
     if shape[1:] and 'chunks' not in kwargs:
         # Choose a chunk size of at most 8MiB to save on disk space
         max_chunk_bytes = 8 * 1024 ** 2

@@ -200,6 +200,12 @@ def mock_modern_spb_proc_run():
         make_examples.make_modern_spb_proc_run(td)
         yield td
 
+@pytest.fixture(scope='session')
+def mock_small_agipd_proc_run():
+    with TemporaryDirectory() as td:
+        make_examples.make_small_agipd_proc_run(td)
+        yield td
+
 @pytest.fixture()
 def mock_spb_raw_and_modern_proc_run(monkeypatch):
     with TemporaryDirectory() as td:
