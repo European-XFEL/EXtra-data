@@ -1260,6 +1260,7 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         elif out.shape != out_shape:
             raise ValueError(f'requires output array of shape {out_shape}')
 
+        reading_view = out.view()
         if self._extraneous_dim:
             reading_view = out.reshape(out.shape[:2] + (1,) + out.shape[2:], copy=False)
             # Ensure ROI applies to pixel dimensions, not the extra
