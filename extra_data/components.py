@@ -10,10 +10,12 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 
+from . import direct_read
 from .exceptions import SourceNameError
 from .reader import DataCollection, by_id, by_index
-from .read_machinery import DataChunk, roi_shape, split_trains
-from .utils import default_num_threads
+from .read_machinery import (
+    ReadOp, contiguous_regions, roi_shape, split_trains,
+)
 from .writer import FileWriter
 from .write_cxi import XtdfCXIWriter, JUNGFRAUCXIWriter
 
@@ -957,10 +959,43 @@ class MultimodKeyData:
         for det_split in self.det.split_trains(parts, trains_per_part, frames_per_part):
             yield self._with_selected_det(det_split)
 
-    def ndarray(self, *, fill_value=None, out=None, roi=(), astype=None, module_gaps=False):
-        """Get data as a plain NumPy array with no labels"""
-        train_ids = np.asarray(self.det.train_ids)
+    def _module_indices(self, module_gaps):
+        """(index in the output array, KeyData) for each module, in order."""
+        for i, (modno, kd) in enumerate(sorted(self.modno_to_keydata.items())):
+            yield ((modno - self.det._modnos_start_at) if module_gaps else i), kd
 
+    def _read_ops(self, module_gaps, entries):
+        """The reads needed to fill an array with *entries* rows per module.
+
+        The destination indices count through the modules dimension and the
+        entries dimension as if they were one, so that :meth:`_read` can fill
+        every module in a single pass.
+        """
+        train_ids = np.asarray(self.det.train_ids)
+        ops = []
+
+        for mod_ix, kd in self._module_indices(module_gaps):
+            for chunk in kd._data_chunks:
+                for tgt_slice, chunk_slice in self.det._split_align_chunk(
+                        chunk, train_ids):
+                    ops.append(ReadOp(
+                        chunk.file, chunk.dataset_path, chunk_slice.start,
+                        (mod_ix * entries) + tgt_slice.start,
+                        chunk_slice.stop - chunk_slice.start,
+                    ))
+
+        return ops
+
+    def _read(self, out, ops, roi, parallel):
+        """Fill *out*, shaped (modules, entries, ...), from *ops*."""
+        # The ops index the modules and entries dimensions as one, which is only
+        # the same array if it's contiguous.
+        assert out.flags.c_contiguous, "output array must be C-contiguous"
+        direct_read.read(out.reshape((-1,) + out.shape[2:]), ops, roi, parallel)
+
+    def ndarray(self, *, fill_value=None, out=None, roi=(), astype=None,
+                module_gaps=False, parallel=-1):
+        """Get data as a plain NumPy array with no labels"""
         out_shape = self.buffer_shape(module_gaps, roi)
 
         if out is None:
@@ -969,13 +1004,7 @@ class MultimodKeyData:
         elif out.shape != out_shape:
             raise ValueError(f'requires output array of shape {out_shape}')
 
-        for i, (modno, kd) in enumerate(sorted(self.modno_to_keydata.items())):
-            mod_ix = (modno - self.det._modnos_start_at) if module_gaps else i
-            for chunk in kd._data_chunks:
-                for tgt_slice, chunk_slice in self.det._split_align_chunk(chunk, train_ids):
-                    chunk.dataset.read_direct(
-                        out[mod_ix, tgt_slice], source_sel=(chunk_slice,) + roi
-                    )
+        self._read(out, self._read_ops(module_gaps, out_shape[1]), roi, parallel)
         return out
 
     def _wrap_xarray(self, arr):
@@ -984,8 +1013,9 @@ class MultimodKeyData:
         coords = {'module': self.modules, 'trainId': self.train_id_coordinates()}
         return DataArray(arr, dims=self.dimensions, coords=coords)
 
-    def xarray(self, *, fill_value=None, roi=(), astype=None):
-        arr = self.ndarray(fill_value=fill_value, roi=roi, astype=astype)
+    def xarray(self, *, fill_value=None, roi=(), astype=None, parallel=-1):
+        arr = self.ndarray(fill_value=fill_value, roi=roi, astype=astype,
+                           parallel=parallel)
         return self._wrap_xarray(arr)
 
     def dask_array(self, *, labelled=False, fill_value=None, astype=None):
@@ -1181,115 +1211,47 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             self._sel_frames_cached = s
         return self._sel_frames_cached
 
-    def _read_chunk(self, chunk: DataChunk, mod_out, roi):
-        """Read per-pulse data from file into an output array (of 1 module)"""
-        # Limit to 5 GB sections of the dataset at once, so the temporary
-        # arrays used in the workaround below are not too large.
-        nbytes_frame = chunk.dataset.dtype.itemsize
-        for dim in chunk.dataset.shape[1:]:
-            nbytes_frame *= dim
-        frame_limit = 5 * (1024 ** 3) // nbytes_frame
+    def _read_ops(self, module_gaps, entries):
+        """The reads needed to fill an array with *entries* frames per module.
 
-        for tgt_slice, chunk_slice in self.det._split_align_chunk(
-                chunk, self.det.train_ids_perframe, length_limit=frame_limit
-        ):
-            inc_pulses_chunk = self._sel_frames[tgt_slice]
-            if inc_pulses_chunk.sum() == 0:  # No data from this chunk selected
-                continue
-            elif inc_pulses_chunk.all():  # All pulses in chunk
-                chunk.dataset.read_direct(
-                    mod_out[tgt_slice], source_sel=(chunk_slice,) + roi
-                )
-                continue
+        A pulse selection makes holes in what we want from each chunk, so this
+        makes one read per contiguous run of selected frames.
+        """
+        sel_frames = self._sel_frames
+        ops = []
 
-            # Read a subset of pulses from the chunk:
-
-            # Reading a non-contiguous selection in HDF5 seems to be slow:
-            # https://forum.hdfgroup.org/t/performance-reading-data-with-non-contiguous-selection/8979
-            # Except it's fast if you read the data to a matching selection in
-            # memory (one weird trick).
-            # So as a workaround, this allocates a temporary array of the same
-            # shape as the full chunk, reads into it, and then copies the selected
-            # data to the output array. The extra memory copy is not optimal,
-            # but it's better than the HDF5 performance issue, at least in some
-            # realistic cases.
-            # N.B. tmp should only use memory for the data it contains -
-            # zeros() uses calloc, so the OS can do virtual memory tricks.
-            # Don't change this to zeros_like() !
-            tmp = np.zeros(
-                shape=inc_pulses_chunk.shape + chunk.dataset.shape[1:],
-                dtype=chunk.dataset.dtype
-            )
-            tmp_sel = np.nonzero(inc_pulses_chunk)[0]
-            dataset_sel = tmp_sel + chunk_slice.start
-            chunk.dataset.read_direct(
-                tmp, source_sel=(dataset_sel,) + roi, dest_sel=(tmp_sel,) + roi,
-            )
-            # Where does this data go in the target array?
-            tgt_start_ix = self._sel_frames[:tgt_slice.start].sum()
-            tgt_pulse_sel = slice(
-                tgt_start_ix, tgt_start_ix + inc_pulses_chunk.sum()
-            )
-            # Copy data from temp array to output array
-            np.compress(
-                inc_pulses_chunk, tmp[np.index_exp[:] + roi],
-                axis=0, out=mod_out[tgt_pulse_sel]
-            )
-
-    def _read_parallel_decompress(self, out, module_gaps, threads=16):
-        try:
-            from .compression import multi_dataset_decompressor, parallel_decompress_chunks
-        except ImportError:
-            return False
-
-        modno_to_keydata_no_virtual = {}
-        all_datasets = []
-        for (m, vkd) in self.modno_to_keydata.items():
-            modno_to_keydata_no_virtual[m] = kd = vkd._without_virtual_overview()
-            all_datasets.extend([f.file[kd.hdf5_data_path] for f in kd.files])
-
-        if any(d.chunks != (1,) + d.shape[1:] for d in all_datasets):
-            return False  # Chunking not as we expect
-
-        decomp_proto = multi_dataset_decompressor(all_datasets)
-        if decomp_proto is None:
-            return False  # No suitable fast decompression path
-
-        load_tasks = []
-        for i, (modno, kd) in enumerate(sorted(modno_to_keydata_no_virtual.items())):
-            mod_ix = (modno - self.det._modnos_start_at) if module_gaps else i
-            # 'chunk' in the lines below means a range of consecutive indices
-            # in one HDF5 dataset, as elsewhere in EXtra-data.
-            # We use this to build a list of HDF5 chunks (1 frame per chunk)
-            # to be loaded & decompressed. Sorry about that.
+        for mod_ix, kd in self._module_indices(module_gaps):
             for chunk in kd._data_chunks:
-                dset = chunk.dataset
-
                 for tgt_slice, chunk_slice in self.det._split_align_chunk(
-                        chunk, self.det.train_ids_perframe,
-                ):
-                    inc_pulses_chunk = self._sel_frames[tgt_slice]
-                    if inc_pulses_chunk.sum() == 0:  # No data from this chunk selected
+                        chunk, self.det.train_ids_perframe):
+                    inc_frames = sel_frames[tgt_slice]
+                    if not inc_frames.any():  # Nothing selected from this chunk
                         continue
 
-                    dataset_ixs = np.nonzero(inc_pulses_chunk)[0] + chunk_slice.start
+                    # Where the frames selected so far end up in the output
+                    dest = ((mod_ix * entries)
+                            + int(sel_frames[:tgt_slice.start].sum()))
 
-                    # Where does this data go in the target array?
-                    tgt_start_ix = self._sel_frames[:tgt_slice.start].sum()
+                    for first, stop in contiguous_regions(inc_frames):
+                        ops.append(ReadOp(
+                            chunk.file, chunk.dataset_path,
+                            chunk_slice.start + first, dest, stop - first,
+                        ))
+                        dest += stop - first
 
-                    # Each task is a h5py.h5d.DatasetID, coordinates & array destination
-                    load_tasks.extend([
-                        (dset.id, (ds_ix, 0, 0), out[mod_ix, tgt_start_ix + i])
-                        for i, ds_ix in enumerate(dataset_ixs)]
-                    )
-
-        parallel_decompress_chunks(load_tasks, decomp_proto, threads=threads)
-
-        return True
+        return ops
 
     def ndarray(self, *, fill_value=None, out=None, roi=(), astype=None,
-                module_gaps=False, decompress_threads=None):
+                module_gaps=False, parallel=-1, decompress_threads=None):
         """Get an array of per-pulse data (image.*) for xtdf detector"""
+        if decompress_threads is not None:
+            warn("decompress_threads is deprecated, use parallel= instead",
+                 DeprecationWarning, stacklevel=2)
+            if parallel == -1:  # Don't override an explicit parallel=
+                # 1 thread meant letting HDF5 decompress the data, and more
+                # than that meant using threads where the data allowed it.
+                parallel = 0 if decompress_threads == 1 else -1
+
         out_shape = self.buffer_shape(module_gaps=module_gaps, roi=roi)
 
         if out is None:
@@ -1298,14 +1260,6 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         elif out.shape != out_shape:
             raise ValueError(f'requires output array of shape {out_shape}')
 
-        if roi == () and astype is None:
-            if decompress_threads is None:
-                decompress_threads = default_num_threads(fixed_limit=16)
-
-            if decompress_threads > 1:
-                if self._read_parallel_decompress(out, module_gaps, decompress_threads):
-                    return out
-
         reading_view = out.view()
         if self._extraneous_dim:
             reading_view.shape = out.shape[:2] + (1,) + out.shape[2:]
@@ -1313,10 +1267,8 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             # dim in raw data (except AGIPD, where it is data/gain)
             roi = np.index_exp[:] + roi
 
-        for i, (modno, kd) in enumerate(sorted(self.modno_to_keydata.items())):
-            mod_ix = (modno - self.det._modnos_start_at) if module_gaps else i
-            for chunk in kd._data_chunks:
-                self._read_chunk(chunk, reading_view[mod_ix], roi)
+        self._read(reading_view, self._read_ops(module_gaps, out_shape[1]),
+                   roi, parallel)
 
         return out
 
@@ -1332,11 +1284,13 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         })
 
     def xarray(self, *, pulses=None, fill_value=None, roi=(), astype=None,
-               subtrain_index='pulseId', unstack_pulses=False, decompress_threads=None):
+               subtrain_index='pulseId', unstack_pulses=False, parallel=-1,
+               decompress_threads=None):
         arr = self.ndarray(
             fill_value=fill_value,
             roi=roi,
             astype=astype,
+            parallel=parallel,
             decompress_threads=decompress_threads,
         )
         out = self._wrap_xarray(arr, subtrain_index)

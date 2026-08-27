@@ -202,6 +202,8 @@ class FileAccess(metaclass=MetaFileAccess):
         self._run_keys_cache = {}
         # {source: set(keys)} - including incomplete sets
         self._known_keys = defaultdict(set)
+        # Chunk tables & virtual dataset mappings, see direct_read.py
+        self._direct_read_cache = {}
 
     @property
     def file(self):

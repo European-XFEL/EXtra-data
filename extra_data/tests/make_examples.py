@@ -371,6 +371,35 @@ def make_modern_spb_proc_run(dir_path, format_version='1.2'):
         ds[0, 0, 5] = 1
 
 
+def make_small_agipd_proc_run(dir_path, format_version='1.2', nmodules=2,
+                              ntrains=20, frames=8, dims=(32, 16)):
+    # Holds all three dataset layouts we can read. image.data is chunked and
+    # uncompressed, image.mask is chunked and gzipped, and image.gain is
+    # rewritten as a contiguous dataset.
+    for modno in range(nmodules):
+        module = AGIPDModule(f'SPB_DET_AGIPD1M-1/DET/{modno}CH0', raw=False,
+                             frames_per_train=frames)
+        module.image_dims = dims
+        path = osp.join(dir_path, f'CORR-R0142-AGIPD{modno:0>2}-S00000.h5')
+        write_file(path, [module], ntrains=ntrains, chunksize=4,
+                   format_version=format_version)
+
+        with h5py.File(path, 'r+') as f:
+            group = f[f'INSTRUMENT/SPB_DET_AGIPD1M-1/DET/{modno}CH0:xtdf/image']
+            # Random values so that reading the wrong bytes doesn't match reading
+            # the right ones
+            for key in ['data', 'mask', 'gain']:
+                dset = group[key]
+                dset[:] = np.random.uniform(0, 100, dset.shape).astype(dset.dtype)
+
+            gain = group['gain'][:]
+            del group['gain']
+            # Contiguous
+            group.create_dataset('gain', data=gain)
+
+    return dir_path
+
+
 def make_agipd1m_run(
     dir_path,
     rep_rate=True,
