@@ -3,11 +3,12 @@ from warnings import warn
 import h5py
 import numpy as np
 
+from . import direct_read
 from .exceptions import TrainIDError, NoDataError
 from .file_access import FileAccess
 from .read_machinery import (
-    contiguous_regions, DataChunk, select_train_ids, split_trains, roi_shape,
-    trains_files_index,
+    contiguous_regions, DataChunk, ReadOp, select_train_ids, split_trains,
+    roi_shape, trains_files_index,
 )
 
 
@@ -473,33 +474,56 @@ class KeyData:
 
     # Getting data as different kinds of array: -------------------------------
 
-    def ndarray(self, roi=(), out=None):
+    def buffer_shape(self, roi=()):
+        """Get the final shape of this data."""
+        return self.shape[:1] + roi_shape(self.entry_shape, roi)
+
+    def _read_ops(self):
+        """The reads needed to load this data, one per contiguous chunk."""
+        ops = []
+        dest_cursor = 0
+        for chunk in self._data_chunks_nonempty:
+            ops.append(ReadOp(chunk.file, chunk.dataset_path, chunk.first,
+                              dest_cursor, chunk.total_count))
+            dest_cursor += chunk.total_count
+
+        return ops
+
+    def ndarray(self, roi=(), out=None, parallel=-1):
         """Load this data as a numpy array
 
-        *roi* may be a ``numpy.s_[]`` expression to load e.g. only part of each
-        image from a camera. If *out* is not given, a suitable array will be
-        allocated.
+        Parameters
+        ----------
+
+        roi: numpy.s_[], slice, or tuple of slices
+            The region of interest. This expression selects data in all
+            dimensions apart from the first (trains) dimension. If the data
+            holds a 1D array for each entry, roi=np.s_[:8] would get the first 8
+            values from every train. If the data is 2D or more at each entry,
+            selection looks like roi=np.s_[:8, 5:10] .
+        out: numpy.ndarray
+            An array to read the data into, of the shape given by
+            :meth:`buffer_shape`. If not given, a suitable array is allocated.
+            An array that isn't C-contiguous is read through HDF5.
+        parallel: int
+            How many threads to read the data with, which is much faster for
+            large amounts of data. The default (-1) uses several threads where
+            the data allows it, and reads through HDF5 where it doesn't. 0
+            always reads through HDF5, on this thread. A positive number
+            requires the faster path, raising an exception if this data can't be
+            read that way.
         """
         if not isinstance(roi, tuple):
             roi = (roi,)
 
-        req_shape = self.shape[:1] + roi_shape(self.entry_shape, roi)
+        req_shape = self.buffer_shape(roi)
 
         if out is None:
             out = np.empty(req_shape, dtype=self.dtype)
         elif out is not None and out.shape != req_shape:
             raise ValueError(f'requires output array of shape {req_shape}')
 
-        # Read the data from each chunk into the result array
-        dest_cursor = 0
-        for chunk in self._data_chunks_nonempty:
-            dest_chunk_end = dest_cursor + chunk.total_count
-
-            slices = (chunk.slice,) + roi
-            chunk.dataset.read_direct(
-                out[dest_cursor:dest_chunk_end], source_sel=slices
-            )
-            dest_cursor = dest_chunk_end
+        direct_read.read(out, self._read_ops(), roi, parallel)
 
         if out.dtype.hasobject:
             # Can current only occur for string properties, convert from
@@ -558,7 +582,8 @@ class KeyData:
             start[1:] = counts.cumsum()[:-1]
             return start, start + counts
 
-    def xarray(self, extra_dims=None, roi=(), name=None, extra_coords=None):
+    def xarray(self, extra_dims=None, roi=(), name=None, extra_coords=None,
+               out=None, parallel=-1):
         """Load this data as a labelled xarray array or dataset.
 
         The first dimension is labelled with train IDs. Other dimensions may be
@@ -596,10 +621,14 @@ class KeyData:
             coordinates will match the selected region of interest. If a dict is
             given, it should map dimension names to coordinate arrays. If True,
             default coordinate arrays will be generated.
+        out: numpy.ndarray
+            An array to read the data into, as for :meth:`ndarray`.
+        parallel: int
+            How many threads to read the data with, as for :meth:`ndarray`.
         """
         import xarray
 
-        ndarr = self.ndarray(roi=roi)
+        ndarr = self.ndarray(roi=roi, out=out, parallel=parallel)
 
         # Train ID index
         coords = {'trainId': self.train_id_coordinates()}
