@@ -1,6 +1,4 @@
-import threading
 from copy import copy
-from multiprocessing.pool import ThreadPool
 
 import h5py
 import numpy as np
@@ -82,36 +80,3 @@ def dataset_decompressor(dset):
             return inst
 
     return None
-
-
-def multi_dataset_decompressor(dsets):
-    if not dsets:
-        return None
-
-    chunk = dsets[0].chunks
-    dtype = dsets[0]
-    filters = filter_ids(dsets[0])
-    for d in dsets[1:]:
-        if d.chunks != chunk or d.dtype != dtype or filter_ids(d) != filters:
-            return None  # Datasets are not consistent
-
-    return dataset_decompressor(dsets[0])
-
-
-def parallel_decompress_chunks(tasks, decompressor_proto, threads=16):
-    tlocal = threading.local()
-
-    def load_one(dset_id, coord, dest):
-        try:
-            decomp = tlocal.decompressor
-        except AttributeError:
-            tlocal.decompressor = decomp = decompressor_proto.clone()
-
-        if dset_id.get_chunk_info_by_coord(coord).byte_offset is None:
-            return   # Chunk not allocated in file
-
-        filter_mask, compdata = dset_id.read_direct_chunk(coord)
-        decomp.apply_filters(compdata, filter_mask, dest)
-
-    with ThreadPool(threads) as pool:
-        pool.starmap(load_one, tasks)

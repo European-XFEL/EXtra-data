@@ -7,6 +7,8 @@ class BaslerCamera(DeviceBase):
     Based on example /gpfs/exfel/exp/SPB/201930/p900061/raw/r0055/RAW-R0055-DA01-S00000.h5
     """
 
+    fill_instrument = False
+
     def __init__(self, device_id, nsamples=None, sensor_size=None):
         """Create a dummy basler device that inherits from Device Base"""
         self.sensor_size = sensor_size or (2058, 2456)
