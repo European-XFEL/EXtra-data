@@ -23,3 +23,9 @@ def test_make_virtual_cxi_jungfrau(mock_jungfrau_run, tmpdir):
     output = osp.join(str(tmpdir), 'test.cxi')
     main([mock_jungfrau_run, '-o', output])
     assert_isfile(output)
+
+    os.remove(output)
+
+    # Test passing an explicit detector name
+    main([mock_jungfrau_run, '-o', output, '--detector-name', 'SPB_IRDA_JF4M'])
+    assert_isfile(output)
