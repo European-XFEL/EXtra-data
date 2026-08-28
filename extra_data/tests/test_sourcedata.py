@@ -360,3 +360,4 @@ def test_no_control_keys(mock_remi_run):
     assert sd.one_key() is None
     assert sd.aggregator == 'REMI01'
     np.testing.assert_array_equal(sd.data_counts(), 0)
+    np.testing.assert_array_equal(sd.data_counts(''), 0)
