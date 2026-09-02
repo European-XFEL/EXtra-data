@@ -253,7 +253,7 @@ class DataChunk:
 # contiguous_regions() by Joe Kington on Stackoverflow
 # https://stackoverflow.com/a/4495197/434217
 # Used here under Stackoverflow's default CC-BY-SA 3.0 license.
-def contiguous_regions(condition):
+def contiguous_regions(condition: np.ndarray):
     """Finds contiguous True regions of the boolean array "condition". Returns
     a 2D array where the first column is the start index of the region and the
     second column is the end index."""
@@ -275,8 +275,7 @@ def contiguous_regions(condition):
         idx = np.r_[idx, condition.size] # Edit
 
     # Reshape the result into two columns
-    idx.shape = (-1,2)
-    return idx
+    return idx.reshape((-1, 2), copy=False)
 
 
 def roi_shape(orig_shape: tuple, roi: tuple) -> tuple:
