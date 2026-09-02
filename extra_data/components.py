@@ -1306,12 +1306,13 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
                 if self._read_parallel_decompress(out, module_gaps, decompress_threads):
                     return out
 
-        reading_view = out.view()
         if self._extraneous_dim:
-            reading_view.shape = out.shape[:2] + (1,) + out.shape[2:]
+            reading_view = out.reshape(out.shape[:2] + (1,) + out.shape[2:], copy=False)
             # Ensure ROI applies to pixel dimensions, not the extra
             # dim in raw data (except AGIPD, where it is data/gain)
             roi = np.index_exp[:] + roi
+        else:
+            reading_view = out
 
         for i, (modno, kd) in enumerate(sorted(self.modno_to_keydata.items())):
             mod_ix = (modno - self.det._modnos_start_at) if module_gaps else i
