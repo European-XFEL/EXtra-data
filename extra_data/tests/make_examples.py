@@ -400,6 +400,19 @@ def make_small_agipd_proc_run(dir_path, format_version='1.2', nmodules=2,
     return dir_path
 
 
+def make_small_agipd_proc_gap_run(dir_path):
+    make_small_agipd_proc_run(dir_path)
+
+    # Module 1 misses train 5, so the data for later trains moves up to fill
+    # its place.
+    with h5py.File(osp.join(dir_path, 'CORR-R0142-AGIPD01-S00000.h5'), 'r+') as f:
+        index = f['INDEX/SPB_DET_AGIPD1M-1/DET/1CH0:xtdf/image']
+        index['first'][6:] = index['first'][6:] - index['count'][5]
+        index['count'][5] = 0
+
+    return dir_path
+
+
 def make_agipd1m_run(
     dir_path,
     rep_rate=True,
