@@ -19,6 +19,18 @@ SPLIT_BYTES = 32 * 1024 ** 2
 THREADS_FILTERED = 16
 THREADS_UNFILTERED = 48
 
+# How many chunks are worth looking up one at a time, counted over the life of a
+# DatasetInfo, before reading the whole index instead. Each lookup is its own
+# B-tree descent and the cost grows about quadratically with how many we do
+# (~6.4e-9 * n^2 seconds, the same curve for AGIPD and LPD on GPFS), so this is a
+# cliff to stay clear of rather than an optimum to sit on. It has to be
+# cumulative: a streamer reading a few trains at a time would otherwise never
+# reach any per-call limit and would run the quadratic out to tens of thousands
+# of lookups. Below it, lookups beat a full walk by a wide margin on a big
+# uncompressed dataset, where the index nodes sit between the chunks and reading
+# all of them means seeking across the whole file.
+MAX_CHUNK_LOOKUPS = 4000
+
 
 class UnsupportedDataset(Exception):
     """Raised while planning, for a dataset we can't read ourselves."""
@@ -125,7 +137,8 @@ class DatasetInfo:
             np.prod(self.entry_shape, dtype=np.intp))
         self.decompressor = get_decompressor(dset)
 
-        # {first entry of chunk: (byte offset, stored size, filter mask)}
+        # {first entry of chunk: (byte offset, stored size, filter mask)}, filled
+        # in by load() for the entries actually asked for.
         if dset.chunks is None:
             # Unchunked datasets are treated as a single unfiltered chunk
             self.chunk_frames = max(1, dset.shape[0])
@@ -133,15 +146,52 @@ class DatasetInfo:
             if offset is None:
                 raise UnsupportedDataset("dataset has no data in the file")
             self.chunks = {0: (offset, self.chunk_frames * self.frame_bytes, 0)}
+            self.have_whole_index = True
         else:
             self.chunk_frames = dset.chunks[0]
             self.chunks = {}
-            dset.id.chunk_iter(lambda info: self.chunks.__setitem__(
-                info.chunk_offset[0],
-                (info.byte_offset, info.size, info.filter_mask)
-            ))
+            self.have_whole_index = False
+
+        self.lookups_done = 0
 
         self.chunk_nbytes = self.chunk_frames * self.frame_bytes
+
+    def load(self, dset, first_entry, count):
+        # Find where the chunks holding these entries are, if we don't know yet.
+        #
+        # Reading the whole index up front is wrong for a big uncompressed
+        # dataset: its B-tree nodes sit between the chunks, so the walk seeks
+        # across the entire file however few entries the caller wants. Looking
+        # up only what's needed avoids that, up to the point where the
+        # per-lookup cost takes over (see MAX_CHUNK_LOOKUPS). What's found is
+        # kept, so reading the same file again asks for less.
+        if self.have_whole_index:
+            return
+
+        last = self.chunk_first(first_entry + count - 1)
+        wanted = [c for c in range(self.chunk_first(first_entry),
+                                   last + self.chunk_frames, self.chunk_frames)
+                  if c not in self.chunks]
+
+        if self.lookups_done + len(wanted) > MAX_CHUNK_LOOKUPS:
+            self.load_whole_index(dset)
+            return
+
+        rest = (0,) * len(self.entry_shape)
+        for first in wanted:
+            info = dset.id.get_chunk_info_by_coord((first,) + rest)
+            # An unallocated chunk has no offset; chunk_of() rejects those
+            if info.byte_offset is not None:
+                self.chunks[first] = (info.byte_offset, info.size, info.filter_mask)
+
+        self.lookups_done += len(wanted)
+
+    def load_whole_index(self, dset):
+        dset.id.chunk_iter(lambda info: self.chunks.__setitem__(
+            info.chunk_offset[0],
+            (info.byte_offset, info.size, info.filter_mask)
+        ))
+        self.have_whole_index = True
 
     def chunk_first(self, entry):
         return (entry // self.chunk_frames) * self.chunk_frames
@@ -270,17 +320,56 @@ class DatasetReader:
         data = buf.view(self.info.dtype).reshape((count,) + self.band_shape)
         out[dest_first:dest_first + count] = data[(np.s_[:],) + self.band_index]
 
-    def _decompress(self, scratch, offset, size, filter_mask, dest):
-        compressed = buffer(scratch, 'compressed', size)
-        self._pread(compressed, offset)
-
+    def _decompressor(self, scratch):
         # Decompressors hold a buffer, so each worker needs its own copy
         key = ('decompressor', self.info.key)
         decompressor = scratch.get(key)
         if decompressor is None:
             decompressor = scratch[key] = self.info.decompressor.clone()
 
-        decompressor.apply_filters(compressed, filter_mask, dest)
+        return decompressor
+
+    def _decompress(self, scratch, offset, size, filter_mask, dest):
+        compressed = buffer(scratch, 'compressed', size)
+        self._pread(compressed, offset)
+        self._decompressor(scratch).apply_filters(compressed, filter_mask, dest)
+
+    def _unpack(self, scratch, decompressor, data, filter_mask, out, dest_first,
+                segments):
+        # Unpack one chunk of compressed `data` into `out`. `segments` of None
+        # means the whole chunk lands unchanged in one contiguous piece of `out`,
+        # so it can be decompressed straight into it.
+        if segments is None:
+            dest = out[dest_first:dest_first + self.info.chunk_frames]
+            decompressor.apply_filters(data, filter_mask,
+                                       dest.reshape(-1).view(np.uint8))
+            return
+
+        chunk = buffer(scratch, 'chunk', self.info.chunk_nbytes)
+        decompressor.apply_filters(data, filter_mask, chunk)
+
+        entries = chunk.view(self.info.dtype).reshape(
+            (self.info.chunk_frames,) + self.info.entry_shape)
+
+        for first, count, dest_at in segments:
+            # These are whole entries, so the ROI applies as the caller wrote it
+            out[dest_at:dest_at + count] = \
+                entries[first:first + count][(np.s_[:],) + self.roi]
+
+    def read_span(self, scratch, out, offset, total, chunks):
+        # Read chunks stored back to back in one go, then unpack each of them.
+        # `chunks` are (offset within the read, stored size, filter mask,
+        # destination index, segments). Reading them together keeps a dataset
+        # chunked an entry at a time from costing one read per entry; they still
+        # have to be decompressed one by one, but that needs no extra copy, only
+        # a view of the bytes already read.
+        span = buffer(scratch, 'compressed', total)
+        self._pread(span, offset)
+        decompressor = self._decompressor(scratch)
+
+        for rel, size, filter_mask, dest_first, segments in chunks:
+            self._unpack(scratch, decompressor, span[rel:rel + size], filter_mask,
+                         out, dest_first, segments)
 
     def read_chunk(self, scratch, out, offset, size, filter_mask, segments):
         # `segments` are (first entry in the chunk, count, destination index)
@@ -383,8 +472,7 @@ class Planner:
             for op in ops:
                 self._add_op(op)
 
-            for (reader, chunk_first), segments in self._chunk_segments.items():
-                self._add_chunk_job(reader, chunk_first, segments)
+            self._add_chunk_jobs()
         finally:
             self._close_files()
 
@@ -434,20 +522,30 @@ class Planner:
         if src_first + count > reader.info.shape[0]:
             raise UnsupportedDataset("read runs past the end of the dataset")
 
+        # Planning is the only point where the files are open, so this is where
+        # the chunk offsets have to be looked up.
+        reader.info.load(self._dataset(*reader.info.key), src_first, count)
+
         if reader.info.decompressor is None:
             self._add_unfiltered(reader, src_first, dest_first, count)
         else:
             self._add_filtered(reader, src_first, dest_first, count)
 
     def _add_unfiltered(self, reader, src_first, dest_first, count):
-        # Long runs are split into pieces of SPLIT_BYTES so that big chunks can
-        # be read by several threads.
+        # Consecutive chunks are usually laid out back to back in the file, so a
+        # run spanning several of them can be fetched in one read. That matters
+        # for data chunked an entry at a time, where a read per chunk means
+        # thousands of small reads. Runs are then split into pieces of
+        # SPLIT_BYTES so that big chunks can be read by several threads.
         if reader.whole_frame:
             max_per_read = max(1, SPLIT_BYTES // max(1, reader.band_bytes))
         else:
             # Partial entries aren't contiguous, so read one at a time
             max_per_read = 1
 
+        # (byte offset, first entry, number of entries) for each run of entries
+        # that the file stores contiguously.
+        runs = []
         cursor, end = src_first, src_first + count
         while cursor < end:
             chunk_first, (byte_offset, _, filter_mask) = \
@@ -460,14 +558,28 @@ class Planner:
                       + ((cursor - chunk_first) * reader.info.frame_bytes)
                       + reader.band_offset)
 
+            # A band read takes only part of each entry, so its pieces are not
+            # contiguous and only whole entries can be joined up.
+            if runs and reader.whole_frame:
+                run_offset, run_first, run_n = runs[-1]
+                joined = run_offset + (run_n * reader.info.frame_bytes) == offset
+            else:
+                joined = False
+
+            if joined:
+                runs[-1] = (run_offset, run_first, run_n + n)
+            else:
+                runs.append((offset, cursor, n))
+
+            cursor += n
+
+        for offset, first, n in runs:
             for start in range(0, n, max_per_read):
                 self.jobs.append((reader.read_run, (
                     offset + (start * reader.info.frame_bytes),
-                    dest_first + (cursor - src_first) + start,
+                    dest_first + (first - src_first) + start,
                     min(max_per_read, n - start),
                 )))
-
-            cursor += n
 
     def _add_filtered(self, reader, src_first, dest_first, count):
         cursor, end = src_first, src_first + count
@@ -481,16 +593,62 @@ class Planner:
 
             cursor += n
 
-    def _add_chunk_job(self, reader, chunk_first, segments):
-        _, (byte_offset, size, filter_mask) = reader.info.chunk_of(chunk_first)
-        args = (byte_offset, size, filter_mask)
+    def _add_chunk_jobs(self):
+        # Turn the chunks we noted into jobs, reading adjacent ones together.
+        # Compressed data chunked an entry at a time would otherwise cost one
+        # small read per entry. Chunks that lie back to back in the file are
+        # fetched in a single read and then unpacked one by one. A span holds at
+        # most SPLIT_BYTES of compressed data, bounding a worker's scratch buffer.
+        by_reader = {}
+        for (reader, chunk_first), segments in self._chunk_segments.items():
+            byte_offset, size, filter_mask = reader.info.chunk_of(chunk_first)[1]
+            unpack = self._chunk_unpack(reader, chunk_first, segments)
+            by_reader.setdefault(reader, []).append(
+                (byte_offset, size, filter_mask) + unpack
+            )
 
-        # Whole chunks can be decompressed straight into the output, except the
-        # last one which may extend past the end of the dataset.
+        for reader, chunks in by_reader.items():
+            # By position in the file, which is what decides what can be joined
+            chunks.sort(key=lambda c: c[0])
+
+            span, span_start, span_bytes = [], 0, 0
+            for byte_offset, size, filter_mask, dest_first, segments in chunks:
+                if span and (span_start + span_bytes != byte_offset
+                             or span_bytes + size > SPLIT_BYTES):
+                    self._add_span_job(reader, span_start, span_bytes, span)
+                    span, span_bytes = [], 0
+
+                if not span:
+                    span_start = byte_offset
+
+                span.append((span_bytes, size, filter_mask, dest_first, segments))
+                span_bytes += size
+
+            if span:
+                self._add_span_job(reader, span_start, span_bytes, span)
+
+    def _chunk_unpack(self, reader, chunk_first, segments):
+        # Returns (dest_first, segments) for one chunk. Segments of None means
+        # the whole chunk can be decompressed straight into the output, which
+        # isn't possible for the last chunk if it extends past the end of the
+        # dataset.
         first, count, dest_first = segments[0]
         if (len(segments) == 1 and reader.direct
                 and count == reader.info.chunk_frames
                 and chunk_first + count <= reader.info.shape[0]):
+            return dest_first, None
+
+        return dest_first, segments
+
+    def _add_span_job(self, reader, offset, total, span):
+        # One job for a run of adjacent chunks, or for a chunk read on its own
+        if len(span) > 1:
+            self.jobs.append((reader.read_span, (offset, total, span)))
+            return
+
+        _, size, filter_mask, dest_first, segments = span[0]
+        args = (offset, size, filter_mask)
+        if segments is None:
             self.jobs.append((reader.read_chunk_inplace, args + (dest_first,)))
         else:
             self.jobs.append((reader.read_chunk, args + (segments,)))
