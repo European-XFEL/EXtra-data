@@ -6,7 +6,9 @@ import pytest
 
 import h5py
 
-from extra_data import RunDirectory, H5File, open_run
+from extra_data import (
+    RunDirectory, H5File, open_run, by_index, direct_read,
+)
 from extra_data.keydata import expand_indexing
 from extra_data.exceptions import TrainIDError, NoDataError
 from . import make_examples
@@ -373,6 +375,44 @@ def test_ndarray_out(mock_spb_raw_run):
 
     np.testing.assert_allclose(buf_new, buf_out)
     assert buf_in is buf_out
+
+
+def test_ndarray_parallel(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run).select_trains(by_index[:8])
+    am0 = run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.data']
+    serial = am0.ndarray(parallel=0)
+
+    np.testing.assert_array_equal(am0.ndarray(), serial)
+
+    # Reading into an array the caller supplied
+    buf = np.zeros(am0.shape, dtype=am0.dtype)
+    assert am0.ndarray(out=buf) is buf
+    np.testing.assert_array_equal(buf, serial)
+
+    roi = np.s_[0, :16, :8]
+    np.testing.assert_array_equal(am0.ndarray(roi=roi),
+                                  am0.ndarray(roi=roi, parallel=0))
+
+
+def test_xarray_parallel(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    xgm = run['SPB_XTD9_XGM/DOOCS/MAIN', 'beamPosition.ixPos.value']
+
+    xr.testing.assert_identical(xgm.xarray(), xgm.xarray(parallel=0))
+
+
+def test_parallel_fallback(mock_spb_raw_run):
+    run = RunDirectory(mock_spb_raw_run)
+    state = run['SPB_XTD9_XGM/DOOCS/MAIN', 'state']
+
+    # Strings fall back to h5py
+    assert state.dtype.hasobject
+    data = state.ndarray()
+    assert (data[3:8] == ['OFF', 'OFF', 'ON', 'ON', 'ON']).all()
+
+    # But requiring the direct reader throws an exception with the reason
+    with pytest.raises(direct_read.UnsupportedDataset, match='not a plain number'):
+        state.ndarray(parallel=4)
 
 
 def test_string_arrays(mock_spb_raw_run):

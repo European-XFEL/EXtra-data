@@ -201,6 +201,32 @@ def trains_files_index(train_ids, files, inc_suspect_trains=True) -> list:
                 tids_files[ix] = file
     return tids_files
 
+class ReadOp:
+    """One contiguous run of entries to copy from a dataset into an array.
+
+    This is the unit of work for reading: `src_first` and `count` say where the
+    entries are in the dataset, `dest_first` where they belong in the
+    destination array.
+    """
+    def __init__(self, file, dataset_path, src_first, dest_first, count):
+        self.file = file
+        self.dataset_path = dataset_path
+        # Converted from numpy integers: on numpy < 2, uint64 + int gives a
+        # float, which h5py won't accept as a slice bound.
+        self.src_first = int(src_first)
+        self.dest_first = int(dest_first)
+        self.count = int(count)
+
+    @property
+    def dest_slice(self):
+        return slice(self.dest_first, self.dest_first + self.count)
+
+    def read_into(self, out, roi=()):
+        """Read this run of entries into `out`, which must hold `count` of them."""
+        source_sel = (np.s_[self.src_first:self.src_first + self.count],) + roi
+        self.file.file[self.dataset_path].read_direct(out, source_sel=source_sel)
+
+
 class DataChunk:
     """Reference to a contiguous chunk of data for one or more trains."""
     def __init__(self, file, dataset_path, first, train_ids, counts):

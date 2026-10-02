@@ -224,7 +224,7 @@ def make_data_file_bad_device_name(path, format_version='0.5'):
     """Not all devices have the Karabo standard A/B/C naming convention"""
     write_file(path, [
         BaslerCam('SPB_IRU_SIDEMIC_CAM', sensor_size=(1000, 1000))
-    ], ntrains=500, chunksize=50, format_version=format_version)
+    ], ntrains=10, chunksize=50, format_version=format_version)
 
 def make_agipd_file(path, format_version='0.5'):
     write_file(path, [
@@ -275,11 +275,13 @@ def make_lpd_parallelgain_run(dir_path, raw=True, format_version='0.5'):
 
 def make_lpd_run_mini_missed_train(dir_path):
     write_file(osp.join(dir_path, 'RAW-R0450-LPD00-S00000.h5'), [
-        LPDModule('FXE_DET_LPD1M-1/DET/0CH0', frames_per_train=10),
+        LPDModule('FXE_DET_LPD1M-1/DET/0CH0', frames_per_train=10,
+                  fill_image=True),
     ], ntrains=5, chunksize=5, format_version='1.0')
     mod1_f = osp.join(dir_path, 'RAW-R0450-LPD01-S00000.h5')
     write_file(mod1_f, [
-        LPDModule('FXE_DET_LPD1M-1/DET/1CH0', frames_per_train=10),
+        LPDModule('FXE_DET_LPD1M-1/DET/1CH0', frames_per_train=10,
+                  fill_image=True),
     ], ntrains=4, chunksize=5, format_version='1.0')
 
     # Modify the file for module 1, as if it missed train 10002
@@ -367,6 +369,35 @@ def make_modern_spb_proc_run(dir_path, format_version='1.2'):
     with h5py.File(path, 'r+') as f:
         ds = f['INSTRUMENT/SPB_DET_AGIPD1M-1/CORR/15CH0:output/image/mask']
         ds[0, 0, 5] = 1
+
+
+def make_small_agipd_proc_run(dir_path, format_version='1.2', nmodules=2,
+                              ntrains=20, frames=8, dims=(32, 16)):
+    # Holds all three dataset layouts we can read. image.data is chunked and
+    # uncompressed, image.mask is chunked and gzipped, and image.gain is
+    # rewritten as a contiguous dataset.
+    for modno in range(nmodules):
+        module = AGIPDModule(f'SPB_DET_AGIPD1M-1/DET/{modno}CH0', raw=False,
+                             frames_per_train=frames)
+        module.image_dims = dims
+        path = osp.join(dir_path, f'CORR-R0142-AGIPD{modno:0>2}-S00000.h5')
+        write_file(path, [module], ntrains=ntrains, chunksize=4,
+                   format_version=format_version)
+
+        with h5py.File(path, 'r+') as f:
+            group = f[f'INSTRUMENT/SPB_DET_AGIPD1M-1/DET/{modno}CH0:xtdf/image']
+            # Random values so that reading the wrong bytes doesn't match reading
+            # the right ones
+            for key in ['data', 'mask', 'gain']:
+                dset = group[key]
+                dset[:] = np.random.uniform(0, 100, dset.shape).astype(dset.dtype)
+
+            gain = group['gain'][:]
+            del group['gain']
+            # Contiguous
+            group.create_dataset('gain', data=gain)
+
+    return dir_path
 
 
 def make_agipd1m_run(

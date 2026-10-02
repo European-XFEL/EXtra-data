@@ -6,12 +6,36 @@ import h5py
 import numpy as np
 from packaging import version
 
+def make_dataset(f, path, shape, dtype, maxshape=None, fill=True, nrows=None,
+                 **kwargs):
+    """Create a dataset and write zeros into the first `nrows` rows.
+
+    A dataset which is never written has no chunks in the file, so reading it
+    gives fill values without touching the disk and never exercises the direct
+    reader. The rows past `nrows` are padding so we don't care about them.
+    """
+    if shape[1:] and 'chunks' not in kwargs:
+        # Choose a chunk size of at most 8MiB to save on disk space
+        max_chunk_bytes = 8 * 1024 ** 2
+        entry_bytes = int(np.prod(shape[1:])) * np.dtype(dtype).itemsize
+        rows = max(1, min(nrows or shape[0], max_chunk_bytes // entry_bytes))
+        kwargs['chunks'] = (rows,) + shape[1:]
+
+    ds = f.create_dataset(path, shape, dtype, maxshape=maxshape, **kwargs)
+    if fill and ds.size and ds.dtype.kind not in 'SUO':
+        ds[:nrows] = 0
+
+    return ds
+
+
 class DeviceBase:
     # Override these in subclasses
     control_keys = []
     extra_run_values = []
     output_channels = ()
     instrument_keys = []
+
+    fill_instrument = True
 
     # These are set by write_file
     ntrains = 400
@@ -47,8 +71,6 @@ class DeviceBase:
         i_count[:] = 0 if self.no_ctrl_data else 1
 
         # CONTROL & RUN
-        # Creating empty datasets for now.
-
         if self.no_ctrl_data:
             N = 0
 
@@ -57,16 +79,16 @@ class DeviceBase:
             f.create_group(f'CONTROL/{self.device_id}')
 
         for (topic, datatype, dims) in self.control_keys:
-            f.create_dataset('CONTROL/%s/%s/timestamp' % (self.device_id, topic),
-                             (N,), 'u8', maxshape=(None,))
-            f.create_dataset('CONTROL/%s/%s/value' % (self.device_id, topic),
-                             (N,)+dims, datatype, maxshape=((None,)+dims))
+            make_dataset(f, 'CONTROL/%s/%s/timestamp' % (self.device_id, topic),
+                         (N,), 'u8', maxshape=(None,))
+            make_dataset(f, 'CONTROL/%s/%s/value' % (self.device_id, topic),
+                         (N,)+dims, datatype, maxshape=((None,)+dims))
 
             # RUN is the value at the start of the run
-            f.create_dataset('RUN/%s/%s/timestamp' % (self.device_id, topic),
-                             (1,), 'u8', maxshape=(None,))
-            f.create_dataset('RUN/%s/%s/value' % (self.device_id, topic),
-                             (1,)+dims, datatype, maxshape=((None,)+dims))
+            make_dataset(f, 'RUN/%s/%s/timestamp' % (self.device_id, topic),
+                         (1,), 'u8', maxshape=(None,))
+            make_dataset(f, 'RUN/%s/%s/value' % (self.device_id, topic),
+                         (1,)+dims, datatype, maxshape=((None,)+dims))
 
         for row in self.extra_run_values:
             if len(row) == 3:
@@ -135,8 +157,9 @@ class DeviceBase:
             if len(trainids) > 0:
                 tid[:self.nsamples] = trainids
             for (topic, datatype, dims) in self.instrument_keys:
-                f.create_dataset('INSTRUMENT/%s/%s' % (dev_chan, topic),
-                                 (Npad,) + dims, datatype, maxshape=((None,) + dims))
+                make_dataset(f, 'INSTRUMENT/%s/%s' % (dev_chan, topic),
+                             (Npad,) + dims, datatype, maxshape=((None,) + dims),
+                             fill=self.fill_instrument, nrows=self.nsamples)
 
     def datasource_ids(self):
         if self.control_keys or self.extra_run_values:

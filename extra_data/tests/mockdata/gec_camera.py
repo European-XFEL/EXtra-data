@@ -1,6 +1,8 @@
 from .base import DeviceBase
 
 class GECCamera(DeviceBase):
+    fill_instrument = False
+
     control_keys = [
         ('acquisitionTime', 'f4', ()),
         ('binningX', 'i4', ()),
