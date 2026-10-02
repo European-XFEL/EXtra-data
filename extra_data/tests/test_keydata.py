@@ -170,7 +170,7 @@ def test_get_train_keep_dims(mock_jungfrau_run):
     assert val.shape == (1, 16, 512, 1024)
 
 
-def test_data_counts(mock_reduced_spb_proc_run):
+def test_data_counts(mock_reduced_spb_proc_run, mock_jungfrau_run):
     run = RunDirectory(mock_reduced_spb_proc_run)
 
     # control data
@@ -188,6 +188,14 @@ def test_data_counts(mock_reduced_spb_proc_run):
     count = mod.data_counts()
     assert count.index.tolist() == mod.train_ids
     assert count.values.sum() == mod.shape[0]
+
+    # Combine data with more train IDs than our original sources, and
+    # ensure that the data counts now cover these additional train IDs
+    # as well with 0.
+    multi_run = run.union(RunDirectory(mock_jungfrau_run))
+    mod = multi_run['SPB_DET_AGIPD1M-1/DET/0CH0:xtdf', 'image.data']
+    count = mod.data_counts()
+    assert count.index.tolist() == mod.train_ids
 
 
 def test_data_counts_empty(mock_fxe_raw_run):
@@ -230,8 +238,8 @@ def test_data_counts_missing_train(fxe_run_module_offset):
     lpd_m8 = run['FXE_DET_LPD1M-1/DET/8CH0:xtdf', 'image.cellId']
 
     ser = lpd_m8.data_counts(labelled=True)
-    assert len(ser) == 480
-    np.testing.assert_array_equal(ser.index, run.train_ids[1:])
+    assert len(ser) == 481
+    np.testing.assert_array_equal(ser.index, run.train_ids)
 
     arr = lpd_m8.data_counts(labelled=False)
     assert len(arr) == 481
