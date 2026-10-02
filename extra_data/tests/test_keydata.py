@@ -363,6 +363,17 @@ def test_single_value(mock_sa3_control_data, monkeypatch):
     np.testing.assert_equal(intensity.as_single_value(rtol=1), np.median(data))
 
 
+def test_run_value(mock_sa3_control_data):
+    f = H5File(mock_sa3_control_data)
+
+    flux = f['SA3_XTD10_XGM/XGM/DOOCS', 'pulseEnergy.photonFlux']
+    assert flux.run_value() == 0.0
+
+    imager = f['SA3_XTD10_IMGFEL/CAM/BEAMVIEW:daqOutput', 'data.image.pixels']
+    with pytest.raises(ValueError):
+        assert imager.run_value()
+
+
 def test_ndarray_out(mock_spb_raw_run):
     f = RunDirectory(mock_spb_raw_run)
     cam = f['SPB_IRU_CAM/CAM/SIDEMIC:daqOutput', 'data.image.dims']
