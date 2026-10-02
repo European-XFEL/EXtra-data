@@ -405,6 +405,13 @@ class SourceData:
         IDs. Otherwise, returns a NumPy array of counts to match ``.train_ids``.
         """
 
+        def build_data_counts(data_counts):
+            if labelled:
+                import pandas as pd
+                return pd.DataFrame(data_counts).max(axis=1)
+            else:
+                return np.stack(list(data_counts.values())).max(axis=0)
+
         if index_group is None:
             # Collect data counts for a sample key per index group.
             data_counts = {
@@ -416,15 +423,17 @@ class SourceData:
             if not data_counts:
                 data_counts = {None: np.zeros(len(self.train_ids), dtype=int)}
 
-            if labelled:
-                import pandas as pd
-                return pd.DataFrame(data_counts).max(axis=1)
-            else:
-                return np.stack(list(data_counts.values())).max(axis=0)
+            return build_data_counts(data_counts)
 
         else:
-            return self[self.one_key(index_group)].data_counts(
-                labelled=labelled)
+            if (key := self.one_key(index_group)) is None:
+                # Index group is actually keyless and not ownly
+                # downselected, most likely to occur for RUN-only
+                # sources.
+                return build_data_counts(
+                    {None: np.zeros(len(self.train_ids), dtype=int)})
+
+            return self[key].data_counts(labelled=labelled)
 
     def train_id_coordinates(self, index_group=None):
         """Make an array of train IDs to use alongside data this source.
