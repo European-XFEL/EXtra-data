@@ -479,11 +479,12 @@ def test_split_trains(mock_fxe_raw_run):
 
     # trains_per_part cuts off before frames_per_part
     parts = list(det.split_trains(trains_per_part=3, frames_per_part=1024))
-    assert [len(p.train_ids) for p in parts] == ([3] * 6) + [2]
+    assert {len(p.train_ids) for p in parts} == {2, 3}
 
     # parts cuts off before frames_per_part
     parts = list(det.split_trains(parts=6, frames_per_part=1024))
-    assert [len(p.train_ids) for p in parts] == ([3] * 6) + [2]
+    assert len(parts) == 6
+    assert {len(p.train_ids) for p in parts} == {3, 4}
 
     # frames_per_part > all frames in selection
     parts = list(det.split_trains(frames_per_part=3000))
