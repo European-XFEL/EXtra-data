@@ -109,9 +109,10 @@ def parallel_decompress_chunks(tasks, decompressor_proto, threads=16):
 
         try:
             filter_mask, compdata = dset_id.read_direct_chunk(coord)
-            decomp.apply_filters(compdata, filter_mask, dest)
-        except RuntimeError:
-            pass  # Chunk not allocated in file
+        except Exception:
+            return  # Chunk not allocated in file
+
+        decomp.apply_filters(compdata, filter_mask, dest)
 
     with ThreadPool(threads) as pool:
         pool.starmap(load_one, tasks)
