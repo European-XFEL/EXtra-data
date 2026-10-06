@@ -930,6 +930,20 @@ class MultimodKeyData:
         return self.modno_to_keydata[min(self.modno_to_keydata)]
 
     @property
+    def section(self):
+        return self._eg_keydata.section
+
+    @property
+    def is_control(self):
+        """Whether this key belongs to a control source."""
+        return self.section == 'CONTROL'
+
+    @property
+    def is_instrument(self):
+        """Whether this key belongs to an instrument source."""
+        return self.section == 'INSTRUMENT'
+
+    @property
     def ndim(self):
         return self._eg_keydata.ndim + 1
 
@@ -1034,8 +1048,8 @@ class MultimodKeyData:
         coords = {'module': self.modules, 'trainId': self.train_id_coordinates()}
         return DataArray(arr, dims=self.dimensions, coords=coords)
 
-    def xarray(self, *, fill_value=None, roi=(), astype=None, parallel=-1):
-        arr = self.ndarray(fill_value=fill_value, roi=roi, astype=astype,
+    def xarray(self, *, fill_value=None, out=None, roi=(), astype=None, parallel=-1):
+        arr = self.ndarray(fill_value=fill_value, out=out, roi=roi, astype=astype,
                            parallel=parallel)
         return self._wrap_xarray(arr)
 
@@ -1058,6 +1072,20 @@ class MultimodKeyData:
             return self._wrap_xarray(arr)
 
         return arr
+
+    def data_counts(self, labelled=True):
+        """Get the maximum count of data entries across modules in each train.
+
+        If *labelled* is True, returns a pandas series with an index of train
+        IDs. Otherwise, returns a NumPy array of counts to match ``.train_ids``.
+        """
+        counts = np.zeros(len(self.train_ids), dtype=np.uint64)
+        for kd in self.modno_to_keydata.values():
+            counts = np.maximum(counts, kd.data_counts(labelled=False))
+
+        if labelled:
+            return pd.Series(counts, index=self.train_ids)
+        return counts
 
     def data_availability(self, module_gaps=False):
         """Get an array indicating what data is available
@@ -1143,6 +1171,18 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
     def _all_pulses(self):
         psv = self._pulse_sel.value
         return isinstance(psv, slice) and psv == slice(0, MAX_PULSES, 1)
+
+    def data_counts(self, labelled=True):
+        if self._all_pulses():
+            return super().data_counts(labelled=labelled)
+
+        # Count the selected frames in each train
+        sel_tids = self.det.train_ids_perframe[self._sel_frames]
+        counts = pd.Series(sel_tids).value_counts().reindex(self.train_ids, fill_value=0).astype(np.uint64)
+
+        if labelled:
+            return counts
+        return counts.to_numpy()
 
     def buffer_shape(self, module_gaps=False, roi=()):
         """Get the array shape for this data
@@ -1309,25 +1349,26 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
             'train_pulse': index, 'module': self.modules,
         })
 
-    def xarray(self, *, pulses=None, fill_value=None, roi=(), astype=None,
+    def xarray(self, *, pulses=None, fill_value=None, out=None, roi=(), astype=None,
                subtrain_index='pulseId', unstack_pulses=False, parallel=-1,
                decompress_threads=None):
         arr = self.ndarray(
             fill_value=fill_value,
+            out=out,
             roi=roi,
             astype=astype,
             parallel=parallel,
             decompress_threads=decompress_threads,
         )
-        out = self._wrap_xarray(arr, subtrain_index)
+        res = self._wrap_xarray(arr, subtrain_index)
 
         if unstack_pulses:
             # Separate train & pulse dimensions, and arrange dimensions
             # so that the data is contiguous in memory.
-            dim_order = ['module'] + out.indexes['train_pulse'].names + self.dimensions[2:]
-            return out.unstack('train_pulse').transpose(*dim_order)
+            dim_order = ['module'] + res.indexes['train_pulse'].names + self.dimensions[2:]
+            return res.unstack('train_pulse').transpose(*dim_order)
 
-        return out
+        return res
 
     def dask_array(self, *, labelled=False, subtrain_index='pulseId',
                    fill_value=None, astype=None, frames_per_chunk=None):
