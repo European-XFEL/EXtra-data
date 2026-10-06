@@ -120,6 +120,23 @@ def _out_array(shape, dtype, fill_value=None):
         return np.full(shape, fill_value, dtype=dtype)
 
 
+def _fill_unread(out, ops, fill_value=None):
+    """Fill the entries of *out*, shaped (modules, entries, ...), which *ops* don't read."""
+    if fill_value is None:
+        fill_value = np.nan if out.dtype.kind == 'f' else 0
+
+    # Fill the gaps between the ops, in the order they write into out
+    flat = out.reshape((-1,) + out.shape[2:], copy=False)
+    end = 0
+    for op in sorted(ops, key=lambda op: op.dest_first):
+        if op.dest_first > end:
+            flat[end:op.dest_first] = fill_value
+        end = max(end, op.dest_first + op.count)
+
+    if end < len(flat):
+        flat[end:] = fill_value
+
+
 class MultimodDetectorBase:
     """Base class for detectors made of several modules as separate data sources
     """
@@ -997,14 +1014,18 @@ class MultimodKeyData:
                 module_gaps=False, parallel=-1):
         """Get data as a plain NumPy array with no labels"""
         out_shape = self.buffer_shape(module_gaps, roi)
+        ops = self._read_ops(module_gaps, out_shape[1])
 
         if out is None:
             dtype = self._eg_keydata.dtype if astype is None else np.dtype(astype)
             out = _out_array(out_shape, dtype, fill_value=fill_value)
         elif out.shape != out_shape:
             raise ValueError(f'requires output array of shape {out_shape}')
+        else:
+            # A given array may hold anything, e.g. data from an earlier read
+            _fill_unread(out, ops, fill_value)
 
-        self._read(out, self._read_ops(module_gaps, out_shape[1]), roi, parallel)
+        self._read(out, ops, roi, parallel)
         return out
 
     def _wrap_xarray(self, arr):
@@ -1253,12 +1274,16 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
                 parallel = 0 if decompress_threads == 1 else -1
 
         out_shape = self.buffer_shape(module_gaps=module_gaps, roi=roi)
+        ops = self._read_ops(module_gaps, out_shape[1])
 
         if out is None:
             dtype = self._eg_keydata.dtype if astype is None else np.dtype(astype)
             out = _out_array(out_shape, dtype, fill_value=fill_value)
         elif out.shape != out_shape:
             raise ValueError(f'requires output array of shape {out_shape}')
+        else:
+            # A given array may hold anything, e.g. data from an earlier read
+            _fill_unread(out, ops, fill_value)
 
         reading_view = out.view()
         if self._extraneous_dim:
@@ -1269,8 +1294,7 @@ class XtdfImageMultimodKeyData(MultimodKeyData):
         else:
             reading_view = out
 
-        self._read(reading_view, self._read_ops(module_gaps, out_shape[1]),
-                   roi, parallel)
+        self._read(reading_view, ops, roi, parallel)
 
         return out
 
