@@ -83,6 +83,7 @@ Documentation contents
    reading_files
    agipd_lpd_data
    streaming
+   misc_api
    validation
    cli
    data_format
@@ -105,4 +106,3 @@ Indices and tables
 
 * :ref:`genindex`
 * :ref:`search`
-
