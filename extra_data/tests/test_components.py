@@ -180,6 +180,19 @@ def test_ndarray_module_gaps(mock_fxe_raw_run):
     assert arr_w_gaps[:, 0, 0, 0].tolist() == ([7] * 2) + [0] + ([7] * 13)
 
 
+def test_ndarray_out_gaps(mock_lpd_mini_gap_run):
+    det = LPD1M(RunDirectory(mock_lpd_mini_gap_run), modules=[0, 1])
+
+    # Data already in out mustn't show through where modules are missing
+    for kd in [det['image.data'], det['image.data'].select_pulses(np.s_[8:]), det['header.pulseCount']]:
+        for module_gaps in [False, True]:
+            expected = kd.ndarray(module_gaps=module_gaps, fill_value=7)
+            out = np.full_like(expected, 99)
+            res = kd.ndarray(module_gaps=module_gaps, fill_value=7, out=out)
+            assert res is out
+            np.testing.assert_array_equal(out, expected)
+
+
 def test_get_array_lpd_parallelgain(mock_lpd_parallelgain_run):
     run = RunDirectory(mock_lpd_parallelgain_run)
     det = LPD1M(run.select_trains(by_index[:2]), parallel_gain=True)
