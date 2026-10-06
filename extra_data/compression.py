@@ -101,17 +101,20 @@ def multi_dataset_decompressor(dsets):
 def parallel_decompress_chunks(tasks, decompressor_proto, threads=16):
     tlocal = threading.local()
 
-    def load_one(dset_id, coord, dest):
+    def decompress_one(filter_mask, compdata, dest):
         try:
             decomp = tlocal.decompressor
         except AttributeError:
             tlocal.decompressor = decomp = decompressor_proto.clone()
 
-        if dset_id.get_chunk_info_by_coord(coord).byte_offset is None:
-            return   # Chunk not allocated in file
-
-        filter_mask, compdata = dset_id.read_direct_chunk(coord)
         decomp.apply_filters(compdata, filter_mask, dest)
 
+    def read_chunks(tasks):
+        for dset_id, coord, dest in tasks:
+            try:
+                yield dset_id.read_direct_chunk(coord) + (dest,)
+            except Exception:
+                pass  # Chunk not allocated in file
+
     with ThreadPool(threads) as pool:
-        pool.starmap(load_one, tasks)
+        pool.starmap(decompress_one, read_chunks(tasks))
