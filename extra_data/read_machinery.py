@@ -314,9 +314,13 @@ class FilenameInfo:
 
 def find_proposal(propno):
     """Find the proposal directory for a given proposal on Maxwell"""
-    if '/' in propno:
+    if isinstance(propno,Integral):
+        propno = f'p{propno:06d}'
+    elif '/' in propno:
         # Already passed a proposal directory
         return propno
+
+
 
     t0 = time.monotonic()
     for d in data_root_dir().glob(f'*/*/{propno}'):
