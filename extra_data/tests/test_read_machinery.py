@@ -17,6 +17,7 @@ def test_find_proposal(tmpdir, monkeypatch):
     os.makedirs(prop_dir)
 
     assert read_machinery.find_proposal('p002012') == prop_dir
+    assert read_machinery.find_proposal(2012) == prop_dir
     assert read_machinery.find_proposal(prop_dir) == prop_dir
 
 
