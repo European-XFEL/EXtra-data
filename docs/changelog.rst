@@ -1,6 +1,28 @@
 Release Notes
 =============
 
+.. _rel-1.25:
+
+1.25
+----
+
+- New :class:`~.LPDSolo` detector component class for LPD Solo data, with
+  a single 256 x 256 pixel supermodule (:ghpull:`741`).
+- :ref:`Virtual CXI files <cmd-make-virtual-cxi>` now include the detector
+  name and, when available, the proposal and run numbers as HDF5 attributes
+  (:ghpull:`749`).
+- Speed up reading compressed detector data with parallel decompression
+  (:ghpull:`761`).
+- Fix region-of-interest (``roi=``) selection when reading masked detector
+  data as NumPy or xarray arrays by applying the same selection to the data
+  and pixel mask (:ghpull:`763`).
+- The ``extra_data.read_machinery.find_proposal()`` helper now accepts integer
+  proposal numbers (:ghpull:`762`).
+- Fix ``extra-data-readable`` failing if a file check times out before
+  producing any output (:ghpull:`733`).
+- Avoid deprecated array shape assignment for compatibility with NumPy 2.5.
+  EXtra-data now requires NumPy 2.1 or above (:ghpull:`760`).
+
 .. _rel-1.24:
 
 1.24
