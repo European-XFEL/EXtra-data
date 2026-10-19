@@ -271,6 +271,12 @@ def test_jungfrau_masked_data(mock_fxe_jungfrau_run):
     assert xarr.dims[:2] == ('module', 'trainId')
     np.testing.assert_array_equal(xarr.values[0, 0, 0, 0, :], line0)
 
+    # ROI includes both masked and unmasked pixels
+    roi = np.s_[:2, :2, 10:40]
+    expected = arr[:, :, :2, :2, 10:40]
+    np.testing.assert_array_equal(kd.ndarray(roi=roi), expected)
+    np.testing.assert_array_equal(kd.xarray(roi=roi).values, expected)
+
     # Specify which mask bits to use, & replace masked values with 99
     kd = jf.masked_data(mask_bits=1, masked_value=99).select_trains(np.s_[:1])
     arr = kd.ndarray()
@@ -302,10 +308,19 @@ def test_xtdf_masked_data(mock_reduced_spb_proc_run):
     line0_2mod[1, 1:32] = np.nan
     np.testing.assert_array_equal(arr[:, 0, 0, :], line0_2mod)
 
+    # ROI includes both masked and unmasked pixels
+    roi = np.s_[:2, 10:40]
+    expected = arr[:, :, :2, 10:40]
+    np.testing.assert_array_equal(kd.ndarray(roi=roi), expected)
+    np.testing.assert_array_equal(kd.xarray(roi=roi).values, expected)
+
     # Test with pulse selection (frames per train is consistent but arbitrary)
     kd_pulse_sel = kd.select_pulses(np.s_[:3])
     assert kd_pulse_sel.shape[1] <= 3
     assert kd_pulse_sel.ndarray().shape == kd_pulse_sel.shape
+    np.testing.assert_array_equal(
+        kd_pulse_sel.ndarray(roi=roi), expected[:, :kd_pulse_sel.shape[1]]
+    )
 
     kd = agipd.masked_data(mask_bits=[1, 4], masked_value=-1).select_trains(np.s_[:1])
     arr = kd.ndarray()
