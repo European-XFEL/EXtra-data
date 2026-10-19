@@ -1051,21 +1051,21 @@ class DetectorMaskedKeyData(MultimodKeyData):
     def _mask_keydata(self):
         return self.det[self._mask_key]
 
-    def _load_mask(self, module_gaps):
+    def _load_mask(self, module_gaps, roi=()):
         """Load the mask & convert to boolean (True for bad pixels)"""
-        mask_data = self._mask_keydata().ndarray(module_gaps=module_gaps)
+        mask_data = self._mask_keydata().ndarray(module_gaps=module_gaps, roi=roi)
         if self._mask_bits is None:
             return mask_data != 0  # Skip extra temporary array from &
         else:
             return (mask_data & self._mask_bits) != 0
 
-    def ndarray(self, *, module_gaps=False, **kwargs):
+    def ndarray(self, *, module_gaps=False, roi=(), **kwargs):
         """Load data into a NumPy array & apply the mask"""
         # Load mask first: it shrinks from 4 bytes/px to 1, so peak memory use
         # is lower than loading it after the data
-        mask = self._load_mask(module_gaps=module_gaps)
+        mask = self._load_mask(module_gaps=module_gaps, roi=roi)
 
-        data = super().ndarray(module_gaps=module_gaps, **kwargs)
+        data = super().ndarray(module_gaps=module_gaps, roi=roi, **kwargs)
         data[mask] = self._masked_value
         return data
 
