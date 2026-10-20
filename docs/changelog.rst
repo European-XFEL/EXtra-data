@@ -45,6 +45,8 @@ Release Notes
 - New virtual overview files will now contain a copy of the ``RUN`` section
   from runs, rather than external links, making it faster to scan sources by
   device class (:ghpull:`723`).
+- :meth:`~.LPD1M.split_trains` on detector data components is now more efficient,
+  especially on long runs (:ghpull:`758`).
 - Fix getting units in some specific cases, and don't fail in
   :meth:`~.KeyData.xarray` if there's an error getting units (:ghpull:`696`).
 - Fix :meth:`~.KeyData.data_counts` in with out-of-order train IDs and
