@@ -398,7 +398,9 @@ class KeyData:
 
         if labelled:
             import pandas as pd
-            return pd.Series(counts, index=train_ids)
+            res = pd.Series(0, index=self.train_ids)
+            res.loc[train_ids] = counts
+            return res
         else:
             all_tids_arr = np.array(self.train_ids)
             res = np.zeros(len(all_tids_arr), dtype=np.uint64)
