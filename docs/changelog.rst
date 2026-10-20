@@ -6,6 +6,8 @@ Release Notes
 1.25
 ----
 
+2026-10-20
+
 - New :class:`~.LPDSolo` detector component class for LPD Solo data, with
   a single 256 x 256 pixel supermodule (:ghpull:`741`).
 - :ref:`Virtual CXI files <cmd-make-virtual-cxi>` now include the detector
