@@ -20,6 +20,8 @@ Release Notes
   proposal numbers (:ghpull:`762`).
 - :meth:`.KeyData.data_counts` now returns a number for every selected train,
   including zeros, even when returning a labelled series (:ghpull:`751`).
+- Fix :meth:`.KeyData.data_counts` with ``index_group=''`` on RUN-only sources
+  (:ghpull:`755`).
 - Fix ``extra-data-readable`` failing if a file check times out before
   producing any output (:ghpull:`733`).
 - Avoid deprecated array shape assignment for compatibility with NumPy 2.5.
