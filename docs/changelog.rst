@@ -1,10 +1,42 @@
 Release Notes
 =============
 
+.. _rel-1.25:
+
+1.25
+----
+
+2026-10-20
+
+- New :class:`~.LPDSolo` detector component class for LPD Solo data, with
+  a single 256 x 256 pixel supermodule (:ghpull:`741`).
+- :ref:`Virtual CXI files <cmd-make-virtual-cxi>` now include the detector
+  name and, when available, the proposal and run numbers as HDF5 attributes
+  (:ghpull:`749`).
+- Speed up reading compressed detector data with parallel decompression
+  (:ghpull:`761`).
+- Fix region-of-interest (``roi=``) selection when reading masked detector
+  data as NumPy or xarray arrays by applying the same selection to the data
+  and pixel mask (:ghpull:`763`).
+- The ``extra_data.read_machinery.find_proposal()`` helper now accepts integer
+  proposal numbers (:ghpull:`762`).
+- :meth:`.KeyData.data_counts` now returns a number for every selected train,
+  including zeros, even when returning a labelled series (:ghpull:`751`).
+- Fix :meth:`.KeyData.data_counts` with ``index_group=''`` on RUN-only sources
+  (:ghpull:`755`).
+- Fix ``extra-data-readable`` failing if a file check times out before
+  producing any output (:ghpull:`733`).
+- Avoid deprecated array shape assignment for compatibility with NumPy 2.5.
+  EXtra-data now requires NumPy 2.1 or above (:ghpull:`760`).
+- RUN metadata can now be accessed on sources that are not CONTROL sources
+  (:ghpull:`735`).
+
 .. _rel-1.24:
 
 1.24
 ----
+
+2026-03-18
 
 - New options for :ref:`cmd-lsxfel` and :meth:`~.DataCollection.info` to show
   data counts for instrument sources, separate from key names (:ghpull:`727`).
@@ -17,6 +49,8 @@ Release Notes
 - New virtual overview files will now contain a copy of the ``RUN`` section
   from runs, rather than external links, making it faster to scan sources by
   device class (:ghpull:`723`).
+- :meth:`~.LPD1M.split_trains` on detector data components is now more efficient,
+  especially on long runs (:ghpull:`758`).
 - Fix getting units in some specific cases, and don't fail in
   :meth:`~.KeyData.xarray` if there's an error getting units (:ghpull:`696`).
 - Fix :meth:`~.KeyData.data_counts` in with out-of-order train IDs and
