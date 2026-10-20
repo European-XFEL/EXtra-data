@@ -478,6 +478,10 @@ class MultimodDetectorBase:
             raise ValueError(
                 "One of parts, trains_per_part, frames_per_part must be specified"
             )
+
+        if not self.train_ids:
+            return  # No data to split
+
         if frames_per_part is not None:
             # If possible, convert frames_per_part to trains_per_part, which
             # uses the more efficient code path.
@@ -497,9 +501,6 @@ class MultimodDetectorBase:
             # frames_per_part was specified. We don't assume that the number
             # of frames per train is constant, so we'll iterate over trains
             # and cut off each chunk when we reach the relevant number.
-            if not self.train_ids:
-                return  # No data to split
-
             if trains_per_part is None:
                 trains_per_part = np.inf
             if parts:
