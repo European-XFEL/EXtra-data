@@ -427,7 +427,7 @@ class SourceData:
 
         else:
             if (key := self.one_key(index_group)) is None:
-                # Index group is actually keyless and not ownly
+                # Index group is actually keyless and not only
                 # downselected, most likely to occur for RUN-only
                 # sources.
                 return build_data_counts(
