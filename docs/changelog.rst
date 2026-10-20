@@ -32,6 +32,8 @@ Release Notes
 1.24
 ----
 
+2026-03-18
+
 - New options for :ref:`cmd-lsxfel` and :meth:`~.DataCollection.info` to show
   data counts for instrument sources, separate from key names (:ghpull:`727`).
 - New :option:`lsxfel --source` option to select sources (:ghpull:`727`).
