@@ -26,6 +26,8 @@ Release Notes
   producing any output (:ghpull:`733`).
 - Avoid deprecated array shape assignment for compatibility with NumPy 2.5.
   EXtra-data now requires NumPy 2.1 or above (:ghpull:`760`).
+- RUN metadata can now be accessed on sources that are not CONTROL sources
+  (:ghpull:`735`).
 
 .. _rel-1.24:
 
