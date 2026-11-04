@@ -88,6 +88,7 @@ def test_group_ok(names, exp):
         "SPB_XTD9_XGM/DOOCS/MAIN:output",
     ],
     [
+        # One part changing each time, but different parts
         'SQS_ILH_LAS/PROC/BS_CAM_800_OU1',
         'SQS_ILH_LAS/PROC/BS_CAM_800_OU2',
         'SQS_ILH_LAS/PROC/BS_CAM_TT_OU2',
