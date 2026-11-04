@@ -272,7 +272,7 @@ class SourceGroup:
 
         # check if all elements at the element with the difference are digits or strs
         diff_idx = diffs_at[0]
-        if grp[-1][diff_idx].isdigit() == split[diff_idx].isdigit():
+        if grp[-1][diff_idx].isdigit() != split[diff_idx].isdigit():
             return False
 
         if len(grp) > 2 and (grp[-1][diff_at] == grp[0][diff_at]):
