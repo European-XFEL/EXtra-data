@@ -270,7 +270,7 @@ class SourceGroup:
         if len(diffs_at) != 1 or ((diff_at := diffs_at[0]) % 2 == 0):
             return False  # >1 part changed, or separator part changed
 
-        if len(grp) > 2 and (grp[-1][diff_at] == grp[0][diff_at]):
+        if len(grp) >= 2 and (grp[-1][diff_at] == grp[0][diff_at]):
             return False  # different part changing from current group
 
         self.entries.append(split)
