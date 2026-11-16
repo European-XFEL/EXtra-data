@@ -486,6 +486,13 @@ class Planner:
         filename, ds_path = op.file.filename, op.dataset_path
         self._borrowed.setdefault(filename, op.file)
 
+        # Info is only cached for datasets that aren't virtual, so there's no
+        # need to look the dataset up in HDF5 again.
+        if ('info', filename, ds_path) in cache:
+            reader = self._reader(cache, filename, ds_path)
+            self._add(reader, op.src_first, op.dest_first, op.count)
+            return
+
         dset = self._dataset(filename, ds_path)
         if not dset.is_virtual:
             reader = self._reader(cache, filename, ds_path)
