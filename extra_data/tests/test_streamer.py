@@ -349,6 +349,29 @@ def test_memorystreamer_multimod(mock_spb_raw_run, mock_small_agipd_proc_gap_run
     streamer.close()
 
 
+def test_memorystreamer_squeezed_labels(mock_spb_raw_run):
+    # Squeezed trains after the first are wrapped by a TrainTemplate rather than
+    # indexed through xarray, which must give exactly the same DataArrays.
+    run = RunDirectory(mock_spb_raw_run)
+    sources = dict(
+        camera=run["SPB_IRU_CAM/CAM/SIDEMIC:daqOutput", "data.image.pixels"],
+        images=AGIPD1M(run, raw=True)["image.data"].select_pulses(np.s_[:2]),
+        xgm=run["SPB_XTD9_XGM/DOOCS/MAIN", "beamPosition.ixPos"],
+    )
+
+    with MemoryStreamer() as streamer:
+        squeezed = [{ key: getattr(td, key).copy() for key in sources }
+                    for td in streamer.iterate(sources, reader_trains_per_chunk=3)]
+        unsqueezed = [{ key: getattr(td, key).isel(trainId=0).copy() for key in sources }
+                      for td in streamer.iterate(sources, reader_trains_per_chunk=3,
+                                                 autosqueeze=False)]
+
+    assert len(squeezed) == len(unsqueezed) > 3
+    for got, expected in zip(squeezed, unsqueezed):
+        for key in sources:
+            xr.testing.assert_identical(got[key], expected[key])
+
+
 def test_memorystreamer_irregular_entries(mock_reduced_spb_raw_run):
     run = RunDirectory(mock_reduced_spb_raw_run)
     module = run["SPB_DET_AGIPD1M-1/DET/0CH0:xtdf", "image.data"]

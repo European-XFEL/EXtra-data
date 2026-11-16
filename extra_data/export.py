@@ -35,6 +35,7 @@ from .exceptions import SourceNameError
 from .reader import RunDirectory, H5File, by_id, by_index
 from .stacking import stack_detector_data
 from .keydata import KeyData
+from .read_machinery import ReadOp
 from .utils import default_num_threads
 
 
@@ -121,64 +122,84 @@ class SlotBuffer:
         self._array = None
 
 
-class SlotStream:
-    """Keep the slots of a buffer busy with jobs, and give back filled slots.
+class ChunkScheduler:
+    """Keep the slots of several buffers busy with reads, in chunk order.
 
-    Each job is submitted to the reader threads along with a free slot to write
-    into, so at most `n_slots` of them are in flight at once. Iterating gives
-    back ``(job, slot, result)`` in the order the jobs were given, and the
-    consumer calls :meth:`release` once it's finished with a slot's contents.
+    Each source has a buffer, and for each chunk a job per source. A job is
+    submitted to the reader threads along with a free slot of its source's
+    buffer to write into, so at most `n_slots` chunks of a source are in flight
+    at once. Iterating gives back ``{key: (slot, result)}`` for each chunk in
+    order, and the consumer calls :meth:`release` once it's finished with a
+    slot's contents.
 
-    Submitting has to wait for a free slot, so it's done on a thread of its own:
+    All of a chunk's reads are submitted before any of the next chunk's, so the
+    reader threads work through the chunks in the order they're consumed. If
+    each source submitted on its own, sources with free slots would fill the
+    pool with reads far ahead and hold up the chunk the consumer is waiting on,
+    making the stream come in bursts.
+
+    Submitting has to wait for free slots, so it's done on a thread of its own:
     that lets a single-threaded consumer drive the whole thing by iterating,
     without deadlocking against its own unreleased slots.
 
-    `func` is called in a reader thread as ``func(job, buffer, slot)``. `stop`
-    may be a callable which returns True to abandon the stream, checked while
-    waiting for a slot to come free.
+    `jobs` maps each key to an iterable of that source's jobs, one per chunk.
+    `func` is called in a reader thread as ``func(key, job, buffer, slot)``.
+    `stop` may be a callable which returns True to abandon the stream, checked
+    while waiting for a slot to come free.
     """
-    def __init__(self, buffer, jobs, func, pool, stop=None):
-        self.buffer = buffer
+    def __init__(self, buffers, jobs, func, pool, stop=None):
+        self.buffers = buffers
         self._func = func
         self._pool = pool
         self._stop = stop
         self._closed = False
 
         # Every slot is free to begin with
-        self._free_slots = queue.Queue()
-        for slot in range(buffer.n_slots):
-            self._free_slots.put(slot)
+        self._free_slots = { key: queue.Queue() for key in buffers }
+        for key, buffer in buffers.items():
+            for slot in range(buffer.n_slots):
+                self._free_slots[key].put(slot)
 
-        # Results are taken from this in the order the jobs were submitted
+        # Results are taken from this in chunk order
         self._submitted = queue.Queue()
         self._feeder_error = None
-        self._feeder = threading.Thread(target=self._feed, args=(iter(jobs),),
+        self._feeder = threading.Thread(target=self._feed, args=(jobs,),
                                         daemon=True)
         self._feeder.start()
 
-    def _acquire(self):
+    def _acquire(self, key):
         """Wait for a free slot, returning None if the stream is stopping."""
         while True:
             # The timeout lets us periodically check whether we should give up.
             try:
-                return self._free_slots.get(timeout=0.1)
+                return self._free_slots[key].get(timeout=0.1)
             except queue.Empty:
                 if self._closed or (self._stop is not None and self._stop()):
                     return None
 
-    def release(self, slot):
+    def release(self, key, slot):
         """Return a slot to be used again, once it's finished with."""
-        self._free_slots.put(slot)
+        self._free_slots[key].put(slot)
 
     def _feed(self, jobs):
         try:
-            for job in jobs:
-                slot = self._acquire()
-                if slot is None:
-                    return
+            for chunk_jobs in zip(*jobs.values()):
+                submitted = { }
+                try:
+                    for key, job in zip(jobs, chunk_jobs):
+                        slot = self._acquire(key)
+                        if slot is None:
+                            return
 
-                future = self._pool.submit(self._func, job, self.buffer, slot)
-                self._submitted.put((job, slot, future))
+                        future = self._pool.submit(self._func, key, job,
+                                                   self.buffers[key], slot)
+                        submitted[key] = (slot, future)
+                finally:
+                    # A chunk cut short by stopping is still queued, so that
+                    # close() waits for the reads it did submit. The consumer
+                    # sees it's incomplete and stops.
+                    if submitted:
+                        self._submitted.put(submitted)
         except BaseException as e:
             self._feeder_error = e
         finally:
@@ -188,9 +209,9 @@ class SlotStream:
 
     def __iter__(self):
         while (item := self._submitted.get()) is not None:
-            job, slot, future = item
-            # Re-raise anything the reader hit
-            yield job, slot, future.result()
+            # Re-raise anything the readers hit
+            yield { key: (slot, future.result())
+                    for key, (slot, future) in item.items() }
 
         if self._feeder_error is not None:
             raise self._feeder_error
@@ -198,8 +219,8 @@ class SlotStream:
     def close(self):
         """Stop submitting jobs and wait for those already running.
 
-        The buffer isn't freed here: a consumer may still be holding slots of
-        it, and only the buffer's owner knows when that's no longer true.
+        The buffers aren't freed here: a consumer may still be holding slots of
+        them, and only the buffers' owner knows when that's no longer true.
         """
         self._closed = True
         self._feeder.join()
@@ -215,8 +236,9 @@ class SlotStream:
             except queue.Empty:
                 break
 
-            if item is not None and not item[2].cancel():
-                pending.append(item[2])
+            if item is not None:
+                pending.extend(future for _, future in item.values()
+                               if not future.cancel())
 
         futures.wait(pending)
 
@@ -293,10 +315,94 @@ def read_kd(kd, buffer, slot, xarray, mock_io):
             read_1_thread(lambda p: kd.ndarray(out=out, parallel=p))
         return PartialDataArray(None, None, None, None, slot, shape)
 
-def select_chunks(kd, tid_chunks):
-    # The chunk index goes along with each job so that reads can be timed
+class TrainTemplate:
+    """Wraps a single train's data of a source as a DataArray.
+
+    Indexing a chunk's DataArray for every train of every source costs more than
+    handing out the data, and holds the GIL the reader threads need. Everything
+    but the data and the train ID is the same for every train of a source, so
+    it's taken from one train indexed the slow way and reused.
+    """
+    def __init__(self, part):
+        self.name = part.name
+        self.dims = part.dims
+        self.attrs = part.attrs
+        self.coords = dict(part.coords.variables)
+        self.indexes = dict(part.xindexes)
+
+    def wrap(self, data, train_id):
+        coords = self.coords | { "trainId": xr.Variable((), train_id) }
+        return xr.DataArray(xr.Variable(self.dims, data, self.attrs), coords=coords,
+                            name=self.name, indexes=self.indexes, fastpath=True)
+
+def read_ops(ops, shape, labels, tids, buffer, slot):
+    """Read a chunk of a plain source from its precomputed ops into a slot."""
+    out = buffer.view(slot, shape)
+    read_1_thread(lambda p: direct_read.read(out, ops, (), p))
+
+    # Split the entries into a train axis and an axis for each train's entries
+    split_shape = (len(tids), shape[0] // len(tids)) + shape[1:]
+    if labels is None:
+        return PartialDataArray(None, None, None, None, slot, split_shape)
+
+    name, attrs, dims = labels
+    return PartialDataArray(name, attrs, dims, {"trainId": np.asarray(tids)},
+                            slot, split_shape)
+
+def kd_labels(kd):
+    """The labels kd.xarray() would give, split into trains and entries."""
+    attrs = {}
+    try:
+        if (units := kd.units):
+            attrs['units'] = units
+    except Exception as e:
+        warn(f"Exception fetching units: {e}")
+
+    dims = ("trainId", "entry", *[f"dim_{i}" for i in range(len(kd.entry_shape))])
+    return f"{kd.source}.{kd.key}", attrs, dims
+
+def chunk_jobs(kd, tid_chunks, entries, xarray, mock_io):
+    """Make the job reading each chunk of a source.
+
+    Each job is ``(chunk index, read)``, with ``read(buffer, slot)`` filling the
+    slot. For plain sources the read ops are worked out here from the source's
+    own data chunks: selecting the trains of each chunk instead costs far more
+    than reading it, and every source pays it for every chunk.
+    """
+    # Every train holds `entries` entries, so a chunk's entries are a
+    # contiguous range of the source's. That only holds if the data does.
+    data_chunks = kd._data_chunks_nonempty if isinstance(kd, KeyData) else []
+    bounds = np.cumsum([0] + [c.total_count for c in data_chunks])
+    plain = (type(kd) is KeyData and not mock_io and not kd.dtype.hasobject
+             and bounds[-1] == len(kd.train_ids) * entries)
+
+    if not plain:
+        # Selecting is slow for multi-module data, so each chunk is only
+        # selected when the stream is ready to read it.
+        for i, tids in enumerate(tid_chunks):
+            yield i, partial(read_kd, kd.select_trains(by_id[tids]),
+                             xarray=xarray, mock_io=mock_io)
+        return
+
+    labels = kd_labels(kd) if xarray else None
+    entry_shape = tuple(kd.entry_shape)
+    start = 0
     for i, tids in enumerate(tid_chunks):
-        yield i, kd.select_trains(by_id[tids])
+        lo, hi = start, start + len(tids) * entries
+        ops = []
+        j = int(np.searchsorted(bounds, lo, side='right')) - 1
+        while lo < hi:
+            end = min(hi, int(bounds[j + 1]))
+            chunk = data_chunks[j]
+            ops.append(ReadOp(chunk.file, chunk.dataset_path,
+                              chunk.first + lo - bounds[j], lo - start, end - lo))
+            lo = end
+            j += 1
+
+        start = hi
+
+        yield i, partial(read_ops, ops, (len(tids) * entries, *entry_shape),
+                         labels, tids)
 
 def align_sources(source_objects):
     if len(source_objects) == 0:
@@ -444,7 +550,7 @@ class MemoryStreamer:
                 raise TypeError(f"Unsupported object: {obj}")
 
         self._train_ready_queue = queue.Queue(0)
-        self._slot_streams = { }
+        self._scheduler = None
         self._slot_refcounts = { }
         self._slot_refcount_lock = threading.Lock()
         self._stop_streaming = False
@@ -563,10 +669,10 @@ class MemoryStreamer:
 
         return ax
 
-    def _read_chunk(self, key, job, buffer, slot, **kwargs):
-        chunk, kd = job
+    def _read_chunk(self, key, job, buffer, slot):
+        chunk, read = job
         start = time.perf_counter()
-        result = read_kd(kd, buffer, slot, **kwargs)
+        result = read(buffer, slot)
         self._record("read", start, time.perf_counter(), key=key, chunk=chunk)
         return result
 
@@ -585,7 +691,7 @@ class MemoryStreamer:
                     del self._slot_refcounts[key, td._chunk]
 
             if free:
-                self._slot_streams[key].release(slot)
+                self._scheduler.release(key, slot)
 
     def _put_ready(self, td):
         # Always put before notifying, so that a token on the eventfd is a
@@ -602,8 +708,8 @@ class MemoryStreamer:
             # progress, so that no worker is writing into a buffer once we're
             # done with it. Leaving them running would also let them carry on
             # into the next stream, which resets _stop_streaming.
-            for stream in self._slot_streams.values():
-                stream.close()
+            if self._scheduler is not None:
+                self._scheduler.close()
 
             # Push the end-of-stream sentinel from a finally block so that the
             # consumer is woken up even if _stream() raised. Consumers waiting
@@ -780,22 +886,20 @@ class MemoryStreamer:
             self._buffers_by_key[key] = buffer
             self._buffers.append(buffer)
 
-        # Give each fast source a stream, which keeps that source's slots busy
-        # by submitting a job for each chunk as slots come free. Results come
-        # back in chunk order, so the loop below can just take the next one from
-        # each source.
-        for key, kd in fast_sources.items():
-            # Selecting is slow for multi-module data, so each chunk is only
-            # selected when the stream is ready to read it.
-            chunk_kds = select_chunks(kd, tid_chunks)
-            read_chunk = partial(self._read_chunk, key, xarray=xarray, mock_io=mock_io)
-            self._slot_streams[key] = SlotStream(
-                self._buffers_by_key[key], chunk_kds, read_chunk,
+        # The scheduler keeps the sources' slots busy by submitting each chunk's
+        # reads as slots come free. Results come back in chunk order, so the
+        # loop below can just take the next one.
+        if fast_sources:
+            jobs = { key: chunk_jobs(kd, tid_chunks, entries_per_train[key], xarray, mock_io)
+                     for key, kd in fast_sources.items() }
+            self._scheduler = ChunkScheduler(
+                self._buffers_by_key, jobs, self._read_chunk,
                 pool=self._pool, stop=lambda: self._stop_streaming,
             )
+            chunk_results = iter(self._scheduler)
 
-        source_results = { key: iter(stream)
-                           for key, stream in self._slot_streams.items() }
+        # Per source, how to wrap a single train's data as a DataArray
+        templates = { }
 
         # Iterate through the chunks to give the data to the users loop
         for i, read_tids in enumerate(tid_chunks):
@@ -804,31 +908,25 @@ class MemoryStreamer:
                 break
 
             # Take this chunk from each source, waiting for the data to be
-            # loaded. A stream that has been stopped runs out early, which is
-            # the other way this loop ends.
+            # loaded. A stopped scheduler runs out early or hands back a
+            # partial chunk, which is the other way this loop ends.
             partial_results = { }
-            for key, results in source_results.items():
-                chunk_result = next(results, None)
+            if fast_sources:
+                chunk_result = next(chunk_results, None)
                 if chunk_result is None:
                     break
 
-                partial_results[key] = chunk_result[2]
+                partial_results = { key: result
+                                    for key, (_, result) in chunk_result.items() }
 
             if len(partial_results) < len(fast_sources):
                 break
 
-            # Re-build the DataArrays
-            results = { }
-            for key, partial_array in partial_results.items():
-                array = self._buffers_by_key[key].view(partial_array.buffer_slot, partial_array.shape)
-                if xarray:
-                    results[key] = xr.DataArray(array,
-                                                name=partial_array.name,
-                                                dims=partial_array.dims,
-                                                coords=partial_array.coords,
-                                                attrs=partial_array.attrs)
-                else:
-                    results[key] = array
+            # The chunk's arrays, wrapped as DataArrays only when a part needs
+            # xarray's indexing, see TrainTemplate.
+            arrays = { key: self._buffers_by_key[key].view(partial_array.buffer_slot, partial_array.shape)
+                       for key, partial_array in partial_results.items() }
+            data_arrays = { }
 
             # Split the chunk into parts of the size the user requested
             tid_parts = tid_parts_per_chunk[i]
@@ -853,11 +951,28 @@ class MemoryStreamer:
                     iter_tids = iter_tids[0]
 
                 iter_results = { }
-                for key, array in results.items():
+                for key, array in arrays.items():
                     trains = start_idx if squeeze else np.s_[start_idx:end_idx]
                     entries = 0 if key in drop_entries else np.s_[:]
                     leading = (np.s_[:],) * train_axes[key]
-                    iter_results[key] = array[(*leading, trains, entries)]
+                    index = (*leading, trains, entries)
+
+                    if not xarray:
+                        iter_results[key] = array[index]
+                    elif squeeze and key in templates:
+                        iter_results[key] = templates[key].wrap(array[index], iter_tids)
+                    else:
+                        if key not in data_arrays:
+                            partial_array = partial_results[key]
+                            data_arrays[key] = xr.DataArray(array,
+                                                            name=partial_array.name,
+                                                            dims=partial_array.dims,
+                                                            coords=partial_array.coords,
+                                                            attrs=partial_array.attrs)
+
+                        iter_results[key] = data_arrays[key][index]
+                        if squeeze:
+                            templates[key] = TrainTemplate(iter_results[key])
 
                 # Merge slow data
                 for key in slow_sources:
