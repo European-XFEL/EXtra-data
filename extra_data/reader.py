@@ -1268,6 +1268,32 @@ class DataCollection:
 
         for source, srcdata in self._sources_data.items():
             if files_have_conflict(srcdata.files):
+                # This source exists in different files for the same
+                # train IDs. Check whether the conflict may due to it
+                # being a legacy source shadowing a real source.
+
+                files_as_legacy = []
+                files_as_actual = []
+
+                for fa in srcdata.files:
+                    if source in fa.legacy_sources:
+                        files_as_legacy.append(fa)
+                    else:
+                        files_as_actual.append(fa)
+
+                if files_as_legacy and files_as_actual:
+                    # With the source being both a legacy and an actual
+                    # source across different fields, reduce it to the
+                    # files where it is an actual source and check
+                    # again.
+
+                    srcdata.canonical_name = srcdata.source
+                    srcdata.files = files_as_actual
+
+                    if not files_have_conflict(srcdata.files):
+                        # The conflict disappeared.
+                        continue
+
                 sources_with_conflicts.add(source)
 
         if sources_with_conflicts:
